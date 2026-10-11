@@ -303,6 +303,10 @@ input[type="number"] { width: 62px; }
 .plan .cyclo.none { fill: var(--fix-off); }
 .plan .side { fill: var(--fix-off); stroke: var(--fix-line); stroke-width: 2; stroke-linejoin: round; }
 .plan .side.on { fill: #fde68a; stroke: #f29900; filter: drop-shadow(0 0 6px rgba(251, 188, 4, .85)); }
+/* Selected spotlights and side lights get a blue halo, so they read as selected whether
+   they are on or off. */
+.plan .fx.sel > .hit { fill: var(--blue); fill-opacity: .22; stroke: var(--blue); stroke-width: 3; rx: 10px; }
+.plan .fx.sel > .spot, .plan .fx.sel > .side { stroke: var(--blue); stroke-width: 4; }
 .plan .box { fill: rgba(26, 115, 232, .1); stroke: var(--blue); stroke-dasharray: 5 4; }
 
 /* ---------- Previews ---------- */

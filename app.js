@@ -692,11 +692,13 @@ function paintPlan(look, bare) {
   for (const s of SPOTS) {
     planEls.spots[s.id].classList.toggle('on', !!look.spots[s.id]);
     planEls.spots[s.id].classList.toggle('selected', !bare && selSpots.has(s.id));
+    planEls.spots[s.id].parentNode.classList.toggle('sel', !bare && selSpots.has(s.id));   // halo behind it
   }
   for (const n of planEls.face) n.setAttribute('class', 'face f' + look.face);
   for (const side of SIDES) planEls.side[side].forEach((n, i) => {
     n.classList.toggle('on', look.sidePos[side][i]);
     n.classList.toggle('selected', !bare && selSides.has(side + i));
+    n.parentNode.classList.toggle('sel', !bare && selSides.has(side + i));
   });
   planEls.cyclo.style.fill = look.cyclo === 'none' ? '' : COLORS[look.cyclo];
   planEls.cyclo.classList.toggle('none', look.cyclo === 'none');
