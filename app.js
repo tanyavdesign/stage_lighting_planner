@@ -251,7 +251,13 @@ function ease(dt) {
 // People: rough stand-ins that pick up whatever light lands on them.
 // Each gets a colour for head, torso and legs.
 // ---------------------------------------------------------------------------
-const figures = PEOPLE.map(() => new Float32Array(9));
+// What lands on each figure, kept apart by where it comes from, since each kind of light
+// falls on a body differently:
+//   [0-2] top light (LEDs and spotlights): colour, strongest on the head and shoulders
+//   [3]   face light: even, from the front
+//   [4-6] side light from stage left, at head / torso / leg height
+//   [7-9] side light from stage right, the same
+const figures = PEOPLE.map(() => new Float32Array(10));
 
 // An LED beam is about 50% strong at the fixture and 10% where it lands. Beams that land
 // on the same spot share the floor between them, so a pile of them adds up to about 20%
@@ -294,14 +300,15 @@ function shareGround(D) {
   }
 }
 const tone = (v) => 1 - Math.exp(-1.1 * v);
-const GREY = 0.2;
+const UNLIT = 0.055;        // a figure with no light on it: nearly black, not grey
 
 // LEDs are wide washes, so their colour is the main tint on a figure. Spot, face and
 // side lights are white: they mostly make the figure brighter in the colour it already
 // has, and only show as plain warm white where there is little LED colour.
 function lightFigures(D) {
   PEOPLE.forEach((p, n) => {
-    let r = 0, g = 0, b = 0, white = 0;
+    const out = figures[n];
+    let r = 0, g = 0, b = 0, spot = 0;
     for (const led of LEDS) {
       const o = led.idx * L;
       if (D[o] + D[o + 1] + D[o + 2] < 0.01) continue;
@@ -309,30 +316,27 @@ function lightFigures(D) {
       const w = Math.exp(-d * d) * ground[led.idx] / LANDING * 0.5;
       r += D[o] * w; g += D[o + 1] * w; b += D[o + 2] * w;
     }
-    SPOTS.forEach((s, i) => { white += Math.max(0, 1 - Math.hypot(s.x3 - p.x3, s.z3 - p.z3) / 1.6) * D[O_SPOT + i] * 0.45; });
-    white += D[O_FACE] * (0.35 + 0.2 * clamp01((p.z3 + 3) / 6));
+    SPOTS.forEach((s, i) => { spot += Math.max(0, 1 - Math.hypot(s.x3 - p.x3, s.z3 - p.z3) / 1.6) * D[O_SPOT + i] * 0.7; });
+    r += WARM[0] * spot; g += WARM[1] * spot; b += WARM[2] * spot;
+    // compress the brightness only, so strong coloured light keeps its hue
+    const m = Math.max(r, g, b, 1e-4), k = tone(m) / m;
+    out[0] = r * k; out[1] = g * k; out[2] = b * k;
 
-    let side = 0;
-    for (let i = 0; i < 10; i++) side += D[O_POS + i] * Math.max(0, 1 - Math.abs(SIDE_Z[i % 5] - p.z3) / 1.3);
-    side = Math.min(1, side) * 0.3;
-    const sheen = D[O_TYPE] * side, mid = D[O_TYPE + 1] * side, low = D[O_TYPE + 2] * side;
-    const parts = [sheen * 0.5, sheen + mid * 0.4, mid * 0.6 + low];   // head, torso, legs
-    const colour = Math.min(1, Math.max(r, g, b));
-    const out = figures[n];
-    parts.forEach((s, i) => {
-      const w = white + s, boost = 1 + 1.4 * w, plain = w * 0.9 * (1 - 0.65 * colour);
-      // Compress the brightness only, so strong light keeps its hue (green stays green
-      // and does not drift to cyan), then pull it a quarter of the way to grey: cloth and
-      // skin never reflect a pure colour. Unlit figures stay a mid-dark grey.
-      const lr = r * boost + WARM[0] * plain, lg = g * boost + WARM[1] * plain, lb = b * boost + WARM[2] * plain;
-      const m = Math.max(lr, lg, lb, 1e-4), k = tone(m) / m;
-      const grey = (lr + lg + lb) * k / 3;
-      out[i * 3] = GREY + (1 - GREY) * (lr * k * 0.75 + grey * 0.25);
-      out[i * 3 + 1] = GREY + (1 - GREY) * (lg * k * 0.75 + grey * 0.25);
-      out[i * 3 + 2] = GREY + (1 - GREY) * (lb * k * 0.75 + grey * 0.25);
-    });
+    out[3] = D[O_FACE] * (0.42 + 0.14 * clamp01((p.z3 + 3) / 6));
+
+    const sheen = D[O_TYPE], mid = D[O_TYPE + 1], low = D[O_TYPE + 2];
+    for (let side = 0; side < 2; side++) {
+      let reach = 0;
+      for (let j = 0; j < 5; j++) reach += D[O_POS + side * 5 + j] * Math.max(0, 1 - Math.abs(SIDE_Z[j] - p.z3) / 1.3);
+      reach = Math.min(1, reach) * 0.75;
+      out[4 + side * 3] = sheen * 0.5 * reach;                           // head
+      out[5 + side * 3] = Math.min(1, sheen + mid * 0.4) * reach;        // torso
+      out[6 + side * 3] = Math.min(1, mid * 0.6 + low) * reach;          // legs
+    }
   });
 }
+// How much of the top light reaches the head, torso and legs.
+const TOP_SHARE = [1, 0.5, 0.2];
 
 // ---------------------------------------------------------------------------
 // Stage plan (SVG)
@@ -873,20 +877,50 @@ function wallGlow(x, y, major, minor, angle, r, g, b, a) {
   hctx.restore();
 }
 
-function drawFigure(p, c) {
+// A figure is filled nearly black, then each kind of light is added inside its outline:
+// top light fading from the crown downwards, face light evenly, side light from the
+// edge it comes from, at the height it comes from.
+function drawFigure(p, f) {
   const s = depthScale(p.z3), x = frontX(p.x3, p.z3), y = floorY(p.z3), u = PX * s;
-  const part = (i) => css(c[i * 3], c[i * 3 + 1], c[i * 3 + 2], 1);
-  ctx.fillStyle = part(2);
-  ctx.fillRect(x - 0.19 * u, y - 0.86 * u, 0.16 * u, 0.86 * u);
-  ctx.fillRect(x + 0.03 * u, y - 0.86 * u, 0.16 * u, 0.86 * u);
-  ctx.fillStyle = part(1);
+  const top = y - 1.78 * u, left = x - 0.3 * u, wide = 0.6 * u;
+  const lit = (r, g, b, k) => `rgb(${Math.round(r * k * 255)},${Math.round(g * k * 255)},${Math.round(b * k * 255)})`;
+  ctx.save();
   ctx.beginPath();
+  ctx.rect(x - 0.19 * u, y - 0.86 * u, 0.16 * u, 0.86 * u);
+  ctx.rect(x + 0.03 * u, y - 0.86 * u, 0.16 * u, 0.86 * u);
   ctx.moveTo(x - 0.24 * u, y - 0.8 * u); ctx.lineTo(x - 0.26 * u, y - 1.38 * u);
   ctx.quadraticCurveTo(x, y - 1.52 * u, x + 0.26 * u, y - 1.38 * u);
-  ctx.lineTo(x + 0.24 * u, y - 0.8 * u);
-  ctx.closePath(); ctx.fill();
-  ctx.fillStyle = part(0);
-  ctx.beginPath(); ctx.arc(x, y - 1.62 * u, 0.14 * u, 0, 6.3); ctx.fill();
+  ctx.lineTo(x + 0.24 * u, y - 0.8 * u); ctx.closePath();
+  ctx.moveTo(x + 0.14 * u, y - 1.62 * u); ctx.arc(x, y - 1.62 * u, 0.14 * u, 0, 6.3);
+  ctx.fillStyle = lit(1, 1, 1.1, UNLIT);
+  ctx.fill();
+  ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+
+  if (f[0] + f[1] + f[2] > 0.01) {             // top light: crown and shoulders catch most of it
+    const g = ctx.createLinearGradient(0, top, 0, y);
+    g.addColorStop(0, lit(f[0], f[1], f[2], 1));
+    g.addColorStop(0.2, lit(f[0], f[1], f[2], 0.8));
+    g.addColorStop(0.42, lit(f[0], f[1], f[2], 0.38));
+    g.addColorStop(1, lit(f[0], f[1], f[2], 0.12));
+    ctx.fillStyle = g; ctx.fillRect(left, top, wide, y - top);
+  }
+  if (f[3] > 0.01) {                           // face light: flat across the whole front
+    ctx.fillStyle = lit(WARM[0], WARM[1], WARM[2], f[3]);
+    ctx.fillRect(left, top, wide, y - top);
+  }
+  const bands = [[top, y - 1.45 * u], [y - 1.45 * u, y - 0.8 * u], [y - 0.8 * u, y]];   // head, torso, legs
+  for (let side = 0; side < 2; side++) {       // side light: bright on its own edge, gone by the far side
+    const from = side === 0 ? left + 0.06 * u : left + wide - 0.06 * u, to = side === 0 ? x + 0.12 * u : x - 0.12 * u;
+    bands.forEach(([y0, y1], i) => {
+      const amount = f[4 + side * 3 + i];
+      if (amount < 0.01) return;
+      const g = ctx.createLinearGradient(from, 0, to, 0);
+      g.addColorStop(0, lit(WARM[0], WARM[1], WARM[2], amount)); g.addColorStop(1, 'rgb(0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(left, y0, wide, y1 - y0);
+    });
+  }
+  ctx.restore();
 }
 
 function drawFront(D) {
@@ -1195,8 +1229,15 @@ function buildThree() {
     cyclo.material.color.setRGB(0.045 + D[O_CYC] * 0.5, 0.045 + D[O_CYC + 1] * 0.5, 0.06 + D[O_CYC + 2] * 0.5);
     people.forEach((p, n) => {
       p.g.visible = prefs.people;
-      const c = figures[n];
-      p.parts.forEach((m, i) => m.material.color.setRGB(c[i * 3], c[i * 3 + 1], c[i * 3 + 2]));
+      // each part is one flat colour here, so the two sides are averaged
+      const f = figures[n];
+      p.parts.forEach((m, i) => {
+        const white = f[3] + (f[4 + i] + f[7 + i]) * 0.5, share = TOP_SHARE[i];
+        m.material.color.setRGB(
+          Math.min(1, UNLIT + f[0] * share + WARM[0] * white),
+          Math.min(1, UNLIT + f[1] * share + WARM[1] * white),
+          Math.min(1, UNLIT + f[2] * share + WARM[2] * white));
+      });
     });
     renderer.render(scene, camera);
   }
