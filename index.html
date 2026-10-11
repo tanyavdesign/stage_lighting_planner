@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610120137">
+<link rel="stylesheet" href="style.css?v=202610120204">
 </head>
 <body data-view="front">
 <main>
@@ -18,7 +18,6 @@
       </button>
       <div id="menu" class="menu" hidden>
         <div id="track-name" class="menu-note">No track loaded</div>
-        <label>Load track<input id="track-file" type="file" accept="audio/*" hidden></label>
         <button id="watch">Watch</button>
         <button id="people">Hide people</button>
         <button id="theme">Dark mode</button>
@@ -163,6 +162,10 @@
     <button id="prev-cue" class="btn icon" title="Previous cue"><svg viewBox="0 0 16 16"><path d="M3 3h1.8v10H3zM13 3v10L5.5 8z"/></svg></button>
     <button id="next-cue" class="btn icon" title="Next cue"><svg viewBox="0 0 16 16"><path d="M11.2 3H13v10h-1.8zM3 3v10l7.5-5z"/></svg></button>
     <button id="add-cue" class="btn icon primary" title="Add a cue here"><svg viewBox="0 0 16 16"><path d="M7.1 2.5h1.8v4.6h4.6v1.8H8.9v4.6H7.1V8.9H2.5V7.1h4.6z"/></svg></button>
+    <label class="btn icon" id="load-track" title="Load a track" aria-label="Load a track">
+      <svg viewBox="0 0 16 16"><path d="M9 2v8.3a2.6 2.6 0 1 0 1.6 2.4V5h3V2z"/></svg>
+      <input id="track-file" type="file" accept="audio/*" hidden>
+    </label>
     <span id="time" class="time">0:00.0 / 1:00.0</span>
     <span id="next-text" class="hint"></span>
   </div>
@@ -172,6 +175,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610120137"></script>
+<script src="app.js?v=202610120204"></script>
 </body>
 </html>

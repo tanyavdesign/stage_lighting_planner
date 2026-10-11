@@ -1391,6 +1391,7 @@ async function loadTrack(file) {
   player.audio.addEventListener('ended', () => setPlaying(false));
   player.peaks = null;
   show.trackName = file.name; saveShow();
+  $('load-track').title = `Track: ${file.name} (tap to load another)`;
   $('track-name').textContent = `Analyzing ${file.name}...`;
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
