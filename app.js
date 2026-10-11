@@ -820,6 +820,9 @@ const hctx = haze.getContext('2d');
 const css = (r, g, b, a) => `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${clamp01(a)})`;
 const depthScale = (z3) => 0.8 + 0.2 * clamp01((z3 + 3) / 6);   // further back sits closer to the centre
 const frontX = (x3, z3) => FW / 2 + x3 * 96 * depthScale(z3);
+// Where a fixture sits in the picture. The rig hangs above the top edge, so beams come
+// in from off-screen instead of appearing to start in mid-air.
+const rigY = (scale) => (1 - scale) * 130 - 44;
 const floorY = (z3) => HORIZON + 8 + clamp01((z3 + 3) / 6) * (FLOOR_Y - HORIZON - 14);
 
 function sizeFront() {
@@ -906,13 +909,13 @@ function drawFront(D) {
     const xb = frontX(D[o + 3], D[o + 4]), yb = floorY(D[o + 4]);
     const hit = cycloHit(led, D[o + 3], D[o + 4]);
     if (hit) {                                 // lands on the back wall: stop the beam there
-      const xw = frontX(hit.x, CYC.z), yw = HORIZON - hit.y / RIG_H * (HORIZON - 26);
-      softBeam(frontX(led.x3, led.z3), (1 - s) * 130, 24 * s, xw, yw, 150 * 0.8 * hit.s * wide, r, gg, b, TOP * k, hit.strength * k);
+      const xw = frontX(hit.x, CYC.z), yw = HORIZON - hit.y / RIG_H * (HORIZON - rigY(0.8));
+      softBeam(frontX(led.x3, led.z3), rigY(s), 24 * s, xw, yw, 150 * 0.8 * hit.s * wide, r, gg, b, TOP * k, hit.strength * k);
       const minor = hit.radius * 60 * wide;
       wallGlow(xw, yw, minor * hit.stretch, minor, Math.atan2(RIG_H * 57, (D[o + 3] - led.x3) * 77),
         washed(r), washed(gg), washed(b), Math.min(0.5, hit.strength * 2.2) * hit.fade * k);
     } else {
-      softBeam(frontX(led.x3, led.z3), (1 - s) * 130, 24 * s, xb, yb, 150 * ts * wide, r, gg, b, TOP * k, ground[led.idx] * k);
+      softBeam(frontX(led.x3, led.z3), rigY(s), 24 * s, xb, yb, 150 * ts * wide, r, gg, b, TOP * k, ground[led.idx] * k);
       floorGlow(xb, yb, 125 * ts * wide, 15, r, gg, b, ground[led.idx] * k);
     }
   }
@@ -920,7 +923,7 @@ function drawFront(D) {
     const lvl = D[O_SPOT + i];
     if (lvl < 0.01) return;
     const s = depthScale(sp.z3), x = frontX(sp.x3, sp.z3), y = floorY(sp.z3);
-    softBeam(x, (1 - s) * 130, 20 * s, x, y, 95 * s, WARM[0], WARM[1], WARM[2], 0.4 * lvl, 0.08 * lvl);
+    softBeam(x, rigY(s), 20 * s, x, y, 95 * s, WARM[0], WARM[1], WARM[2], 0.4 * lvl, 0.08 * lvl);
     floorGlow(x, y, 62 * s, 9, WARM[0], WARM[1], WARM[2], 0.1 * lvl);
   });
   SIDES.forEach((side, sIdx) => {
