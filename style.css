@@ -46,13 +46,14 @@
 [hidden] { display: none !important; }
 
 /* The app fills the screen and never scrolls as a page: toolbar, work area, transport. */
-html, body { height: 100%; }
+html, body { height: 100%; width: 100%; overflow: hidden; }
 body {
   margin: 0;
   height: 100dvh;
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);       /* never wider than the screen */
   background: var(--bg);
   color: var(--text);
   font: 13px/1.4 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -375,7 +376,13 @@ body.watch .view-col { flex-direction: row; }
    when there is one, otherwise the stage-wide controls as tabs. */
 @media (max-width: 899px) {
   .title, .divider, .tip, .plan-col h2, .view .panel-head { display: none; }
-  .toolbar { padding-left: 8px; padding-right: 8px; }
+  .toolbar { padding-left: 8px; padding-right: 8px; gap: 6px; }
+  .field { gap: 4px; min-width: 0; }
+  .field:first-of-type { flex: 1; }
+  .field select { flex: 1; min-width: 0; width: 100%; }
+  .field input[type="number"] { width: 56px; }
+  .toolbar .spacer { display: none; }
+  .toolbar .btn { padding: 0 8px; }
   main { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
 
   .view-col { flex: 0 0 29dvh; }
