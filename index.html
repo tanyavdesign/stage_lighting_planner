@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610120212">
+<link rel="stylesheet" href="style.css?v=202610120224">
 </head>
 <body data-view="front">
 <main>
@@ -17,7 +17,7 @@
         <svg viewBox="0 0 16 16"><path d="M2 3.5h12v1.6H2zM2 7.2h12v1.6H2zM2 10.9h12v1.6H2z"/></svg>
       </button>
       <div id="menu" class="menu" hidden>
-        <div id="track-name" class="menu-note">No track loaded</div>
+        <input id="project-name" class="menu-note" type="text" placeholder="Project name" title="Project name (used for exported files)" autocomplete="off">
         <button id="watch">Watch</button>
         <button id="people">Hide people</button>
         <button id="theme">Dark mode</button>
@@ -175,6 +175,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610120212"></script>
+<script src="app.js?v=202610120224"></script>
 </body>
 </html>

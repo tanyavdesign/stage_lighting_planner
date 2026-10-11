@@ -684,8 +684,8 @@ function buildControls() {
 
   // "More" menu
   $('more').addEventListener('click', (e) => { e.stopPropagation(); $('menu').hidden = !$('menu').hidden; });
-  $('menu').addEventListener('click', (e) => { if (!e.target.closest('label')) $('menu').hidden = true; e.stopPropagation(); });
-  $('menu').addEventListener('change', () => { $('menu').hidden = true; });
+  $('menu').addEventListener('click', (e) => { if (!e.target.closest('label, input')) $('menu').hidden = true; e.stopPropagation(); });
+  $('menu').addEventListener('change', (e) => { if (e.target.type === 'file') $('menu').hidden = true; });
   document.addEventListener('click', () => { $('menu').hidden = true; });
 
   document.addEventListener('keydown', (e) => {
@@ -1400,7 +1400,7 @@ async function loadTrack(file) {
   player.peaks = null;
   show.trackName = file.name; saveShow();
   $('load-track').title = `Track: ${file.name} (tap to load another)`;
-  $('track-name').textContent = `Analyzing ${file.name}...`;
+  toast(`Analyzing ${file.name}...`);
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     const ac = new AC();
@@ -1411,9 +1411,9 @@ async function loadTrack(file) {
     if (bpm) { show.songBpm = show.detectedBpm = bpm; saveShow(); }
     // never overwrite a cue's tempo, or an effect that keeps its own
     if (bpm && !show.cues.length && !EFFECT_BPM[state.effect]) { state.bpm = bpm; commit(); }
-    $('track-name').textContent = bpm ? `${file.name} · detected ${bpm} BPM` : `${file.name} · no clear beat found`;
+    toast(bpm ? `${file.name}: detected ${bpm} BPM` : `${file.name}: no clear beat found`, 3500);
   } catch (e) {
-    $('track-name').textContent = `${file.name} · could not analyze this file`;
+    toast(`${file.name}: could not analyze this file`, 3500);
   }
 }
 
@@ -1660,10 +1660,16 @@ function addCue() {
   record();
 }
 
+// What exported files are called: the project's name, else the track's, else a plain default.
+function fileStem() {
+  const name = show.projectName || (show.trackName || '').replace(/\.[^.]+$/, '') || 'Lighting';
+  return name.replace(/[\\/:*?"<>|]/g, ' ').trim();
+}
+
 function exportShow() {
-  const blob = new Blob([JSON.stringify({ version: 1, look: state, cues: show.cues, trackName: show.trackName }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ version: 1, projectName: show.projectName || '', look: state, cues: show.cues, trackName: show.trackName }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'lighting-show.json';
+  a.href = URL.createObjectURL(blob); a.download = fileStem() + ' - lighting show.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -1672,14 +1678,15 @@ async function importShow(file) {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.cues)) throw new Error('no cues');
-    show = { cues: data.cues, trackName: data.trackName || '' };
+    show = { cues: data.cues, trackName: data.trackName || '', projectName: data.projectName || '' };
+    $('project-name').value = show.projectName;
     state = Object.assign(blankLook(), data.look || {});
     store.set('kdt-lighting-v1', state);
     syncUI();
     cuesChanged();
-    $('track-name').textContent = `Imported ${file.name}. Undo with Cmd+Z.`;
+    toast(`Imported ${file.name}. Undo with Cmd+Z.`, 3500);
   } catch (e) {
-    $('track-name').textContent = `${file.name} is not a lighting show export.`;
+    toast(`${file.name} is not a lighting show export.`, 3500);
   }
 }
 
@@ -1891,7 +1898,7 @@ async function exportPdf() {
       return {
         look: cue.look, note: cue.note,
         title: show.cues.length ? cueLabel(cue) : cue.name,
-        meta: show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : '',
+        meta: (show.projectName ? show.projectName + '   |   ' : '') + (show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
         map: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planSvgText(cue.look)),
         shot: front.toDataURL('image/jpeg', 0.92),
       };
@@ -1915,7 +1922,7 @@ async function exportPdf() {
     // 3. Download.
     const link = document.createElement('a');
     link.href = URL.createObjectURL(pdfFromJpegs(jpegs));
-    link.download = (show.trackName ? show.trackName.replace(/\.[^.]+$/, '') + ' - ' : '') + 'lighting cues.pdf';
+    link.download = fileStem() + ' - lighting cues.pdf';
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1937,7 +1944,12 @@ function buildShow() {
   $('export').addEventListener('click', exportShow);
   $('export-pdf').addEventListener('click', exportPdf);
   $('import').addEventListener('change', (e) => { if (e.target.files[0]) importShow(e.target.files[0]); e.target.value = ''; });
-  if (show.trackName) $('track-name').textContent = `Load "${show.trackName}" to hear the track`;
+  if (show.trackName) $('load-track').title = `Last track: ${show.trackName} (tap to load it again)`;
+  // The project's name sits at the top of the menu and names the exported files.
+  const project = $('project-name');
+  project.value = show.projectName || '';
+  project.addEventListener('change', () => { show.projectName = project.value.trim(); saveShow(); });
+  project.addEventListener('keydown', (e) => { if (e.key === 'Enter') project.blur(); });
   renderCues();
 }
 
