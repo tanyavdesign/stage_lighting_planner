@@ -711,6 +711,13 @@ function syncUI() {
 
   // Each section shows its extra controls only while lights of that kind are selected.
   $('deselect').hidden = !anySelected();
+  // With a selection, only the sections for the kinds of light selected are shown;
+  // with nothing selected, every section is.
+  const some = anySelected();
+  $('sec-leds').hidden = some && !selection.size;
+  $('sec-spots').hidden = some && !selSpots.size;
+  $('sec-sides').hidden = some && !selSides.size;
+  $('sec-face').hidden = $('sec-cyclo').hidden = some;
   $('sel-leds').hidden = !selection.size;
   $('sel-spots').hidden = !selSpots.size;
   $('sel-sides').hidden = !selSides.size;
