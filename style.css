@@ -234,7 +234,7 @@ input[type="number"] { width: 62px; }
 .line .seg .btn { flex: 1; padding: 0 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .line select { flex: 1; }
 #sec-cue { background: var(--led-bg); }
-.cue-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.cue-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cue-tag { font-weight: 600; color: var(--blue); white-space: nowrap; }
 .cue-edit .t { width: 70px; }
 .cue-edit .name { flex: 1; min-width: 90px; }

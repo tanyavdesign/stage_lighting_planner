@@ -1289,7 +1289,10 @@ wave.addEventListener('pointermove', (e) => {
   if (!cueDrag) return;
   if (!cueDrag.moved && Math.abs(e.clientX - cueDrag.x) < 4) return;
   cueDrag.moved = true;
-  cueDrag.cue.time = Math.round(waveTime(e) * 100) / 100;
+  // within a few pixels of the playhead, the cue snaps onto it
+  const r = wave.getBoundingClientRect(), T = currentTime();
+  const near = Math.abs(e.clientX - (r.left + T / duration() * r.width)) <= 8;
+  cueDrag.cue.time = Math.round((near ? T : waveTime(e)) * 100) / 100;
   sortCues();
 });
 function endWave() {
