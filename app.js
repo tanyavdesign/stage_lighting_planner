@@ -186,18 +186,12 @@ function compute(look, t, out) {
         case 'fastfade': k = 0.5 - 0.5 * Math.cos(beat * 2 * Math.PI); break;
         case 'slowfade': k = 0.5 - 0.5 * Math.cos(beat * 0.5 * Math.PI); break;
         case 'party': k = randomFade(led, beat, 1); break;
-        case 'chase': {
-          // A swell that rolls from the back row to the front, then a short rest before
-          // the next one. Each row rises and falls on a smooth curve and never drops below
-          // a dim base. The rest matters: with only three rows, if the back row came up
-          // while the front row was still fading, the eye could not tell which way the
-          // light was travelling, and it would look like it was going back and forth.
-          const CYCLE = 5;                                    // beats from one swell to the next
-          let d = (((beat - led.row) % CYCLE) + CYCLE) % CYCLE;   // beats since the crest passed this row
-          if (d > CYCLE / 2) d -= CYCLE;                      // negative: the crest is still coming
-          k = 0.3 + 0.7 * (Math.abs(d) < 1.2 ? Math.pow(Math.cos(Math.PI * d / 2.4), 2) : 0);
+        case 'chase':
+          // The three rows swell in turn, evenly spaced: back, mid, front, back, mid, front,
+          // with the same gap between every step, including from the front row round to the
+          // back row again. Each row follows one smooth sine and never drops to dark.
+          k = 0.3 + 0.7 * (0.5 + 0.5 * Math.cos(2 * Math.PI * (beat - led.row) / 3));
           break;
-        }
         case 'moveparty':                      // stays lit the whole time; only the beams move
           tx += Math.sin(beat * 0.45 + led.s2 * 6.28) * 2.4;
           tz += Math.sin(beat * 0.33 + led.s3 * 6.28) * 1.8;      // far enough upstage to brush the cyclorama
