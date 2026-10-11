@@ -192,8 +192,9 @@ function compute(look, t, out) {
           // a dim base. The rest matters: with only three rows, if the back row came up
           // while the front row was still fading, the eye could not tell which way the
           // light was travelling, and it would look like it was going back and forth.
-          let d = (((beat - led.row) % 5) + 5) % 5;          // beats since the crest passed this row
-          if (d > 2.5) d -= 5;                                // negative: the crest is still coming
+          const CYCLE = 7;                                    // beats from one swell to the next
+          let d = (((beat - led.row) % CYCLE) + CYCLE) % CYCLE;   // beats since the crest passed this row
+          if (d > CYCLE / 2) d -= CYCLE;                      // negative: the crest is still coming
           k = 0.3 + 0.7 * (Math.abs(d) < 1.2 ? Math.pow(Math.cos(Math.PI * d / 2.4), 2) : 0);
           break;
         }
