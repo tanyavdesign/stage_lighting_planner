@@ -300,6 +300,8 @@ input[type="number"] { width: 62px; }
 .plan .face.f1 { fill: #fef3c7; }
 .plan .face.f2 { fill: #fde68a; }
 .plan .face.f3 { fill: #fbbf24; stroke: #f29900; filter: drop-shadow(0 0 5px rgba(251, 188, 4, .8)); }
+.plan .fx:hover > .cyclo { stroke: var(--muted); stroke-width: 3; }
+.plan .cyclo.selected, .plan .fx:hover > .cyclo.selected { stroke: var(--blue); stroke-width: 5; }
 .plan .cyclo.none { fill: var(--fix-off); }
 .plan .side { fill: var(--fix-off); stroke: var(--fix-line); stroke-width: 2; stroke-linejoin: round; }
 .plan .side.on { fill: #fde68a; stroke: #f29900; filter: drop-shadow(0 0 6px rgba(251, 188, 4, .85)); }

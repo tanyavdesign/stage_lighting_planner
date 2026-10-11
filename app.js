@@ -354,8 +354,9 @@ const planEls = { leds: {}, aims: {}, spots: {}, face: [], side: { L: [], R: [] 
 // Selection: `selection` holds LEDs; spotlights and side positions have their own sets.
 const selSpots = new Set(), selSides = new Set();
 let aiming = false;        // true while the plan is waiting for a zone to be tapped
-const anySelected = () => selection.size + selSpots.size + selSides.size > 0;
-function clearSelection() { selection.clear(); selSpots.clear(); selSides.clear(); }
+let selCyclo = false;      // the cyclorama can be selected too, to bring up its colours
+const anySelected = () => selCyclo || selection.size + selSpots.size + selSides.size > 0;
+function clearSelection() { selection.clear(); selSpots.clear(); selSides.clear(); selCyclo = false; }
 const toggleIn = (set, key) => { set.has(key) ? set.delete(key) : set.add(key); };
 
 // The part of the drawing on screen. Phones crop to the stage so fixtures are as large
@@ -415,7 +416,10 @@ function buildPlan() {
   for (let z = 0; z < 9; z++) {
     el('text', { x: ZONES.x + ZONES.w * (z % 3) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / 3) + 192, 'text-anchor': 'end', class: 'zone' }, z + 1);
   }
-  planEls.cyclo = el('rect', { x: 624, y: 205, width: 759, height: 26, rx: 6, class: 'cyclo' });
+  planEls.cyclo = fixture(
+    ['rect', { x: 624, y: 192, width: 759, height: 52 }],
+    ['rect', { x: 624, y: 205, width: 759, height: 26, rx: 6, class: 'cyclo' }],
+    () => { selCyclo = !selCyclo; syncUI(); });
   for (const y of CURTAIN_Y) {
     el('line', { x1: 515, y1: y, x2: 609, y2: y, class: 'curtain' });
     el('line', { x1: 1392, y1: y, x2: 1486, y2: y, class: 'curtain' });
@@ -760,6 +764,7 @@ function paintPlan(look, bare) {
   });
   planEls.cyclo.style.fill = look.cyclo === 'none' ? '' : COLORS[look.cyclo];
   planEls.cyclo.classList.toggle('none', look.cyclo === 'none');
+  planEls.cyclo.classList.toggle('selected', !bare && selCyclo);
 
   // The selection panel shows one section per kind of light that is selected.
 }
@@ -775,7 +780,8 @@ function syncUI() {
   $('sec-leds').hidden = some && !selection.size;
   $('sec-spots').hidden = some && !selSpots.size;
   $('sec-sides').hidden = some && !selSides.size;
-  $('sec-face').hidden = $('sec-cyclo').hidden = some;
+  $('sec-face').hidden = some;
+  $('sec-cyclo').hidden = some && !selCyclo;
   $('sel-leds').hidden = !selection.size;
   $('sel-spots').hidden = !selSpots.size;
   $('sel-sides').hidden = !selSides.size;
