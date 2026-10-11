@@ -69,9 +69,10 @@ p { margin: 0; }
 /* ---------- Work area: controls | plan | previews ---------- */
 main {
   display: grid;
-  grid-template-columns: 290px minmax(0, 1.6fr) minmax(0, 1fr);
-  grid-template-areas: "side plan views";
-  gap: 10px;
+  /* controls | bar | plan | bar | previews: drag the bars to resize the columns */
+  grid-template-columns: min(var(--side-w, 290px), 45%) 10px minmax(0, 1fr) 10px min(var(--views-w, 32%), 60%);
+  grid-template-areas: "side gs plan gv views";
+  gap: 0;
   padding: 10px 12px;
   padding-top: max(10px, env(safe-area-inset-top));
   min-height: 0;
@@ -95,9 +96,31 @@ main {
 
 .side { grid-area: side; padding: 0; overflow-y: auto; overscroll-behavior: contain; }
 .plan-col { grid-area: plan; display: flex; flex-direction: column; }
-.view-col { grid-area: views; display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; position: relative; }
-.view { flex: 1; display: flex; flex-direction: column; }
-.seg.view-switch, .grip { display: none; }
+.view-col { grid-area: views; display: flex; flex-direction: column; gap: 0; min-height: 0; min-width: 0; position: relative; }
+.view { flex: 1 1 0; display: flex; flex-direction: column; }
+.view[data-view="front"] { flex: 0 1 var(--front-h, 50%); }
+.seg.view-switch { display: none; }
+
+/* Drag bars between panes */
+.grip { position: relative; cursor: col-resize; touch-action: none; }
+.grip[data-grip="plan"] { grid-area: gs; }
+.grip[data-grip="view"] { grid-area: gv; }
+.grip.split { flex: 0 0 10px; cursor: row-resize; }
+.grip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 44px;
+  margin: -22px 0 0 -2px;
+  border-radius: 2px;
+  background: var(--fix-line);
+  opacity: 0;
+  transition: opacity .12s;
+}
+.grip.split::after { width: 44px; height: 4px; margin: -2px 0 0 -22px; }
+.grip:hover::after, .grip:active::after { opacity: 1; }
 
 /* ---------- Buttons and inputs ---------- */
 .btn, select, input[type="number"], input[type="text"] {
@@ -320,7 +343,8 @@ input[type="number"] { width: 62px; }
 /* ---------- Watch mode: previews only ---------- */
 body.watch .side, body.watch .plan-col, body.watch .grip { display: none; }
 body.watch main { grid-template-columns: 1fr; grid-template-areas: "views"; }
-body.watch .view-col { flex-direction: row; }
+body.watch .view-col { flex-direction: row; gap: 10px; }
+body.watch .view, body.watch .view[data-view="front"] { flex: 1 1 0; }
 
 /* ---------- Touch: finger-size controls ---------- */
 @media (pointer: coarse) {
@@ -350,24 +374,10 @@ body.watch .view-col { flex-direction: row; }
 
   .plan-col { flex: 0 0 min(var(--plan-h, 34dvh), 60dvh); padding: 4px; }
 
-  .grip {
-    display: block;
-    flex: 0 0 16px;
-    position: relative;
-    cursor: row-resize;
-    touch-action: none;
-  }
-  .grip::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 44px;
-    height: 4px;
-    margin: -2px 0 0 -22px;
-    border-radius: 2px;
-    background: var(--fix-line);
-  }
+  .grip { flex: 0 0 16px; cursor: row-resize; }
+  .grip::after { width: 44px; height: 4px; margin: -2px 0 0 -22px; opacity: 1; }
+  .grip.split { display: none; }
+  .view, .view[data-view="front"] { flex: 1 1 0; }
 
   .side { flex: 1 1 0; min-height: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 0; }
   .side .group { padding: 10px; }

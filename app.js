@@ -434,7 +434,7 @@ svg.addEventListener('pointerdown', (e) => {
   }
   if (pointers.size > 2) return;
   drag = { fx: e.target.closest('.fx'), x: e.clientX, y: e.clientY, start: svgPoint(e), rect: null };
-  svg.setPointerCapture(e.pointerId);
+  try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
 });
 svg.addEventListener('pointermove', (e) => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -605,23 +605,51 @@ function setWatch(on) {
   $('watch').textContent = on ? 'Exit watch' : 'Watch';
 }
 
+// Draggable dividers. On phones the bars under the preview and the plan change their
+// heights. On desktop the same two bars sit between the columns and change the widths
+// of the previews and the controls, and a third splits the two previews.
 function setupGrips() {
-  const root = document.documentElement;
-  const panes = { view: $('views'), plan: document.querySelector('.plan-col') };
+  const root = document.documentElement, main = document.querySelector('main');
+  const views = $('views'), plan = document.querySelector('.plan-col'), mods = $('mods');
+  const frontView = document.querySelector('.view[data-view="front"]');
+  const size = (n, axis) => n.getBoundingClientRect()[axis];
+  const clamp = (v, lo, hi) => Math.round(Math.max(lo, Math.min(hi, v)));
+  // each: the pref it sets, its limits, and how a drag of d pixels changes it
+  const rules = {
+    phone: {
+      view: (s, d) => ['viewH', clamp(s.view.h + d.y, 70, size(main, 'height') - size(plan, 'height') - 110)],
+      plan: (s, d) => ['planH', clamp(s.plan.h + d.y, 70, size(main, 'height') - size(views, 'height') - 110)],
+    },
+    desktop: {
+      view: (s, d) => ['viewsW', clamp(s.view.w - d.x, 240, size(main, 'width') - size(mods, 'width') - 320)],
+      plan: (s, d) => ['sideW', clamp(s.side.w + d.x, 220, size(main, 'width') - size(views, 'width') - 320)],
+      split: (s, d) => ['frontH', clamp(s.front.h + d.y, 90, size(views, 'height') - 100)],
+    },
+  };
   const apply = () => {
-    for (const key in panes) if (prefs[key + 'H']) root.style.setProperty(`--${key}-h`, prefs[key + 'H'] + 'px');
+    for (const [pref, name] of [['viewH', '--view-h'], ['planH', '--plan-h'], ['viewsW', '--views-w'], ['sideW', '--side-w'], ['frontH', '--front-h']]) {
+      if (prefs[pref]) root.style.setProperty(name, prefs[pref] + 'px');
+    }
   };
   each('.grip', (grip) => {
-    const key = grip.dataset.grip, other = key === 'view' ? 'plan' : 'view';
     let start = null;
     grip.addEventListener('pointerdown', (e) => {
-      start = { y: e.clientY, h: panes[key].getBoundingClientRect().height };
-      grip.setPointerCapture(e.pointerId);
+      start = {
+        x: e.clientX, y: e.clientY,
+        view: { w: size(views, 'width'), h: size(views, 'height') },
+        plan: { h: size(plan, 'height') },
+        side: { w: size(mods, 'width') },
+        front: { h: size(frontView, 'height') },
+      };
+      try { grip.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+      e.preventDefault();
     });
     grip.addEventListener('pointermove', (e) => {
       if (!start) return;
-      const room = document.querySelector('main').getBoundingClientRect().height - panes[other].getBoundingClientRect().height - 110;
-      prefs[key + 'H'] = Math.round(Math.max(70, Math.min(room, start.h + e.clientY - start.y)));
+      const rule = rules[mqPhone.matches ? 'phone' : 'desktop'][grip.dataset.grip];
+      if (!rule) return;
+      const [pref, value] = rule(start, { x: e.clientX - start.x, y: e.clientY - start.y });
+      prefs[pref] = value;
       apply();
     });
     const end = () => { if (start) { start = null; store.set('kdt-lighting-prefs-v1', prefs); } };
