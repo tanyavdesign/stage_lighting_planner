@@ -176,7 +176,9 @@ function randomFade(led, beat, rate) {
 // then comes back up for the next crest. That slow tail behind a quicker rise is what
 // shows the light travelling towards the front. The levels are joined by a curve with
 // no corners and no overshoot.
-const CHASE = { level: [1, 0.5, 0.1, 1], slope: [0, -0.444, 0, 0] };
+// The crest takes two beats to move from one row to the next: at one beat per row the
+// rise from 10% to 100% took under half a second at 130 BPM and read as flicker.
+const CHASE = { level: [1, 0.5, 0.1, 1], slope: [0, -0.444, 0, 0], beatsPerRow: 2 };
 function chaseLevel(beats) {
   const t = ((beats % 3) + 3) % 3, i = Math.floor(t), u = t - i, u2 = u * u, u3 = u2 * u;
   return (2 * u3 - 3 * u2 + 1) * CHASE.level[i] + (u3 - 2 * u2 + u) * CHASE.slope[i]
@@ -199,7 +201,7 @@ function compute(look, t, out) {
         case 'slowfade': k = 0.5 - 0.5 * Math.cos(beat * 0.5 * Math.PI); break;
         case 'party': k = randomFade(led, beat, 1); break;
         case 'chase':
-          k = chaseLevel(beat - led.row);
+          k = chaseLevel(beat / CHASE.beatsPerRow - led.row);
           break;
         case 'moveparty':                      // stays lit the whole time; only the beams move
           tx += Math.sin(beat * 0.45 + led.s2 * 6.28) * 2.4;
