@@ -248,6 +248,18 @@ const figures = PEOPLE.map(() => new Float32Array(9));
 // there and no more. `ground` holds each LED's strength at the floor.
 const TOP = 0.5, LANDING = 0.1, LANDING_MAX = 0.2, REACH = 1.5;
 const ground = new Float32Array(LEDS.length);
+
+// A beam swung far enough upstage hits the cyclorama before it reaches the floor.
+// Returns where on the cyclorama it lands and how far along the beam that is (0-1),
+// or null if it reaches the floor.
+const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };
+function cycloHit(led, tx, tz) {
+  if (tz >= CYC.z || led.z3 <= CYC.z) return null;
+  const s = (CYC.z - led.z3) / (tz - led.z3);
+  const x = led.x3 + (tx - led.x3) * s, y = RIG_H * (1 - s);
+  if (Math.abs(x) > CYC.halfW || y > CYC.top) return null;
+  return { x, y, s, strength: ground[led.idx] + (TOP - ground[led.idx]) * Math.pow(1 - s, 2.4) };
+}
 function shareGround(D) {
   for (const a of LEDS) {
     const oa = a.idx * L;
@@ -860,8 +872,15 @@ function drawFront(D) {
     const s = depthScale(led.z3), ts = depthScale(D[o + 4]), wide = D[o + 5];
     const r = D[o] / k, gg = D[o + 1] / k, b = D[o + 2] / k;
     const xb = frontX(D[o + 3], D[o + 4]), yb = floorY(D[o + 4]);
-    softBeam(frontX(led.x3, led.z3), (1 - s) * 130, 24 * s, xb, yb, 150 * ts * wide, r, gg, b, TOP * k, ground[led.idx] * k);
-    floorGlow(xb, yb, 125 * ts * wide, 15, r, gg, b, ground[led.idx] * k);
+    const hit = cycloHit(led, D[o + 3], D[o + 4]);
+    if (hit) {                                 // lands on the back wall: stop the beam there
+      const xw = frontX(hit.x, CYC.z), yw = HORIZON - hit.y / RIG_H * (HORIZON - 26);
+      softBeam(frontX(led.x3, led.z3), (1 - s) * 130, 24 * s, xw, yw, 150 * 0.8 * hit.s * wide, r, gg, b, TOP * k, hit.strength * k);
+      floorGlow(xw, yw, 62 * wide, 44, r, gg, b, Math.min(0.6, hit.strength * 1.5) * k);
+    } else {
+      softBeam(frontX(led.x3, led.z3), (1 - s) * 130, 24 * s, xb, yb, 150 * ts * wide, r, gg, b, TOP * k, ground[led.idx] * k);
+      floorGlow(xb, yb, 125 * ts * wide, 15, r, gg, b, ground[led.idx] * k);
+    }
   }
   SPOTS.forEach((sp, i) => {
     const lvl = D[O_SPOT + i];
@@ -983,6 +1002,7 @@ function buildThree() {
     m.rotation.x = -Math.PI / 2;
     return m;
   }
+  const wallSpot = (radius) => new THREE.Mesh(new THREE.CircleGeometry(radius, 32), glow(poolTex));   // faces the audience
   const DOWN = new THREE.Vector3(0, -1, 0), dir = new THREE.Vector3();
   const lensGeo = new THREE.SphereGeometry(0.08, 12, 8);
   const lens = (x, y, z) => add(new THREE.Mesh(lensGeo, solid(0x1a1a1f)), x, y, z);
@@ -998,7 +1018,7 @@ function buildThree() {
   const leds = LEDS.map((led) => {
     const pivot = add(new THREE.Group(), led.x3, RIG_H, led.z3);
     const cone = beam(0.12, 1.5, RIG_H); pivot.add(cone);
-    return { led, pivot, cone, lens: lens(led.x3, RIG_H, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3) };
+    return { led, pivot, cone, lens: lens(led.x3, RIG_H, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3), wall: add(wallSpot(1.5), led.x3, 2, CYC.z + 0.03) };
   });
   const spots = SPOTS.map((s) => ({
     cone: add(beam(0.1, 1.2, RIG_H), s.x3, RIG_H, s.z3),
@@ -1082,17 +1102,27 @@ function buildThree() {
       const o = f.led.idx * L, r = D[o], g = D[o + 1], b = D[o + 2];
       const on = r + g + b > 0.01;
       f.cone.visible = f.pool.visible = on;
+      f.wall.visible = false;
       setLens(f.lens, r, g, b);
       if (!on) continue;
       const tx = D[o + 3], tz = D[o + 4], wide = D[o + 5];
+      const hit = cycloHit(f.led, tx, tz);       // on the cyclorama: the beam ends there, not on the floor
       dir.set(tx - f.led.x3, -RIG_H, tz - f.led.z3);
-      const len = dir.length();
+      const len = dir.length() * (hit ? hit.s : 1);
       f.pivot.quaternion.setFromUnitVectors(DOWN, dir.normalize());
-      f.cone.scale.set(wide, len / RIG_H, wide);
-      const land = ground[f.led.idx];
+      f.cone.scale.set(wide * (hit ? hit.s : 1), len / RIG_H, wide * (hit ? hit.s : 1));
+      const land = hit ? hit.strength : ground[f.led.idx];
       // the cone is drawn front and back, so each face carries half the strength
       f.cone.material.uniforms.color.value.setRGB(r * TOP / 2, g * TOP / 2, b * TOP / 2);
       f.cone.material.uniforms.low.value = land / TOP;
+      if (hit) {
+        f.pool.visible = false;
+        f.wall.visible = true;
+        f.wall.position.set(hit.x, hit.y, CYC.z + 0.03);
+        f.wall.scale.setScalar(wide * (0.35 + 0.65 * hit.s));
+        f.wall.material.color.setRGB(r * land * 1.6, g * land * 1.6, b * land * 1.6);
+        continue;
+      }
       f.pool.position.set(tx, 0.01, tz);
       f.pool.scale.setScalar(wide);
       f.pool.material.color.setRGB(r * land, g * land, b * land);
