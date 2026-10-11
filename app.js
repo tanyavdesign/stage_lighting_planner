@@ -338,8 +338,9 @@ function lightFigures(D) {
     for (let side = 0; side < 2; side++) {
       let reach = 0;
       for (let j = 0; j < 5; j++) reach += D[O_POS + side * 5 + j] * Math.max(0, 1 - Math.abs(SIDE_Z[j] - p.z3) / 1.3);
-      // side lights stand in the wings: the near side of the stage gets far more than the far side
-      reach = Math.min(1, reach) * 1.05 * nearness(Math.abs(p.x3 - (side === 0 ? -SIDE_AT : SIDE_AT)), 4.5);
+      // side lights stand in the wings and do not throw far: strong on the near side of the
+      // stage, weak by the middle, almost nothing on the far side
+      reach = Math.min(1, reach) * 1.3 * nearness(Math.abs(p.x3 - (side === 0 ? -SIDE_AT : SIDE_AT)), 2.8);
       out[4 + side * 3] = sheen * 0.5 * reach;                           // head
       out[5 + side * 3] = Math.min(1, sheen + mid * 0.4) * reach;        // torso
       out[6 + side * 3] = Math.min(1, mid * 0.6 + low) * reach;          // legs
@@ -988,7 +989,7 @@ function drawFront(D) {
     let n = 0;
     for (let j = 0; j < 5; j++) n += D[O_POS + sIdx * 5 + j];
     if (n < 0.01) return;
-    const edge = side === 'L' ? 0 : FW, tip = side === 'L' ? FW * 0.34 : FW * 0.66;
+    const edge = side === 'L' ? 0 : FW, tip = side === 'L' ? FW * 0.26 : FW * 0.74;     // a short throw
     SIDE_TYPES.forEach(([id], t) => {
       const a = D[O_TYPE + t] * (0.07 + 0.03 * n);
       if (a < 0.005) return;
@@ -1127,7 +1128,7 @@ function buildThree() {
     SIDE_Z.forEach((z, j) => {
       add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.9, 0.1), solid(0x222228)), d * 5.75, 0.65, z);
       SIDE_TYPES.forEach(([type], t) => {
-        const cone = add(beam(0.05, 0.5, 5.4), d * 5.6, SIDE_H[type], z);
+        const cone = add(beam(0.05, 0.42, 3.8), d * 5.6, SIDE_H[type], z);     // a short throw
         cone.rotation.z = -d * Math.PI / 2;
         sides.push({ pos: O_POS + sIdx * 5 + j, type: O_TYPE + t, cone, lens: lens(d * 5.6, SIDE_H[type], z) });
       });
