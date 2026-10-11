@@ -263,6 +263,10 @@ input[type="number"] { width: 62px; }
 }
 .chip { position: absolute; top: 4px; z-index: 2; box-shadow: 0 1px 4px rgba(0, 0, 0, .2); }
 #deselect { left: 4px; }
+.history { position: absolute; left: 4px; bottom: 4px; z-index: 2; display: flex; gap: 4px; }
+.history .btn { box-shadow: 0 1px 4px rgba(0, 0, 0, .2); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn:disabled:hover { background: var(--panel); }
 #plan-reset { right: 4px; }
 .plan .zone-pick .hit { fill: var(--blue); fill-opacity: .16; stroke: var(--blue); stroke-width: 3; }
 .plan .zone-pick .fx:hover .hit { fill-opacity: .32; }

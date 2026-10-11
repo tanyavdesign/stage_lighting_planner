@@ -114,6 +114,11 @@ function record() {             // call after a change the user made
   if (history.undo.length > 100) history.undo.shift();
   history.redo.length = 0;
   saved = now;
+  showHistory();
+}
+function showHistory() {
+  $('undo').disabled = !history.undo.length;
+  $('redo').disabled = !history.redo.length;
 }
 function stepHistory(from, to) {
   if (!from.length) return;
@@ -124,6 +129,7 @@ function stepHistory(from, to) {
   store.set('kdt-lighting-v1', state);
   saveShow(); renderCues(); syncUI();
   syncToPlayhead();
+  showHistory();
 }
 
 // ---------------------------------------------------------------------------
@@ -565,6 +571,8 @@ function buildControls() {
   $('theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); });
   $('watch').addEventListener('click', () => setWatch(!document.body.classList.contains('watch')));
   $('plan-reset').addEventListener('click', resetView);
+  $('undo').addEventListener('click', () => stepHistory(history.undo, history.redo));
+  $('redo').addEventListener('click', () => stepHistory(history.redo, history.undo));
   mqPhone.addEventListener('change', resetView);
 
   // Phone layout: one preview at a time, stage-wide controls in tabs.
@@ -1118,6 +1126,11 @@ function loadCue(idx) {            // copy a cue's look into the live look
   state = clone(show.cues[idx].look);
   store.set('kdt-lighting-v1', state);
   syncUI();
+  if (selectedCue !== show.cues[idx].id) {     // the Cue section follows the playhead
+    selectedCue = show.cues[idx].id;
+    noteOpen = false;
+    renderCues();
+  }
   saved = snapshot();              // loading a cue is not an edit, so it is not an undo step
 }
 
@@ -1376,7 +1389,6 @@ function renderCues() {
     return b;
   };
   iconButton('M6 1.5h4l.6 1.2H14v1.5H2V2.7h3.4zM3.2 5.4h9.6l-.7 9.1H3.9zM6 7v5.8h1.2V7zm2.8 0v5.8H10V7z', 'Delete cue', () => deleteCue(cue));
-  iconButton('M6.3 12.6 2 8.3l1.3-1.3 3 3L12.7 3.6 14 4.9z', 'Done', () => selectCue(null));
   // Optional comment for this cue; it is printed on the cue's page in the PDF.
   if (cue.note || noteOpen) {
     const note = document.createElement('textarea');
@@ -1700,6 +1712,7 @@ show.cues.forEach((cue) => { if (!cue.id) cue.id = Date.now() + '-' + (cueSeq++)
 syncUI();
 syncToPlayhead();
 saved = snapshot();
+showHistory();
 compute(state, 0, shown);
 
 let lastMs = 0, wall = 0, timeText = '', nextText = '';
