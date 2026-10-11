@@ -398,7 +398,7 @@ body.watch .view, body.watch .view[data-view="front"] { flex: 1 1 0; }
   .side .group { padding: 10px; }
 
   .dock { padding: 6px 8px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
-  #wave { flex-basis: 100%; height: 40px; }
+  #wave { flex-basis: 100%; height: 40px; order: -1; }   /* waveform above the buttons, easier to reach */
 
   body.watch .view-col { flex: 1; flex-direction: column; }
 }
