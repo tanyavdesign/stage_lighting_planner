@@ -305,6 +305,9 @@ const UNLIT = 0.055;        // a figure with no light on it: nearly black, not g
 // LEDs are wide washes, so their colour is the main tint on a figure. Spot, face and
 // side lights are white: they mostly make the figure brighter in the colour it already
 // has, and only show as plain warm white where there is little LED colour.
+// 1 right next to a light, falling away with distance; `half` is where it drops to a half.
+const nearness = (distance, half) => 1 / (1 + (distance / half) * (distance / half));
+const FACE_AT = { z: to3(0, FACE_Y)[1] }, SIDE_AT = 5.6;
 function lightFigures(D) {
   PEOPLE.forEach((p, n) => {
     const out = figures[n];
@@ -313,22 +316,29 @@ function lightFigures(D) {
       const o = led.idx * L;
       if (D[o] + D[o + 1] + D[o + 2] < 0.01) continue;
       const d = Math.hypot(D[o + 3] - p.x3, D[o + 4] - p.z3) / REACH;
-      const w = Math.exp(-d * d) * ground[led.idx] / LANDING * 0.5;
+      // a beam thrown a long way across the stage arrives weaker than one pointing straight down
+      const thrown = Math.hypot(D[o + 3] - led.x3, RIG_H, D[o + 4] - led.z3);
+      const w = Math.exp(-d * d) * ground[led.idx] / LANDING * 0.5 * Math.pow(RIG_H / thrown, 1.5);
       r += D[o] * w; g += D[o + 1] * w; b += D[o + 2] * w;
     }
-    SPOTS.forEach((s, i) => { spot += Math.max(0, 1 - Math.hypot(s.x3 - p.x3, s.z3 - p.z3) / 1.6) * D[O_SPOT + i] * 0.7; });
+    SPOTS.forEach((s, i) => {                  // brightest directly underneath, fading towards the edge
+      const off = Math.hypot(s.x3 - p.x3, s.z3 - p.z3) / 1.6;
+      if (off < 1) spot += Math.pow(1 - off * off, 1.5) * D[O_SPOT + i] * 0.75;
+    });
     r += WARM[0] * spot; g += WARM[1] * spot; b += WARM[2] * spot;
     // compress the brightness only, so strong coloured light keeps its hue
     const m = Math.max(r, g, b, 1e-4), k = tone(m) / m;
     out[0] = r * k; out[1] = g * k; out[2] = b * k;
 
-    out[3] = D[O_FACE] * (0.42 + 0.14 * clamp01((p.z3 + 3) / 6));
+    // Every light is stronger on whoever stands nearer to it.
+    out[3] = D[O_FACE] * 0.82 * nearness(FACE_AT.z - p.z3, 6);        // face lights hang out front
 
     const sheen = D[O_TYPE], mid = D[O_TYPE + 1], low = D[O_TYPE + 2];
     for (let side = 0; side < 2; side++) {
       let reach = 0;
       for (let j = 0; j < 5; j++) reach += D[O_POS + side * 5 + j] * Math.max(0, 1 - Math.abs(SIDE_Z[j] - p.z3) / 1.3);
-      reach = Math.min(1, reach) * 0.75;
+      // side lights stand in the wings: the near side of the stage gets far more than the far side
+      reach = Math.min(1, reach) * 1.05 * nearness(Math.abs(p.x3 - (side === 0 ? -SIDE_AT : SIDE_AT)), 4.5);
       out[4 + side * 3] = sheen * 0.5 * reach;                           // head
       out[5 + side * 3] = Math.min(1, sheen + mid * 0.4) * reach;        // torso
       out[6 + side * 3] = Math.min(1, mid * 0.6 + low) * reach;          // legs
