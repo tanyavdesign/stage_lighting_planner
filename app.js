@@ -1128,7 +1128,7 @@ function loadCue(idx) {            // copy a cue's look into the live look
   syncUI();
   if (selectedCue !== show.cues[idx].id) {     // the Cue section follows the playhead
     selectedCue = show.cues[idx].id;
-    noteOpen = false;
+    noteOpen = nameEditing = false;
     renderCues();
   }
   saved = snapshot();              // loading a cue is not an edit, so it is not an undo step
@@ -1317,7 +1317,7 @@ function cuesChanged() {          // after a cue is moved, added or deleted
 }
 let noteOpen = false;
 function selectCue(id) {
-  if (id !== selectedCue) noteOpen = false;
+  if (id !== selectedCue) noteOpen = nameEditing = false;
   selectedCue = id;
   renderCues();
   if (id) $('mods').scrollTop = 0;       // its settings sit at the top of the controls list
@@ -1359,50 +1359,76 @@ const cueLabel = (cue) => {
   const n = 'Cue ' + (show.cues.indexOf(cue) + 1);
   return cueName(cue) ? `${n}: ${cueName(cue)}` : n;
 };
+const FADES = [0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 8, 10];   // seconds offered in the transition menu
+let nameEditing = false;
 function renderCues() {
   const box = $('cue-edit');
   box.textContent = '';
   const cue = show.cues.find((c) => c.id === selectedCue);
   $('sec-cue').hidden = !cue;
   if (!cue) return;
+  const iconButton = (svgPath, label, onClick, cls) => {
+    const b = button(box, '', 'btn icon' + (cls ? ' ' + cls : ''), onClick);
+    b.innerHTML = `<svg viewBox="0 0 16 16"><path d="${svgPath}"/></svg>`;
+    b.title = label; b.setAttribute('aria-label', label);
+    return b;
+  };
+
+  // "Cue 1" or "Cue 1: name", with a pencil that swaps it for a name field
   const tag = document.createElement('span');
   tag.className = 'cue-tag';
-  tag.textContent = 'Cue ' + (show.cues.indexOf(cue) + 1);
   box.appendChild(tag);
+  if (nameEditing) {
+    tag.textContent = 'Cue ' + (show.cues.indexOf(cue) + 1);
+    const name = input(box, 'text', 'name', cueName(cue), () => {});
+    name.placeholder = 'Cue name';
+    const finish = () => {
+      if (!nameEditing) return;
+      nameEditing = false;
+      if (name.value.trim() !== cueName(cue)) { cue.name = name.value.trim(); saveShow(); record(); }
+      renderCues();
+    };
+    name.addEventListener('blur', finish);
+    name.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') name.blur(); });
+    name.focus();
+  } else {
+    tag.textContent = cueLabel(cue);
+    tag.title = cueLabel(cue);
+    iconButton('M11.6 1.8 14.2 4.4 5.4 13.2 2 14l.8-3.4zM10.5 4.3 4.1 10.7l-.4 1.6 1.6-.4 6.4-6.4z', 'Rename cue', () => { nameEditing = true; renderCues(); }, 'bare');
+  }
+
   input(box, 'text', 't', fmt(cue.time), (n) => {
     const t = parseTime(n.value);
     if (t != null && t >= 0) cue.time = t;
     cuesChanged();
   }).title = 'Time in the track';
-  const name = input(box, 'text', 'name', cueName(cue), (n) => { cue.name = n.value.trim(); saveShow(); record(); });
-  name.title = 'Cue name'; name.placeholder = 'Name (optional)';
+
+  // one menu for the transition: instant, or a fade of some length
   const mode = document.createElement('select');
-  mode.add(new Option('Fade', 'fade')); mode.add(new Option('Instant', 'instant'));
-  mode.value = cue.instant ? 'instant' : 'fade';
-  mode.addEventListener('change', () => { cue.instant = mode.value === 'instant'; saveShow(); record(); renderCues(); });
+  mode.title = 'Transition into this cue';
+  mode.add(new Option('Instant', '0'));
+  for (const secs of [...new Set([...FADES, +cue.fade || 1])].sort((x, y) => x - y)) mode.add(new Option(`Fade ${secs} s`, secs));
+  mode.value = cue.instant ? '0' : String(+cue.fade || 1);
+  mode.addEventListener('change', () => {
+    cue.instant = mode.value === '0';
+    if (!cue.instant) cue.fade = +mode.value;
+    saveShow(); record();
+  });
   box.appendChild(mode);
-  if (!cue.instant) {
-    const secs = input(box, 'number', '', cue.fade, (n) => { cue.fade = Math.max(0.05, +n.value || 1); saveShow(); record(); });
-    secs.step = 0.1; secs.min = 0.1; secs.title = 'Fade length in seconds';
-  }
-  const iconButton = (svgPath, label, onClick) => {
-    const b = button(box, '', 'btn icon', onClick);
-    b.innerHTML = `<svg viewBox="0 0 16 16"><path d="${svgPath}"/></svg>`;
-    b.title = label; b.setAttribute('aria-label', label);
-    return b;
-  };
+
   iconButton('M5 1.5h8.5V11H12V3H5zM2.5 4.5h8v10h-8zM4 6v7h5V6z', 'Duplicate cue', () => duplicateCue(cue));
   iconButton('M6 1.5h4l.6 1.2H14v1.5H2V2.7h3.4zM3.2 5.4h9.6l-.7 9.1H3.9zM6 7v5.8h1.2V7zm2.8 0v5.8H10V7z', 'Delete cue', () => deleteCue(cue));
-  // Optional comment for this cue; it is printed on the cue's page in the PDF.
-  if (cue.note || noteOpen) {
+  // Optional comment for this cue; it goes on the cue's page in the PDF.
+  const showNote = !!cue.note || noteOpen;
+  iconButton('M2 2.5h12v8.2H7.2L4 13.6v-2.9H2zM3.6 4.1v5h2v1.3l1.5-1.3h5.3v-5z', showNote ? 'Hide empty note' : 'Add note',
+    () => { noteOpen = !noteOpen; renderCues(); }, showNote ? 'active' : '');
+  if (showNote) {
     const note = document.createElement('textarea');
     note.className = 'note'; note.rows = 3; note.value = cue.note || '';
     note.placeholder = 'Comments or remarks for this cue';
     note.addEventListener('change', () => { cue.note = note.value.trim(); saveShow(); record(); });
     box.appendChild(note);
     if (noteOpen && !cue.note) note.focus();
-  } else {
-    button(box, 'Add note', 'btn', () => { noteOpen = true; renderCues(); });
   }
 }
 
