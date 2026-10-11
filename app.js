@@ -186,10 +186,19 @@ function compute(look, t, out) {
         case 'fastfade': k = 0.5 - 0.5 * Math.cos(beat * 2 * Math.PI); break;
         case 'slowfade': k = 0.5 - 0.5 * Math.cos(beat * 0.5 * Math.PI); break;
         case 'party': k = randomFade(led, beat, 1); break;
-        case 'chase': k = randomFade(led, beat, 0.25); break;
+        case 'chase': {
+          // A wave rolling from the back row to the front, over and over. Each row comes
+          // up quickly as the wave reaches it and trails off behind it, and the front row
+          // is out before the next wave enters at the back, so it always reads as moving
+          // one way: towards the audience.
+          const since = (((beat - led.row) % 4) + 4) % 4;      // beats since the wave reached this row
+          const x = since > 3.5 ? (since - 3.5) / 0.5 : since < 1.3 ? 1 - since / 1.3 : 0;
+          k = x * x * (3 - 2 * x);
+          break;
+        }
         case 'moveparty':                      // stays lit the whole time; only the beams move
           tx += Math.sin(beat * 0.45 + led.s2 * 6.28) * 2.4;
-          tz += Math.sin(beat * 0.33 + led.s3 * 6.28) * 1.4;
+          tz += Math.sin(beat * 0.33 + led.s3 * 6.28) * 2.2;      // far enough upstage to sweep the cyclorama
           break;
       }
     }
@@ -258,8 +267,17 @@ function cycloHit(led, tx, tz) {
   const s = (CYC.z - led.z3) / (tz - led.z3);
   const x = led.x3 + (tx - led.x3) * s, y = RIG_H * (1 - s);
   if (Math.abs(x) > CYC.halfW || y > CYC.top) return null;
-  return { x, y, s, strength: ground[led.idx] + (TOP - ground[led.idx]) * Math.pow(1 - s, 2.4) };
+  const dx = tx - led.x3, dz = tz - led.z3, length = Math.hypot(dx, RIG_H, dz);
+  return {
+    x, y, s,
+    strength: ground[led.idx] + (TOP - ground[led.idx]) * Math.pow(1 - s, 2.4),
+    radius: 0.5 + 1.5 * s,                                   // the beam is wider the further it has travelled
+    stretch: Math.min(3.2, length / Math.max(Math.abs(dz), 0.05)),   // a glancing beam smears into a long oval
+    angle: Math.atan2(-RIG_H, dx),                           // which way the oval points, on the wall
+  };
 }
+// Light on the cyclorama washes its colour out towards white.
+const washed = (v) => 0.7 + 0.3 * v;
 function shareGround(D) {
   for (const a of LEDS) {
     const oa = a.idx * L;
@@ -833,6 +851,17 @@ function floorGlow(x, y, rx, ry, r, g, b, a) {
   hctx.restore();
 }
 
+// A soft oval on the back wall, turned to lie along the beam that made it.
+function wallGlow(x, y, major, minor, angle, r, g, b, a) {
+  hctx.save();
+  hctx.translate(x, y); hctx.rotate(angle); hctx.scale(1, minor / major);
+  const grad = hctx.createRadialGradient(0, 0, 0, 0, 0, major);
+  grad.addColorStop(0, css(r, g, b, a)); grad.addColorStop(0.55, css(r, g, b, a * 0.6)); grad.addColorStop(1, css(r, g, b, 0));
+  hctx.fillStyle = grad;
+  hctx.beginPath(); hctx.arc(0, 0, major, 0, 6.3); hctx.fill();
+  hctx.restore();
+}
+
 function drawFigure(p, c) {
   const s = depthScale(p.z3), x = frontX(p.x3, p.z3), y = floorY(p.z3), u = PX * s;
   const part = (i) => css(c[i * 3], c[i * 3 + 1], c[i * 3 + 2], 1);
@@ -876,7 +905,9 @@ function drawFront(D) {
     if (hit) {                                 // lands on the back wall: stop the beam there
       const xw = frontX(hit.x, CYC.z), yw = HORIZON - hit.y / RIG_H * (HORIZON - 26);
       softBeam(frontX(led.x3, led.z3), (1 - s) * 130, 24 * s, xw, yw, 150 * 0.8 * hit.s * wide, r, gg, b, TOP * k, hit.strength * k);
-      floorGlow(xw, yw, 62 * wide, 44, r, gg, b, Math.min(0.6, hit.strength * 1.5) * k);
+      const minor = hit.radius * 85 * wide;
+      wallGlow(xw, yw, minor * hit.stretch, minor, Math.atan2(RIG_H * 57, (D[o + 3] - led.x3) * 77),
+        washed(r), washed(gg), washed(b), Math.min(0.92, hit.strength * 4.5) * k);
     } else {
       softBeam(frontX(led.x3, led.z3), (1 - s) * 130, 24 * s, xb, yb, 150 * ts * wide, r, gg, b, TOP * k, ground[led.idx] * k);
       floorGlow(xb, yb, 125 * ts * wide, 15, r, gg, b, ground[led.idx] * k);
@@ -1018,7 +1049,7 @@ function buildThree() {
   const leds = LEDS.map((led) => {
     const pivot = add(new THREE.Group(), led.x3, RIG_H, led.z3);
     const cone = beam(0.12, 1.5, RIG_H); pivot.add(cone);
-    return { led, pivot, cone, lens: lens(led.x3, RIG_H, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3), wall: add(wallSpot(1.5), led.x3, 2, CYC.z + 0.03) };
+    return { led, pivot, cone, lens: lens(led.x3, RIG_H, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3), wall: add(wallSpot(1), led.x3, 2, CYC.z + 0.03) };
   });
   const spots = SPOTS.map((s) => ({
     cone: add(beam(0.1, 1.2, RIG_H), s.x3, RIG_H, s.z3),
@@ -1119,8 +1150,10 @@ function buildThree() {
         f.pool.visible = false;
         f.wall.visible = true;
         f.wall.position.set(hit.x, hit.y, CYC.z + 0.03);
-        f.wall.scale.setScalar(wide * (0.35 + 0.65 * hit.s));
-        f.wall.material.color.setRGB(r * land * 1.6, g * land * 1.6, b * land * 1.6);
+        f.wall.scale.set(hit.radius * hit.stretch * wide, hit.radius * wide, 1);
+        f.wall.rotation.z = hit.angle;
+        const glowK = Math.min(1.5, land * 5), peak = Math.max(r, g, b);
+        f.wall.material.color.setRGB(washed(r / peak) * peak * glowK, washed(g / peak) * peak * glowK, washed(b / peak) * peak * glowK);
         continue;
       }
       f.pool.position.set(tx, 0.01, tz);
