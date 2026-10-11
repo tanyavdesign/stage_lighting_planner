@@ -1388,6 +1388,7 @@ function renderCues() {
     b.title = label; b.setAttribute('aria-label', label);
     return b;
   };
+  iconButton('M5 1.5h8.5V11H12V3H5zM2.5 4.5h8v10h-8zM4 6v7h5V6z', 'Duplicate cue', () => duplicateCue(cue));
   iconButton('M6 1.5h4l.6 1.2H14v1.5H2V2.7h3.4zM3.2 5.4h9.6l-.7 9.1H3.9zM6 7v5.8h1.2V7zm2.8 0v5.8H10V7z', 'Delete cue', () => deleteCue(cue));
   // Optional comment for this cue; it is printed on the cue's page in the PDF.
   if (cue.note || noteOpen) {
@@ -1400,6 +1401,21 @@ function renderCues() {
   } else {
     button(box, 'Add note', 'btn', () => { noteOpen = true; renderCues(); });
   }
+}
+
+// Copy a cue's look and transition to a new cue. It goes at the playhead; if the
+// playhead is still sitting on the original, it goes a moment later, short of the next cue.
+function duplicateCue(cue) {
+  let time = Math.round(currentTime() * 100) / 100;
+  if (show.cues.some((c) => Math.abs(c.time - time) < 0.05)) {
+    const next = show.cues.find((c) => c.time > cue.time + 0.05);
+    time = Math.round((next && next.time - cue.time < 2 ? (cue.time + next.time) / 2 : cue.time + 1) * 100) / 100;
+  }
+  const copy = { id: Date.now() + '-' + (cueSeq++), time, name: cueName(cue), fade: cue.fade, instant: cue.instant, look: clone(cue.look) };
+  show.cues.push(copy);
+  sortCues(); saveShow();
+  record();
+  jumpToCue(copy);
 }
 
 function addCue() {
