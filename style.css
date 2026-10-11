@@ -238,6 +238,17 @@ input[type="number"] { width: 62px; }
 .cue-tag { font-weight: 600; color: var(--blue); white-space: nowrap; }
 .cue-edit .t { width: 70px; }
 .cue-edit .name { flex: 1; min-width: 90px; }
+.cue-edit .note {
+  flex: 1 1 100%;
+  min-height: 64px;
+  padding: 8px 10px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+  resize: vertical;
+}
 
 /* ---------- Stage plan ---------- */
 .plan-wrap { flex: 1; min-height: 0; position: relative; }
@@ -253,37 +264,37 @@ input[type="number"] { width: 62px; }
 .chip { position: absolute; top: 4px; z-index: 2; box-shadow: 0 1px 4px rgba(0, 0, 0, .2); }
 #deselect { left: 4px; }
 #plan-reset { right: 4px; }
-#plan .zone-pick .hit { fill: var(--blue); fill-opacity: .16; stroke: var(--blue); stroke-width: 3; }
-#plan .zone-pick .fx:hover .hit { fill-opacity: .32; }
-#plan text.zone-num { font-size: 84px; font-weight: 600; fill: var(--blue); }
+.plan .zone-pick .hit { fill: var(--blue); fill-opacity: .16; stroke: var(--blue); stroke-width: 3; }
+.plan .zone-pick .fx:hover .hit { fill-opacity: .32; }
+.plan text.zone-num { font-size: 84px; font-weight: 600; fill: var(--blue); }
 
-#plan text { font: 500 14px Inter, sans-serif; fill: var(--plan-label); pointer-events: none; }
-#plan text.area { font-size: 15px; font-weight: 600; fill: var(--plan-area); letter-spacing: .1em; }
-#plan text.zone { font-size: 13px; fill: var(--plan-zone); }
-#plan .clickable { cursor: pointer; }
-#plan .stage { fill: var(--plan-stage); stroke: var(--line); stroke-width: 2; }
-#plan .grid { stroke: var(--plan-grid); stroke-width: 2; stroke-dasharray: 2 9; stroke-linecap: round; }
-#plan .curtain { stroke: var(--plan-curtain); stroke-width: 5; stroke-linecap: round; }
-#plan .stairs { fill: var(--hover); stroke: var(--line); stroke-width: 2; stroke-linejoin: round; }
-#plan .rail { stroke: var(--line); stroke-width: 3; stroke-linecap: round; }
-#plan .cyclo { stroke: rgba(0, 0, 0, .15); stroke-width: 1.5; }
-#plan .aim { stroke: var(--blue); stroke-width: 1.5; opacity: .45; pointer-events: none; }
-#plan .led { fill: var(--fix-off); stroke: var(--fix-line); stroke-width: 1.5; }
-#plan .led.lit { stroke: rgba(0, 0, 0, .28); }
-#plan .led.selected { stroke: var(--blue); stroke-width: 4; }
-#plan .hit { fill: transparent; stroke: none; }
-#plan .fx:hover > .led, #plan .fx:hover > .spot, #plan .fx:hover > .side, #plan .fx:hover > .face { stroke: var(--muted); }
-#plan .spot.selected, #plan .side.selected, #plan .fx:hover > .selected { stroke: var(--blue); stroke-width: 4; }
-#plan .spot { fill: var(--panel); stroke: var(--plan-label); stroke-width: 2; }
-#plan .spot.on { fill: #fde68a; stroke: #f29900; stroke-width: 2.5; filter: drop-shadow(0 0 7px rgba(251, 188, 4, .9)); }
-#plan .face { fill: var(--panel); stroke: var(--fix-line); stroke-width: 1.5; }
-#plan .face.f1 { fill: #fef3c7; }
-#plan .face.f2 { fill: #fde68a; }
-#plan .face.f3 { fill: #fbbf24; stroke: #f29900; filter: drop-shadow(0 0 5px rgba(251, 188, 4, .8)); }
-#plan .cyclo.none { fill: var(--fix-off); }
-#plan .side { fill: var(--fix-off); stroke: var(--fix-line); stroke-width: 2; stroke-linejoin: round; }
-#plan .side.on { fill: #fde68a; stroke: #f29900; filter: drop-shadow(0 0 6px rgba(251, 188, 4, .85)); }
-#plan .box { fill: rgba(26, 115, 232, .1); stroke: var(--blue); stroke-dasharray: 5 4; }
+.plan text { font: 500 14px Inter, sans-serif; fill: var(--plan-label); pointer-events: none; }
+.plan text.area { font-size: 15px; font-weight: 600; fill: var(--plan-area); letter-spacing: .1em; }
+.plan text.zone { font-size: 13px; fill: var(--plan-zone); }
+.plan .clickable { cursor: pointer; }
+.plan .stage { fill: var(--plan-stage); stroke: var(--line); stroke-width: 2; }
+.plan .grid { stroke: var(--plan-grid); stroke-width: 2; stroke-dasharray: 2 9; stroke-linecap: round; }
+.plan .curtain { stroke: var(--plan-curtain); stroke-width: 5; stroke-linecap: round; }
+.plan .stairs { fill: var(--hover); stroke: var(--line); stroke-width: 2; stroke-linejoin: round; }
+.plan .rail { stroke: var(--line); stroke-width: 3; stroke-linecap: round; }
+.plan .cyclo { stroke: rgba(0, 0, 0, .15); stroke-width: 1.5; }
+.plan .aim { stroke: var(--blue); stroke-width: 1.5; opacity: .45; pointer-events: none; }
+.plan .led { fill: var(--fix-off); stroke: var(--fix-line); stroke-width: 1.5; }
+.plan .led.lit { stroke: rgba(0, 0, 0, .28); }
+.plan .led.selected { stroke: var(--blue); stroke-width: 4; }
+.plan .hit { fill: transparent; stroke: none; }
+.plan .fx:hover > .led, .plan .fx:hover > .spot, .plan .fx:hover > .side, .plan .fx:hover > .face { stroke: var(--muted); }
+.plan .spot.selected, .plan .side.selected, .plan .fx:hover > .selected { stroke: var(--blue); stroke-width: 4; }
+.plan .spot { fill: var(--panel); stroke: var(--plan-label); stroke-width: 2; }
+.plan .spot.on { fill: #fde68a; stroke: #f29900; stroke-width: 2.5; filter: drop-shadow(0 0 7px rgba(251, 188, 4, .9)); }
+.plan .face { fill: var(--panel); stroke: var(--fix-line); stroke-width: 1.5; }
+.plan .face.f1 { fill: #fef3c7; }
+.plan .face.f2 { fill: #fde68a; }
+.plan .face.f3 { fill: #fbbf24; stroke: #f29900; filter: drop-shadow(0 0 5px rgba(251, 188, 4, .8)); }
+.plan .cyclo.none { fill: var(--fix-off); }
+.plan .side { fill: var(--fix-off); stroke: var(--fix-line); stroke-width: 2; stroke-linejoin: round; }
+.plan .side.on { fill: #fde68a; stroke: #f29900; filter: drop-shadow(0 0 6px rgba(251, 188, 4, .85)); }
+.plan .box { fill: rgba(26, 115, 232, .1); stroke: var(--blue); stroke-dasharray: 5 4; }
 
 /* ---------- Previews ---------- */
 .fit { flex: 1; min-height: 0; position: relative; }
@@ -392,4 +403,20 @@ body.watch .view, body.watch .view[data-view="front"] { flex: 1 1 0; }
 @media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
   main { display: grid; grid-template-columns: 1fr 1.2fr; grid-template-rows: 40dvh minmax(0, 1fr); grid-template-areas: "views plan" "side plan"; gap: 6px; }
   .grip { display: none; }
+}
+
+/* ---------- Short status message (PDF export) ---------- */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 110px;
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 9px 14px;
+  background: var(--text);
+  color: var(--panel);
+  border-radius: 6px;
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
+  max-width: 90vw;
 }

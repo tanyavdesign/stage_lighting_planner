@@ -22,6 +22,7 @@
         <button id="watch">Watch</button>
         <button id="people">Hide people</button>
         <button id="theme">Dark mode</button>
+        <button id="export-pdf">Export PDF</button>
         <button id="export">Export show</button>
         <label>Import show<input id="import" type="file" accept=".json,application/json" hidden></label>
         <button id="reset">Clear lights</button>
@@ -46,7 +47,7 @@
 
   <section class="panel plan-col">
     <div class="plan-wrap">
-      <svg id="plan" viewBox="250 110 1500 1010" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg id="plan" class="plan" viewBox="250 110 1500 1010" xmlns="http://www.w3.org/2000/svg"></svg>
       <button id="deselect" class="btn small chip" hidden>Deselect</button>
       <button id="plan-reset" class="btn small chip" hidden>Reset zoom</button>
     </div>
@@ -164,6 +165,8 @@
   </div>
   <canvas id="wave"></canvas>
 </footer>
+
+<div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="app.js"></script>

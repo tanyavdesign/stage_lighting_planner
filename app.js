@@ -666,13 +666,14 @@ function applyPrefs() {
   store.set('kdt-lighting-prefs-v1', prefs);
 }
 
-function syncUI() {
+// Colour the stage plan for a look. `bare` leaves out the selection outlines.
+function paintPlan(look, bare) {
   for (const led of LEDS) {
-    const n = planEls.leds[led.id], c = state.leds[led.id], zone = state.aim[led.id];
+    const n = planEls.leds[led.id], c = look.leds[led.id], zone = look.aim[led.id];
     n.style.fill = c ? COLORS[c] : '';
     n.style.filter = c ? `drop-shadow(0 0 6px ${COLORS[c]})` : '';
     n.classList.toggle('lit', !!c);
-    n.classList.toggle('selected', selection.has(led.id));
+    n.classList.toggle('selected', !bare && selection.has(led.id));
     const line = planEls.aims[led.id];
     line.style.display = zone ? '' : 'none';
     if (zone) {
@@ -681,18 +682,23 @@ function syncUI() {
     }
   }
   for (const s of SPOTS) {
-    planEls.spots[s.id].classList.toggle('on', !!state.spots[s.id]);
-    planEls.spots[s.id].classList.toggle('selected', selSpots.has(s.id));
+    planEls.spots[s.id].classList.toggle('on', !!look.spots[s.id]);
+    planEls.spots[s.id].classList.toggle('selected', !bare && selSpots.has(s.id));
   }
-  for (const n of planEls.face) n.setAttribute('class', 'face f' + state.face);
+  for (const n of planEls.face) n.setAttribute('class', 'face f' + look.face);
   for (const side of SIDES) planEls.side[side].forEach((n, i) => {
-    n.classList.toggle('on', state.sidePos[side][i]);
-    n.classList.toggle('selected', selSides.has(side + i));
+    n.classList.toggle('on', look.sidePos[side][i]);
+    n.classList.toggle('selected', !bare && selSides.has(side + i));
   });
-  planEls.cyclo.style.fill = state.cyclo === 'none' ? '' : COLORS[state.cyclo];
-  planEls.cyclo.classList.toggle('none', state.cyclo === 'none');
+  planEls.cyclo.style.fill = look.cyclo === 'none' ? '' : COLORS[look.cyclo];
+  planEls.cyclo.classList.toggle('none', look.cyclo === 'none');
 
   // The selection panel shows one section per kind of light that is selected.
+}
+
+function syncUI() {
+  paintPlan(state);
+
   // Each section shows its extra controls only while lights of that kind are selected.
   $('deselect').hidden = !anySelected();
   $('sel-leds').hidden = !selection.size;
@@ -1236,6 +1242,7 @@ function drawWave(T, active) {
     wctx.fillStyle = cue.id === selectedCue ? (dark ? '#8ab4f8' : '#1a73e8') : i === active ? green : (dark ? '#9aa0a6' : '#5f6368');
     wctx.fillRect(cx - 1, 0, 2, H);
     wctx.fillRect(cx - 1, 0, 15, 13);
+    if (cue.note) { wctx.beginPath(); wctx.arc(cx + 7, H - 7, 3.5, 0, 6.3); wctx.fill(); }   // has a note
     wctx.fillStyle = dark ? '#202124' : '#fff';
     wctx.fillText(i + 1, cx + 2, 10);
   });
@@ -1258,7 +1265,7 @@ function cueAt(e) {
 // Press on a cue marker to select it, drag it to move it; anywhere else scrubs.
 let cueDrag = null;
 wave.addEventListener('pointerdown', (e) => {
-  wave.setPointerCapture(e.pointerId);
+  try { wave.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   const cue = cueAt(e);
   if (cue) { cueDrag = { cue, x: e.clientX, moved: false }; selectCue(cue.id); }
   else { scrubbing = true; seek(waveTime(e)); }
@@ -1292,7 +1299,9 @@ function cuesChanged() {          // after a cue is moved, added or deleted
   record();
   syncToPlayhead();
 }
+let noteOpen = false;
 function selectCue(id) {
+  if (id !== selectedCue) noteOpen = false;
   selectedCue = id;
   renderCues();
   if (id) $('mods').scrollTop = 0;       // its settings sit at the top of the controls list
@@ -1327,6 +1336,13 @@ function input(parent, type, cls, value, onChange) {
 }
 
 // The selected cue is edited in a small strip on the transport bar.
+// A cue's own name, or nothing if it was never named. Older cues were auto-named
+// "Cue 3"; that counts as unnamed too.
+const cueName = (cue) => (/^Cue \d+$/.test(cue.name || '') ? '' : cue.name || '');
+const cueLabel = (cue) => {
+  const n = 'Cue ' + (show.cues.indexOf(cue) + 1);
+  return cueName(cue) ? `${n}: ${cueName(cue)}` : n;
+};
 function renderCues() {
   const box = $('cue-edit');
   box.textContent = '';
@@ -1342,7 +1358,8 @@ function renderCues() {
     if (t != null && t >= 0) cue.time = t;
     cuesChanged();
   }).title = 'Time in the track';
-  input(box, 'text', 'name', cue.name, (n) => { cue.name = n.value; saveShow(); record(); }).title = 'Cue name';
+  const name = input(box, 'text', 'name', cueName(cue), (n) => { cue.name = n.value.trim(); saveShow(); record(); });
+  name.title = 'Cue name'; name.placeholder = 'Name (optional)';
   const mode = document.createElement('select');
   mode.add(new Option('Fade', 'fade')); mode.add(new Option('Instant', 'instant'));
   mode.value = cue.instant ? 'instant' : 'fade';
@@ -1352,8 +1369,25 @@ function renderCues() {
     const secs = input(box, 'number', '', cue.fade, (n) => { cue.fade = Math.max(0.05, +n.value || 1); saveShow(); record(); });
     secs.step = 0.1; secs.min = 0.1; secs.title = 'Fade length in seconds';
   }
-  button(box, 'Delete', 'btn', () => deleteCue(cue));
-  button(box, 'Done', 'btn', () => selectCue(null));
+  const iconButton = (svgPath, label, onClick) => {
+    const b = button(box, '', 'btn icon', onClick);
+    b.innerHTML = `<svg viewBox="0 0 16 16"><path d="${svgPath}"/></svg>`;
+    b.title = label; b.setAttribute('aria-label', label);
+    return b;
+  };
+  iconButton('M6 1.5h4l.6 1.2H14v1.5H2V2.7h3.4zM3.2 5.4h9.6l-.7 9.1H3.9zM6 7v5.8h1.2V7zm2.8 0v5.8H10V7z', 'Delete cue', () => deleteCue(cue));
+  iconButton('M6.3 12.6 2 8.3l1.3-1.3 3 3L12.7 3.6 14 4.9z', 'Done', () => selectCue(null));
+  // Optional comment for this cue; it is printed on the cue's page in the PDF.
+  if (cue.note || noteOpen) {
+    const note = document.createElement('textarea');
+    note.className = 'note'; note.rows = 3; note.value = cue.note || '';
+    note.placeholder = 'Comments or remarks for this cue';
+    note.addEventListener('change', () => { cue.note = note.value.trim(); saveShow(); record(); });
+    box.appendChild(note);
+    if (noteOpen && !cue.note) note.focus();
+  } else {
+    button(box, 'Add note', 'btn', () => { noteOpen = true; renderCues(); });
+  }
 }
 
 function addCue() {
@@ -1361,7 +1395,7 @@ function addCue() {
   let cue = show.cues.find((c) => Math.abs(c.time - T) < 0.05);
   if (cue) cue.look = clone(state);
   else {
-    cue = { id: Date.now() + '-' + (cueSeq++), time: Math.round(T * 100) / 100, name: 'Cue ' + (show.cues.length + 1), fade: 1, instant: false, look: clone(state) };
+    cue = { id: Date.now() + '-' + (cueSeq++), time: Math.round(T * 100) / 100, name: '', fade: 1, instant: false, look: clone(state) };
     show.cues.push(cue);
     sortCues();
   }
@@ -1395,6 +1429,248 @@ async function importShow(file) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// PDF export: one landscape page per cue, downloaded as a file in one click.
+// Each page is drawn on a canvas (so any language and the app's own font work) and
+// the pages are wrapped in a minimal PDF written here, with no library.
+// ---------------------------------------------------------------------------
+// [71, 72, 73, 75] -> "71-73, 75"
+function ranges(numbers, prefix) {
+  const sorted = [...numbers].sort((a, b) => a - b), out = [];
+  for (let i = 0; i < sorted.length; i++) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    out.push(j > i ? `${prefix}${sorted[i]}-${prefix}${sorted[j]}` : prefix + sorted[i]);
+    i = j;
+  }
+  return out.join(', ');
+}
+const capital = (word) => word[0].toUpperCase() + word.slice(1);
+
+// A look as rows of text for the settings table: [label, [{ text, dot }]]
+function lookRows(look) {
+  const known = EFFECTS.find(([id]) => id === look.effect);
+  const effect = !known || look.effect === 'none' ? 'Stage wash' : `${known[1]} at ${look.bpm} BPM`;
+  const groups = new Map();              // LEDs grouped by colour and where they point
+  for (const led of LEDS) {
+    const colour = look.leds[led.id];
+    if (!colour) continue;
+    const key = colour + '|' + ((look.aim && look.aim[led.id]) || 0);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(+led.id.slice(1));
+  }
+  const leds = [...groups].map(([key, ids]) => {
+    const [colour, zone] = key.split('|');
+    return { dot: COLORS[colour], text: `${capital(colour)}: ${ranges(ids, 'F')}, ${+zone ? `aimed at zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'straight down'}` };
+  });
+  const spots = SPOTS.filter((s) => look.spots[s.id]).map((s) => +s.id);
+  const types = SIDE_TYPES.filter(([id]) => look.sideTypes[id]).map(([, name]) => name);
+  const places = SIDES.map((side) => {
+    const on = look.sidePos[side].map((v, i) => (v ? i + 1 : 0)).filter(Boolean);
+    return on.length ? `${side === 'L' ? 'Left' : 'Right'} ${ranges(on, '')}` : '';
+  }).filter(Boolean);
+  return [
+    ['Effect', [{ text: effect }]],
+    ['LEDs', leds.length ? leds : [{ text: 'All off' }]],
+    ['Spotlights', [{ text: spots.length ? ranges(spots, '') : 'All off' }]],
+    ['Face lights', [{ text: FACE_LEVELS[look.face] || 'Off' }]],
+    ['Side lights', [{ text: types.length && places.length ? `${types.join(' + ')} on ${places.join(', ')}` : 'Off' }]],
+    ['Cyclorama', [look.cyclo === 'none' ? { text: 'None' } : { text: capital(look.cyclo), dot: COLORS[look.cyclo] }]],
+  ];
+}
+
+// The stage plan painted with a look, as standalone SVG text. An SVG shown as an image
+// cannot see the page's stylesheet, so every element's computed style is written inline.
+const SVG_STYLE = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'display', 'font-size', 'font-weight', 'letter-spacing', 'text-anchor'];
+function planSvgText(look) {
+  paintPlan(look, true);
+  const copy = svg.cloneNode(true);
+  const from = svg.querySelectorAll('*'), to = copy.querySelectorAll('*');
+  from.forEach((n, i) => {
+    const cs = getComputedStyle(n);
+    let style = SVG_STYLE.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(';');
+    if (n.tagName === 'text') style += ';font-family:Helvetica,Arial,sans-serif';
+    to[i].setAttribute('style', style);
+  });
+  copy.querySelectorAll('.zone-pick, .box').forEach((n) => n.remove());
+  copy.removeAttribute('id'); copy.removeAttribute('class');
+  copy.setAttribute('viewBox', '250 110 1500 1010');
+  copy.setAttribute('width', 1500); copy.setAttribute('height', 1010);
+  return new XMLSerializer().serializeToString(copy);
+}
+
+const loadImage = (src) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = () => reject(new Error('image failed to load'));
+  img.src = src;
+});
+
+function wrapText(c, text, width) {
+  const lines = [];
+  for (const para of String(text).split('\n')) {
+    let line = '';
+    for (const word of para.split(' ')) {
+      const next = line ? line + ' ' + word : word;
+      if (line && c.measureText(next).width > width) { lines.push(line); line = word; } else line = next;
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+// Draw one cue's page. The canvas is A4 landscape at about 170 dots per inch.
+const PAGE_W = 2000, PAGE_H = 1414, EDGE = 70;
+function drawPage(c, page, mapImg, shotImg) {
+  const font = (size, weight) => { c.font = `${weight || 400} ${size}px Inter, Helvetica, Arial, sans-serif`; };
+  c.fillStyle = '#fff'; c.fillRect(0, 0, PAGE_W, PAGE_H);
+  c.textBaseline = 'alphabetic';
+
+  // header
+  c.fillStyle = '#202124'; c.textAlign = 'left'; font(46, 600);
+  c.fillText(page.title, EDGE, EDGE + 44);
+  c.fillStyle = '#5f6368'; c.textAlign = 'right'; font(23);
+  c.fillText(page.meta, PAGE_W - EDGE, EDGE + 40);
+  c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
+
+  // lighting map on the left, front view and settings on the right
+  const top = EDGE + 100, mapW = 1080, mapH = Math.round(mapW * 1010 / 1500);
+  c.drawImage(mapImg, EDGE, top, mapW, mapH);
+  const rx = EDGE + mapW + 50, rw = PAGE_W - EDGE - rx, shotH = Math.round(rw * FH / FW);
+  c.save();
+  c.beginPath();
+  if (c.roundRect) c.roundRect(rx, top, rw, shotH, 12); else c.rect(rx, top, rw, shotH);
+  c.clip();
+  c.drawImage(shotImg, rx, top, rw, shotH);
+  c.restore();
+
+  const noteTop = PAGE_H - EDGE - 190;
+  const rows = lookRows(page.look), labelW = 160;
+  let size = 23, lead = 33;
+  const layout = () => { font(size); return rows.map(([, items]) => items.map((item) => wrapText(c, item.text, rw - labelW - (item.dot ? 30 : 0)))); };
+  let wrapped = layout();
+  const height = () => wrapped.reduce((sum, items) => sum + items.reduce((n, lines) => n + lines.length, 0) * lead + 22, 0);
+  if (top + shotH + 30 + height() > noteTop - 20) { size = 19; lead = 26; wrapped = layout(); }   // many LED groups: go smaller
+  let y = top + shotH + 30;
+  c.textAlign = 'left';
+  rows.forEach(([name, items], r) => {
+    let lineY = y + lead - 8;
+    c.fillStyle = '#5f6368'; font(size);
+    c.fillText(name, rx, lineY);
+    items.forEach((item, k) => {
+      if (item.dot) {
+        c.fillStyle = item.dot;
+        c.beginPath(); c.arc(rx + labelW + 10, lineY - size * 0.32, size * 0.36, 0, 6.3); c.fill();
+        c.strokeStyle = '#80868b'; c.lineWidth = 1.5; c.stroke();
+      }
+      c.fillStyle = '#202124';
+      for (const line of wrapped[r][k]) { c.fillText(line, rx + labelW + (item.dot ? 30 : 0), lineY); lineY += lead; }
+    });
+    y = lineY - lead + 8 + 22;
+    c.fillStyle = '#dadce0'; c.fillRect(rx, y - 11, rw, 2);
+  });
+
+  // comments
+  c.strokeStyle = '#9aa0a6'; c.lineWidth = 2;
+  c.beginPath();
+  if (c.roundRect) c.roundRect(EDGE, noteTop, PAGE_W - 2 * EDGE, 190, 12); else c.rect(EDGE, noteTop, PAGE_W - 2 * EDGE, 190);
+  c.stroke();
+  c.fillStyle = '#5f6368'; font(20, 600);
+  c.fillText('Comments', EDGE + 22, noteTop + 38);
+  c.fillStyle = '#202124'; font(24);
+  const noteLines = wrapText(c, page.note || '', PAGE_W - 2 * EDGE - 44);
+  noteLines.slice(0, 4).forEach((line, i) => {
+    c.fillText(i === 3 && noteLines.length > 4 ? line + ' ...' : line, EDGE + 22, noteTop + 76 + i * 33);
+  });
+}
+
+// A PDF whose pages are each one full-page JPEG.
+function pdfFromJpegs(jpegs) {
+  const W = 841.89, H = 595.28;            // A4 landscape, in points
+  const enc = new TextEncoder(), parts = [], offsets = [];
+  let length = 0;
+  const push = (x) => { const bytes = typeof x === 'string' ? enc.encode(x) : x; parts.push(bytes); length += bytes.length; };
+  const object = (n, write) => { offsets[n] = length; push(`${n} 0 obj\n`); write(); push('\nendobj\n'); };
+  push('%PDF-1.4\n');
+  object(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
+  object(2, () => push(`<< /Type /Pages /Count ${jpegs.length} /Kids [${jpegs.map((j, i) => `${3 + 3 * i} 0 R`).join(' ')}] >>`));
+  jpegs.forEach((jpeg, i) => {
+    const n = 3 + 3 * i, draw = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+    object(n, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${n + 2} 0 R >> >> /Contents ${n + 1} 0 R >>`));
+    object(n + 1, () => push(`<< /Length ${draw.length} >>\nstream\n${draw}\nendstream`));
+    object(n + 2, () => {
+      push(`<< /Type /XObject /Subtype /Image /Width ${jpeg.w} /Height ${jpeg.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.bytes.length} >>\nstream\n`);
+      push(jpeg.bytes);
+      push('\nendstream');
+    });
+  });
+  const xref = length, count = 3 + 3 * jpegs.length;
+  push(`xref\n0 ${count}\n0000000000 65535 f \n`);
+  for (let n = 1; n < count; n++) push(String(offsets[n]).padStart(10, '0') + ' 00000 n \n');
+  push(`trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+
+function toast(text) {
+  const box = $('toast');
+  box.textContent = text || '';
+  box.hidden = !text;
+}
+
+let exporting = false;
+async function exportPdf() {
+  if (exporting) return;
+  exporting = true;
+  const cues = show.cues.length ? show.cues : [{ name: 'Current look', look: state }];
+  try {
+    toast('Building PDF...');
+    // 1. Capture every cue while nothing else can run in between: the plan as SVG text
+    //    (on the light theme) and the front view as a still with all its lights on.
+    const theme = document.documentElement.dataset.theme, still = new Float32Array(FRAME_N);
+    document.documentElement.dataset.theme = 'light';
+    const pages = cues.map((cue, i) => {
+      compute(Object.assign({}, cue.look, { effect: 'none' }), 0, still);
+      shareGround(still); lightFigures(still); drawFront(still);
+      return {
+        look: cue.look, note: cue.note,
+        title: show.cues.length ? cueLabel(cue) : cue.name,
+        meta: show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : '',
+        map: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planSvgText(cue.look)),
+        shot: front.toDataURL('image/jpeg', 0.92),
+      };
+    });
+    document.documentElement.dataset.theme = theme;
+    paintPlan(state);
+
+    // 2. Draw each page and collect it as a JPEG.
+    const canvas = document.createElement('canvas');
+    canvas.width = PAGE_W; canvas.height = PAGE_H;
+    const c = canvas.getContext('2d'), jpegs = [];
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    for (let i = 0; i < pages.length; i++) {
+      toast(`Building PDF: page ${i + 1} of ${pages.length}`);
+      const [mapImg, shotImg] = await Promise.all([loadImage(pages[i].map), loadImage(pages[i].shot)]);
+      drawPage(c, pages[i], mapImg, shotImg);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+      jpegs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: PAGE_W, h: PAGE_H });
+    }
+
+    // 3. Download.
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(pdfFromJpegs(jpegs));
+    link.download = (show.trackName ? show.trackName.replace(/\.[^.]+$/, '') + ' - ' : '') + 'lighting cues.pdf';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    toast(`PDF downloaded: ${pages.length} page${pages.length === 1 ? '' : 's'}`);
+  } catch (e) {
+    toast('Could not build the PDF: ' + e.message);
+  }
+  exporting = false;
+  setTimeout(() => toast(''), 3500);
+}
+
 function buildShow() {
   $('play').addEventListener('click', () => setPlaying(!player.playing));
   $('add-cue').addEventListener('click', addCue);
@@ -1402,6 +1678,7 @@ function buildShow() {
   $('next-cue').addEventListener('click', () => stepCue(true));
   $('track-file').addEventListener('change', (e) => { if (e.target.files[0]) loadTrack(e.target.files[0]); e.target.value = ''; });
   $('export').addEventListener('click', exportShow);
+  $('export-pdf').addEventListener('click', exportPdf);
   $('import').addEventListener('change', (e) => { if (e.target.files[0]) importShow(e.target.files[0]); e.target.value = ''; });
   if (show.trackName) $('track-name').textContent = `Load "${show.trackName}" to hear the track`;
   renderCues();
@@ -1414,7 +1691,7 @@ buildPlan();
 buildControls();
 buildShow();
 setupGrips();
-buildThree();
+try { buildThree(); } catch (e) { /* no WebGL here: the rest of the app still works */ }
 applyPrefs();
 sizeFront(); sizeWave();
 window.addEventListener('resize', () => { sizeFront(); sizeWave(); });
@@ -1450,7 +1727,7 @@ function frame(ms) {
   const text = `${fmt(T)} / ${fmt(duration())}`;
   if (text !== timeText) $('time').textContent = timeText = text;
   const next = show.cues[idx + 1];
-  const nextNow = player.playing && next ? `Next: ${next.name} in ${(next.time - T).toFixed(1)} s` : '';
+  const nextNow = player.playing && next ? `Next: ${cueLabel(next)} in ${(next.time - T).toFixed(1)} s` : '';
   if (nextNow !== nextText) $('next-text').textContent = nextText = nextNow;
   requestAnimationFrame(frame);
 }
