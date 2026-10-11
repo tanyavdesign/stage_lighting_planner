@@ -186,12 +186,17 @@ function compute(look, t, out) {
         case 'fastfade': k = 0.5 - 0.5 * Math.cos(beat * 2 * Math.PI); break;
         case 'slowfade': k = 0.5 - 0.5 * Math.cos(beat * 0.5 * Math.PI); break;
         case 'party': k = randomFade(led, beat, 1); break;
-        case 'chase':
-          // A slow swell that travels from the back row to the front. Brightness follows a
-          // smooth sine, each row a quarter-cycle behind the one upstage of it, and it
-          // never drops to dark, so it reads as one continuous wave moving downstage.
-          k = 0.3 + 0.7 * (0.5 + 0.5 * Math.cos(2 * Math.PI * (beat / 4 - led.row / 4)));
+        case 'chase': {
+          // A swell that rolls from the back row to the front, then a short rest before
+          // the next one. Each row rises and falls on a smooth curve and never drops below
+          // a dim base. The rest matters: with only three rows, if the back row came up
+          // while the front row was still fading, the eye could not tell which way the
+          // light was travelling, and it would look like it was going back and forth.
+          let d = (((beat - led.row) % 5) + 5) % 5;          // beats since the crest passed this row
+          if (d > 2.5) d -= 5;                                // negative: the crest is still coming
+          k = 0.3 + 0.7 * (Math.abs(d) < 1.2 ? Math.pow(Math.cos(Math.PI * d / 2.4), 2) : 0);
           break;
+        }
         case 'moveparty':                      // stays lit the whole time; only the beams move
           tx += Math.sin(beat * 0.45 + led.s2 * 6.28) * 2.4;
           tz += Math.sin(beat * 0.33 + led.s3 * 6.28) * 2.2;      // far enough upstage to sweep the cyclorama
