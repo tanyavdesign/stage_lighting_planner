@@ -1855,6 +1855,14 @@ function drawPage(c, page, mapImg, shotImg) {
   c.fillText(page.title, EDGE, EDGE + 44);
   c.fillStyle = '#5f6368'; c.textAlign = 'right'; font(23);
   c.fillText(page.meta, PAGE_W - EDGE, EDGE + 40);
+  const links = [];                              // areas to click on this page
+  if (page.overview) {                           // "Overview" sits left of the page details and links back
+    const metaW = c.measureText(page.meta).width;
+    c.fillStyle = '#174ea6';
+    c.fillText('Overview   |   ', PAGE_W - EDGE - metaW, EDGE + 40);
+    const w = c.measureText('Overview   |   ').width;
+    links.push({ x: PAGE_W - EDGE - metaW - w - 10, y: EDGE, w: w + 10, h: 56, overview: true });
+  }
   c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
 
   // lighting map on the left, front view and settings on the right
@@ -1879,12 +1887,21 @@ function drawPage(c, page, mapImg, shotImg) {
     c.fill();
     c.fillStyle = '#174ea6'; c.textAlign = 'left'; font(25, 600);
     c.fillText(page.like.title, EDGE + 22, boxTop + 40);
+    links.push({ x: EDGE, y: boxTop, w: mapW, h: 56, cue: page.like.index });
     c.fillStyle = '#202124'; font(22);
-    const shown = page.like.lines.length > room ? page.like.lines.slice(0, room - 1) : page.like.lines;
-    shown.forEach((line, i) => c.fillText('•  ' + line, EDGE + 22, boxTop + 76 + i * 31, mapW - 44));
-    if (shown.length < page.like.lines.length) {
+    let row = 0, done = 0;
+    for (const change of page.like.lines) {      // each change wraps on to as many rows as it needs
+      const wrapped = wrapText(c, change, mapW - 80);
+      const last = done === page.like.lines.length - 1;
+      if (row + wrapped.length > (last ? room : room - 1)) break;
+      c.fillStyle = '#174ea6'; c.fillText('•', EDGE + 24, boxTop + 76 + row * 31);
+      c.fillStyle = '#202124';
+      for (const text of wrapped) c.fillText(text, EDGE + 48, boxTop + 76 + (row++) * 31);
+      done++;
+    }
+    if (done < page.like.lines.length) {
       c.fillStyle = '#5f6368';
-      c.fillText(`and ${page.like.lines.length - shown.length} more changes (see the settings on the right)`, EDGE + 22, boxTop + 76 + shown.length * 31);
+      c.fillText(`and ${page.like.lines.length - done} more (see the settings on the right)`, EDGE + 48, boxTop + 76 + row * 31);
     }
   }
   const rows = lookRows(page.look), labelW = 160;
@@ -1924,35 +1941,83 @@ function drawPage(c, page, mapImg, shotImg) {
   noteLines.slice(0, 4).forEach((line, i) => {
     c.fillText(i === 3 && noteLines.length > 4 ? line + ' ...' : line, EDGE + 22, noteTop + 76 + i * 33);
   });
+  return links;
 }
 
-// The overview: every cue on one line, with which earlier cue it copies. `rows` is one
-// page's worth.
-const OVERVIEW_ROWS = 34;
+// The overview: one row per cue, with the earlier cue it copies and what changed, each
+// change on its own line. Long text wraps on to more lines; it is never squeezed.
+const OVERVIEW = {
+  cols: { cue: [EDGE, 300], time: [EDGE + 330, 110], transition: [EDGE + 470, 170], effect: [EDGE + 670, 330], like: [EDGE + 1040, PAGE_W - 2 * EDGE - 1040] },
+  lead: 31, pad: 17, top: EDGE + 150,
+};
+const pdfFont = (c, size, weight) => { c.font = `${weight || 400} ${size}px Inter, Helvetica, Arial, sans-serif`; };
+
+// Wrap every row's text and split the rows into pages.
+function overviewPages(c, items) {
+  const { cols, lead, pad, top } = OVERVIEW, pages = [[]];
+  let y = top;
+  for (const item of items) {
+    pdfFont(c, 23, 600);
+    const cue = wrapText(c, item.cue, cols.cue[1]);
+    pdfFont(c, 22);
+    const effect = wrapText(c, item.effect, cols.effect[1]);
+    const changes = item.like ? item.like.lines.map((line) => wrapText(c, line, cols.like[1] - 26)) : [];
+    const likeLines = item.like ? 1 + changes.reduce((n, lines) => n + lines.length, 0) : 1;
+    const height = Math.max(cue.length, effect.length, likeLines) * lead + pad * 2;
+    if (y + height > PAGE_H - EDGE && pages[pages.length - 1].length) { pages.push([]); y = top; }
+    pages[pages.length - 1].push({ item, cue, effect, changes, height });
+    y += height;
+  }
+  return pages;
+}
+
 function drawOverview(c, rows, pageNo, pageCount) {
-  const font = (size, weight) => { c.font = `${weight || 400} ${size}px Inter, Helvetica, Arial, sans-serif`; };
+  const { cols, lead, pad, top } = OVERVIEW;
   c.fillStyle = '#fff'; c.fillRect(0, 0, PAGE_W, PAGE_H);
   c.textBaseline = 'alphabetic';
-  c.fillStyle = '#202124'; c.textAlign = 'left'; font(46, 600);
+  c.fillStyle = '#202124'; c.textAlign = 'left'; pdfFont(c, 46, 600);
   c.fillText('Cue overview', EDGE, EDGE + 44);
-  c.fillStyle = '#5f6368'; c.textAlign = 'right'; font(23);
+  c.fillStyle = '#5f6368'; c.textAlign = 'right'; pdfFont(c, 23);
   c.fillText((show.projectName ? show.projectName + '   |   ' : '') + `overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
   c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
 
-  const cols = [['Cue', EDGE, 250], ['Time', EDGE + 270, 110], ['Transition', EDGE + 400, 150], ['Effect', EDGE + 570, 330], ['Similar to', EDGE + 920, PAGE_W - 2 * EDGE - 920]];
-  let y = EDGE + 122;
-  c.textAlign = 'left'; c.fillStyle = '#5f6368'; font(21, 600);
-  for (const [name, x] of cols) c.fillText(name, x, y);
-  c.fillStyle = '#dadce0'; c.fillRect(EDGE, y + 12, PAGE_W - 2 * EDGE, 2);
-  font(22);
-  for (const row of rows) {
-    y += 35;
-    row.forEach((text, i) => {
-      c.fillStyle = i === 4 && text !== '-' ? '#174ea6' : '#202124';
-      c.fillText(text, cols[i][1], y, cols[i][2]);
-    });
-    c.fillStyle = '#f1f3f4'; c.fillRect(EDGE, y + 10, PAGE_W - 2 * EDGE, 1);
+  c.textAlign = 'left'; c.fillStyle = '#5f6368'; pdfFont(c, 19, 600);
+  for (const [name, key] of [['CUE', 'cue'], ['TIME', 'time'], ['TRANSITION', 'transition'], ['EFFECT', 'effect'], ['SAME AS AN EARLIER CUE', 'like']]) {
+    c.fillText(name, cols[key][0], top - 22);
   }
+  c.fillStyle = '#dadce0'; c.fillRect(EDGE, top - 8, PAGE_W - 2 * EDGE, 2);
+
+  let y = top;
+  const links = [];                              // areas to click, each { x, y, w, h, cue }
+  rows.forEach((row, r) => {
+    if (r % 2) { c.fillStyle = '#f8f9fa'; c.fillRect(EDGE, y, PAGE_W - 2 * EDGE, row.height); }
+    const line = (n) => y + pad + lead * n + 22;
+    links.push({ x: EDGE, y, w: PAGE_W - 2 * EDGE, h: row.height, cue: row.item.index });
+    if (row.item.like) links.push({ x: cols.like[0], y: y + pad, w: cols.like[1], h: lead, cue: row.item.like.index });
+    c.fillStyle = '#174ea6'; pdfFont(c, 23, 600);
+    row.cue.forEach((text, i) => c.fillText(text, cols.cue[0] + 12, line(i)));
+    c.fillStyle = '#202124'; pdfFont(c, 22);
+    c.fillText(row.item.time, cols.time[0], line(0));
+    c.fillText(row.item.transition, cols.transition[0], line(0));
+    row.effect.forEach((text, i) => c.fillText(text, cols.effect[0], line(i)));
+    if (!row.item.like) {
+      c.fillStyle = '#9aa0a6';
+      c.fillText('New look', cols.like[0], line(0));
+    } else {
+      c.fillStyle = '#174ea6'; pdfFont(c, 22, 600);
+      c.fillText(row.item.like.title, cols.like[0], line(0));
+      c.fillStyle = '#202124'; pdfFont(c, 22);
+      let n = 1;
+      for (const lines of row.changes) {
+        c.fillStyle = '#174ea6'; c.fillText('•', cols.like[0] + 4, line(n));
+        c.fillStyle = '#202124';
+        for (const text of lines) c.fillText(text, cols.like[0] + 26, line(n++));
+      }
+    }
+    y += row.height;
+    c.fillStyle = '#e8eaed'; c.fillRect(EDGE, y, PAGE_W - 2 * EDGE, 1);
+  });
+  return links;
 }
 
 // A PDF whose pages are each one full-page JPEG.
@@ -1967,7 +2032,13 @@ function pdfFromJpegs(jpegs) {
   object(2, () => push(`<< /Type /Pages /Count ${jpegs.length} /Kids [${jpegs.map((j, i) => `${3 + 3 * i} 0 R`).join(' ')}] >>`));
   jpegs.forEach((jpeg, i) => {
     const n = 3 + 3 * i, draw = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
-    object(n, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${n + 2} 0 R >> >> /Contents ${n + 1} 0 R >>`));
+    // clickable areas: page pixels (origin top left) become points (origin bottom left)
+    const k = W / jpeg.w;
+    const annots = (jpeg.links || []).map((l) => {
+      const rect = [l.x * k, H - (l.y + l.h) * k, (l.x + l.w) * k, H - l.y * k].map((v) => v.toFixed(2)).join(' ');
+      return `<< /Type /Annot /Subtype /Link /Rect [${rect}] /Border [0 0 0] /Dest [${3 + 3 * l.page} 0 R /Fit] >>`;
+    }).join(' ');
+    object(n, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${n + 2} 0 R >> >> /Contents ${n + 1} 0 R${annots ? ` /Annots [${annots}]` : ''} >>`));
     object(n + 1, () => push(`<< /Length ${draw.length} >>\nstream\n${draw}\nendstream`));
     object(n + 2, () => {
       push(`<< /Type /XObject /Subtype /Image /Width ${jpeg.w} /Height ${jpeg.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.bytes.length} >>\nstream\n`);
@@ -2009,7 +2080,7 @@ async function exportPdf() {
       shareGround(still); lightFigures(still); drawFront(still);
       return {
         look: cue.look, note: cue.note,
-        like: similar[i] && { title: likeTitle(i), lines: similar[i].lines },
+        like: similar[i] && { index: similar[i].index, title: likeTitle(i), lines: similar[i].lines },
         title: show.cues.length ? cueLabel(cue) : cue.name,
         meta: (show.projectName ? show.projectName + '   |   ' : '') + (show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
         map: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planSvgText(cue.look)),
@@ -2024,28 +2095,25 @@ async function exportPdf() {
     canvas.width = PAGE_W; canvas.height = PAGE_H;
     const c = canvas.getContext('2d'), jpegs = [];
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    const addPage = async () => {
+    // Pages run: overview page(s), then one page per cue. A link names a cue (or the
+    // overview) and is turned into a page number here.
+    const overview = show.cues.length > 1 ? overviewPages(c, cues.map((cue, i) => ({
+      index: i, cue: cueLabel(cue), time: fmt(cue.time), transition: cue.instant ? 'Instant' : `Fade ${cue.fade} s`, effect: effectText(cue.look),
+      like: similar[i] && { index: similar[i].index, title: likeTitle(i), lines: similar[i].lines },
+    }))) : [];
+    const addPage = async (links) => {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.88));
-      jpegs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: PAGE_W, h: PAGE_H });
+      jpegs.push({
+        bytes: new Uint8Array(await blob.arrayBuffer()), w: PAGE_W, h: PAGE_H,
+        links: (links || []).map((l) => Object.assign({ page: l.overview ? 0 : overview.length + l.cue }, l)),
+      });
     };
-    if (show.cues.length > 1) {                  // overview first: every cue on one line
-      const rows = cues.map((cue, i) => [
-        cueLabel(cue), fmt(cue.time), cue.instant ? 'Instant' : `Fade ${cue.fade} s`, effectText(cue.look),
-        !similar[i] ? '-' : similar[i].kinds
-          ? `Cue ${similar[i].index + 1}, with ${similar[i].lines.length} change${similar[i].lines.length === 1 ? '' : 's'}: ${similar[i].lines.join('; ')}`
-          : `Cue ${similar[i].index + 1}, identical`,
-      ]);
-      const count = Math.ceil(rows.length / OVERVIEW_ROWS);
-      for (let n = 0; n < count; n++) {
-        drawOverview(c, rows.slice(n * OVERVIEW_ROWS, (n + 1) * OVERVIEW_ROWS), n + 1, count);
-        await addPage();
-      }
-    }
+    for (let n = 0; n < overview.length; n++) await addPage(drawOverview(c, overview[n], n + 1, overview.length));
+    pages.forEach((page) => { page.overview = overview.length > 0; });
     for (let i = 0; i < pages.length; i++) {
       toast(`Building PDF: page ${i + 1} of ${pages.length}`);
       const [mapImg, shotImg] = await Promise.all([loadImage(pages[i].map), loadImage(pages[i].shot)]);
-      drawPage(c, pages[i], mapImg, shotImg);
-      await addPage();
+      await addPage(drawPage(c, pages[i], mapImg, shotImg));
     }
 
     // 3. Download.
