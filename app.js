@@ -173,7 +173,7 @@ function randomFade(led, beat, rate) {
 
 // Dimmer chase: all three rows fade slowly in and out on the same curve, but each starts
 // later than the one behind it: the back row first, then the mid row, then the front row.
-const CHASE = { cycle: 8, stagger: 1, low: 0.05 };      // beats per fade in and out; beats between rows
+const CHASE = { cycle: 8, stagger: 2, low: 0.05 };      // beats per fade in and out; beats between rows
 function chaseLevel(beat, row) {
   const wave = 0.5 - 0.5 * Math.cos(2 * Math.PI * (beat - row * CHASE.stagger) / CHASE.cycle);
   return CHASE.low + (1 - CHASE.low) * wave;
