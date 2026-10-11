@@ -38,7 +38,8 @@ const CURTAIN_Y = [230, 338, 357, 443, 531, 631, 737];
 const ZONES = { x: 624, w: 253, y: 218, h: 203.3 };       // left edge and size of one zone
 const ZONE_X = [750.5, 1003.5, 1256.5];
 const ZONE_Y = [320, 523, 726];
-const ZONE_NAMES = ['Back L', 'Back C', 'Back R', 'Mid L', 'Mid C', 'Mid R', 'Front L', 'Front C', 'Front R'];
+const ZONE_NAMES = ['Back L', 'Back C', 'Back R', 'Mid L', 'Mid C', 'Mid R', 'Front L', 'Front C', 'Front R', 'Cyclorama'];
+const CYCLO_ZONE = 10;       // aiming here points the beam at the cyclorama itself, not the floor
 const PEOPLE_AT = [[830, 455], [1000, 425], [1170, 455], [745, 600], [885, 680], [1000, 610], [1115, 680], [1255, 600]];
 
 // 3D units: 1 unit is about a metre; the stage is roughly 10 wide and 6 deep.
@@ -64,6 +65,8 @@ SPOT_ROWS.forEach((r, row) => SPOT_X.forEach((x, col) => {
 }));
 const SIDE_Z = SIDE_Y.map((y) => to3(0, y)[1]);
 const PEOPLE = PEOPLE_AT.map(([x, y]) => { const [x3, z3] = to3(x, y); return { x3, z3 }; });
+const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
+
 // Where each aimed LED lands, in plan units. LEDs sent to the same zone fan out across
 // it in the same arrangement they hang in, so together they cover the zone instead of
 // all meeting at its centre. A lone LED lands in the middle.
@@ -79,7 +82,17 @@ function aimTargets(look) {
     const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
     for (const led of leds) {
       const u = c1 > c0 ? (led.col - c0) / (c1 - c0) - 0.5 : 0, v = r1 > r0 ? (led.row - r0) / (r1 - r0) - 0.5 : 0;
-      out[led.id] = [cx + u * ZONES.w * 0.72, cy + v * ZONES.h * 0.62];
+      if (+zone === CYCLO_ZONE) {
+        // Pick a point on the cyclorama (spread across its width, a row of LEDs per
+        // height), then carry the line from the fixture through it on down to floor
+        // level, which is how every aim is stored. The third and fourth numbers are
+        // where to draw the plan's aim line to: the cyclorama bar.
+        const wx = u * CYC.halfW * 1.6, wy = 2.4 - v * 1.7, along = (RIG_H - wy) / RIG_H;
+        const tx = led.x3 + (wx - led.x3) / along, tz = led.z3 + (CYC.z - led.z3) / along;
+        out[led.id] = [tx * 101 + STAGE.cx, tz * 101 + STAGE.cy, wx * 101 + STAGE.cx, 218];
+      } else {
+        out[led.id] = [cx + u * ZONES.w * 0.72, cy + v * ZONES.h * 0.62];
+      }
     }
   }
   return out;
@@ -269,7 +282,6 @@ const ground = new Float32Array(LEDS.length);
 // A beam swung far enough upstage hits the cyclorama before it reaches the floor.
 // Returns where on the cyclorama it lands and how far along the beam that is (0-1),
 // or null if it reaches the floor.
-const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };
 function cycloHit(led, tx, tz) {
   if (tz >= CYC.z || led.z3 <= CYC.z) return null;
   const s = (CYC.z - led.z3) / (tz - led.z3);
@@ -495,6 +507,11 @@ function buildPlan() {
       () => { aiming = false; forSelection((id) => { state.aim[id] = z + 1; }); },
       null, planEls.zonePick);
   }
+  fixture(                                     // zone 10: the cyclorama itself
+    ['rect', { x: ZONES.x + 4, y: 184, width: ZONES.w * 3 - 8, height: 34, rx: 8 }],
+    ['text', { x: ZONES.x + ZONES.w * 1.5, y: 210, 'text-anchor': 'middle', class: 'zone-num small' }, '10  Cyclorama'],
+    () => { aiming = false; forSelection((id) => { state.aim[id] = CYCLO_ZONE; }); },
+    null, planEls.zonePick);
   applyView();
 }
 
@@ -764,8 +781,9 @@ function paintPlan(look, bare) {
     const line = planEls.aims[led.id];
     line.style.display = zone ? '' : 'none';
     if (zone) {
-      line.setAttribute('x2', targets[led.id][0]);
-      line.setAttribute('y2', targets[led.id][1]);
+      const at = targets[led.id];
+      line.setAttribute('x2', at.length > 2 ? at[2] : at[0]);
+      line.setAttribute('y2', at.length > 2 ? at[3] : at[1]);
     }
   }
   for (const s of SPOTS) {

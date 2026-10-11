@@ -275,6 +275,7 @@ input[type="number"] { width: 62px; }
 #plan-reset { right: 4px; }
 .plan .zone-pick .hit { fill: var(--blue); fill-opacity: .16; stroke: var(--blue); stroke-width: 3; }
 .plan .zone-pick .fx:hover .hit { fill-opacity: .32; }
+.plan text.zone-num.small { font-size: 26px; letter-spacing: .04em; }
 .plan text.zone-num { font-size: 84px; font-weight: 600; fill: var(--blue); }
 
 .plan text { font: 500 14px Inter, sans-serif; fill: var(--plan-label); pointer-events: none; }
