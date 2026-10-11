@@ -661,6 +661,14 @@ function buildControls() {
     if (!EFFECT_BPM[state.effect]) { show.songBpm = v; saveShow(); }   // typed for a song-tempo effect
     commit();
   });
+  // The "BPM" label doubles as a button: it puts the loaded track's detected tempo in the field.
+  $('bpm-detect').addEventListener('click', () => {
+    if (!show.detectedBpm) return toast('Load a track with the note button to detect its BPM', 3500);
+    state.bpm = show.songBpm = show.detectedBpm;
+    saveShow();
+    commit();
+    toast(`BPM set to ${show.detectedBpm}, detected from the track`, 2500);
+  });
   $('reset').addEventListener('click', () => { state = blankLook(); clearSelection(); commit(); });
   $('people').addEventListener('click', () => { prefs.people = !prefs.people; applyPrefs(); });
   $('theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); });
@@ -1400,7 +1408,7 @@ async function loadTrack(file) {
     ac.close();
     player.peaks = wavePeaks(buf);
     const bpm = detectBpm(buf);
-    if (bpm) { show.songBpm = bpm; saveShow(); }
+    if (bpm) { show.songBpm = show.detectedBpm = bpm; saveShow(); }
     // never overwrite a cue's tempo, or an effect that keeps its own
     if (bpm && !show.cues.length && !EFFECT_BPM[state.effect]) { state.bpm = bpm; commit(); }
     $('track-name').textContent = bpm ? `${file.name} · detected ${bpm} BPM` : `${file.name} · no clear beat found`;
@@ -1857,10 +1865,13 @@ function pdfFromJpegs(jpegs) {
   return new Blob(parts, { type: 'application/pdf' });
 }
 
-function toast(text) {
+let toastTimer = 0;
+function toast(text, hideAfterMs) {
   const box = $('toast');
   box.textContent = text || '';
   box.hidden = !text;
+  clearTimeout(toastTimer);
+  if (text && hideAfterMs) toastTimer = setTimeout(() => toast(''), hideAfterMs);
 }
 
 let exporting = false;
