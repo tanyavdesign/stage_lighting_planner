@@ -9,28 +9,24 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-view="front" data-tab="face">
-<header class="toolbar">
-  <div class="title">Stage Lighting Planner</div>
-  <div class="divider"></div>
-  <label class="field">Effect <select id="effect"></select></label>
-  <label class="field">BPM <input id="bpm" type="number" min="20" max="300" step="1"></label>
-  <div class="spacer"></div>
-  <button id="watch" class="btn">Watch</button>
-  <div class="menu-wrap">
-    <button id="more" class="btn">More</button>
-    <div id="menu" class="menu" hidden>
-      <button id="people">Hide people</button>
-      <button id="theme">Dark mode</button>
-      <button id="export">Export show</button>
-      <label>Import show<input id="import" type="file" accept=".json,application/json" hidden></label>
-      <button id="reset">Clear lights</button>
-    </div>
-  </div>
-</header>
-
+<body data-view="front">
 <main>
-  <section class="view-col">
+  <section class="view-col" id="views">
+    <div class="menu-wrap">
+      <button id="more" class="btn icon" aria-label="Menu" title="Menu">
+        <svg viewBox="0 0 16 16"><path d="M2 3.5h12v1.6H2zM2 7.2h12v1.6H2zM2 10.9h12v1.6H2z"/></svg>
+      </button>
+      <div id="menu" class="menu" hidden>
+        <div id="track-name" class="menu-note">No track loaded</div>
+        <label>Load track<input id="track-file" type="file" accept="audio/*" hidden></label>
+        <button id="watch">Watch</button>
+        <button id="people">Hide people</button>
+        <button id="theme">Dark mode</button>
+        <button id="export">Export show</button>
+        <label>Import show<input id="import" type="file" accept=".json,application/json" hidden></label>
+        <button id="reset">Clear lights</button>
+      </div>
+    </div>
     <div class="seg view-switch">
       <button class="btn small" data-view-pick="front">Front</button>
       <button class="btn small" data-view-pick="three">3D</button>
@@ -45,85 +41,112 @@
     </div>
   </section>
 
+  <div class="grip" data-grip="view" title="Drag to resize"></div>
+
   <section class="panel plan-col">
-    <div class="panel-head">
-      <h2>Stage plan</h2>
-      <div class="picks">
-        <span class="pick-label">LEDs</span>
-        <div class="seg">
-          <button class="btn small" data-pick="led:all">All</button>
-          <button class="btn small" data-pick="led:0">Back</button>
-          <button class="btn small" data-pick="led:1">Mid</button>
-          <button class="btn small" data-pick="led:2">Front</button>
-        </div>
-        <span class="pick-label">Spots</span>
-        <div class="seg">
-          <button class="btn small" data-pick="spot:all">All</button>
-          <button class="btn small" data-pick="spot:0">Back</button>
-          <button class="btn small" data-pick="spot:1">Mid</button>
-          <button class="btn small" data-pick="spot:2">Front</button>
-        </div>
-        <span class="pick-label">Sides</span>
-        <div class="seg">
-          <button class="btn small" data-pick="side:all">All</button>
-        </div>
-      </div>
-    </div>
     <div class="plan-wrap">
       <svg id="plan" viewBox="250 110 1500 1010" xmlns="http://www.w3.org/2000/svg"></svg>
-      <button id="plan-reset" class="btn small" hidden>Reset zoom</button>
+      <button id="deselect" class="btn small chip" hidden>Deselect</button>
+      <button id="plan-reset" class="btn small chip" hidden>Reset zoom</button>
     </div>
   </section>
 
-  <aside class="panel side">
-    <div id="selection" hidden>
-      <div class="sel-head"><span id="sel-summary">Selected</span><button class="btn small" id="deselect">Deselect all</button></div>
-      <div class="group" id="sel-leds">
-        <h3>LED lights <span id="led-count" class="count"></span></h3>
-        <div class="row swatches" id="led-colors"></div>
-        <div class="aim">
-          <h4>Aim at zone</h4>
-          <div class="zones" id="zones"></div>
-          <button class="btn" id="aim-down">Straight down</button>
+  <div class="grip" data-grip="plan" title="Drag to resize"></div>
+
+  <aside class="panel side" id="mods">
+    <div class="group" id="sec-cue" hidden>
+      <div class="sec-head"><h3>Cue</h3></div>
+      <div id="cue-edit" class="cue-edit"></div>
+    </div>
+
+    <div class="group">
+      <div class="sec-head"><h3>LEDs</h3><span id="led-count" class="count"></span></div>
+      <div class="line">
+        <span class="lbl">Select</span>
+        <div class="seg">
+          <button class="btn" data-pick="led:all">All</button>
+          <button class="btn" data-pick="led:0">Back</button>
+          <button class="btn" data-pick="led:1">Mid</button>
+          <button class="btn" data-pick="led:2">Front</button>
         </div>
       </div>
-      <div class="group" id="sel-spots">
-        <h3>Spotlights <span id="spot-count" class="count"></span></h3>
-        <div class="row seg">
-          <button class="btn" data-sel-spots="on">On</button>
-          <button class="btn" data-sel-spots="off">Off</button>
+      <div id="sel-leds" hidden>
+        <div class="line top">
+          <span class="lbl">Color</span>
+          <div class="swatches" id="led-colors"></div>
+        </div>
+        <div class="line">
+          <span class="lbl">Aim</span>
+          <div class="seg">
+            <button class="btn" id="aim-down">Straight down</button>
+            <button class="btn" id="aim-zone">Aim at zone</button>
+          </div>
         </div>
       </div>
-      <div class="group" id="sel-sides">
-        <h3>Side positions <span id="side-count" class="count"></span></h3>
-        <div class="row seg">
-          <button class="btn" data-sel-sides="on">On</button>
-          <button class="btn" data-sel-sides="off">Off</button>
+      <div class="line">
+        <span class="lbl">Effect</span>
+        <select id="effect"></select>
+        <span class="lbl short">BPM</span>
+        <input id="bpm" type="number" min="20" max="300" step="1">
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="sec-head"><h3>Spotlights</h3><span id="spot-count" class="count"></span></div>
+      <div class="line">
+        <span class="lbl">Select</span>
+        <div class="seg">
+          <button class="btn" data-pick="spot:all">All</button>
+          <button class="btn" data-pick="spot:0">Back</button>
+          <button class="btn" data-pick="spot:1">Mid</button>
+          <button class="btn" data-pick="spot:2">Front</button>
+        </div>
+      </div>
+      <div id="sel-spots" hidden>
+        <div class="line">
+          <span class="lbl">Switch</span>
+          <div class="seg">
+            <button class="btn" data-sel-spots="on">On</button>
+            <button class="btn" data-sel-spots="off">Off</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <div id="globals">
-      <div class="group tip">
-        <p class="hint">Tap lights on the plan to select them, or drag a box. Double-tap a spotlight or side light to switch it.</p>
+    <div class="group">
+      <div class="sec-head"><h3>Side lights</h3><span id="side-count" class="count"></span></div>
+      <div class="line">
+        <span class="lbl">Select</span>
+        <div class="seg"><button class="btn" data-pick="side:all">All positions</button></div>
       </div>
-      <div class="seg tabs">
-        <button class="btn" data-tab-pick="face">Face</button>
-        <button class="btn" data-tab-pick="side">Side</button>
-        <button class="btn" data-tab-pick="cyclo">Cyclo</button>
+      <div id="sel-sides" hidden>
+        <div class="line">
+          <span class="lbl">Switch</span>
+          <div class="seg">
+            <button class="btn" data-sel-sides="on">On</button>
+            <button class="btn" data-sel-sides="off">Off</button>
+          </div>
+        </div>
       </div>
-      <div class="group" data-tab="face">
-        <h3>Face lights</h3>
-        <div class="row seg" id="face"></div>
+      <div class="line">
+        <span class="lbl">Height</span>
+        <div class="seg" id="side-types"></div>
       </div>
-      <div class="group" data-tab="side">
-        <h3>Side lights</h3>
-        <div class="row seg" id="side-types"></div>
-        <p class="hint note">These apply to the side positions that are switched on.</p>
+    </div>
+
+    <div class="group">
+      <div class="sec-head"><h3>Face lights</h3></div>
+      <div class="line">
+        <span class="lbl">Level</span>
+        <div class="seg" id="face"></div>
       </div>
-      <div class="group" data-tab="cyclo">
-        <h3>Cyclorama</h3>
-        <div class="row swatches" id="cyclo-colors"></div>
+    </div>
+
+    <div class="group">
+      <div class="sec-head"><h3>Cyclorama</h3></div>
+      <div class="line top">
+        <span class="lbl">Color</span>
+        <div class="swatches" id="cyclo-colors"></div>
       </div>
     </div>
   </aside>
@@ -131,15 +154,12 @@
 
 <footer class="dock">
   <div class="transport">
-    <button id="play" class="btn play" title="Play or pause (space)">Play</button>
+    <button id="play" class="btn icon" title="Play or pause (space)"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg></button>
+    <button id="prev-cue" class="btn icon" title="Previous cue"><svg viewBox="0 0 16 16"><path d="M3 3h1.8v10H3zM13 3v10L5.5 8z"/></svg></button>
+    <button id="next-cue" class="btn icon" title="Next cue"><svg viewBox="0 0 16 16"><path d="M11.2 3H13v10h-1.8zM3 3v10l7.5-5z"/></svg></button>
+    <button id="add-cue" class="btn icon primary" title="Add a cue here"><svg viewBox="0 0 16 16"><path d="M7.1 2.5h1.8v4.6h4.6v1.8H8.9v4.6H7.1V8.9H2.5V7.1h4.6z"/></svg></button>
     <span id="time" class="time">0:00.0 / 1:00.0</span>
-    <button id="add-cue" class="btn primary">Add cue</button>
-    <span id="cue-hint" class="hint" hidden>Click a cue marker to edit it</span>
-    <span id="cue-edit" class="cue-edit" hidden></span>
-    <span id="next-cue" class="hint"></span>
-    <div class="spacer"></div>
-    <span id="track-name" class="hint">No track loaded</span>
-    <label class="btn">Load track<input id="track-file" type="file" accept="audio/*" hidden></label>
+    <span id="next-text" class="hint"></span>
   </div>
   <canvas id="wave"></canvas>
 </footer>

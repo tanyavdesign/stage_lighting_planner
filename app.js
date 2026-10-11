@@ -293,6 +293,7 @@ const planEls = { leds: {}, aims: {}, spots: {}, face: [], side: { L: [], R: [] 
 
 // Selection: `selection` holds LEDs; spotlights and side positions have their own sets.
 const selSpots = new Set(), selSides = new Set();
+let aiming = false;        // true while the plan is waiting for a zone to be tapped
 const anySelected = () => selection.size + selSpots.size + selSides.size > 0;
 function clearSelection() { selection.clear(); selSpots.clear(); selSides.clear(); }
 const toggleIn = (set, key) => { set.has(key) ? set.delete(key) : set.add(key); };
@@ -327,19 +328,21 @@ function zoomTo(width, anchor, cx, cy) {
 }
 
 // A fixture is a group: an invisible, generous tap area plus the shape you see.
-// A second tap within a moment counts as a double tap.
+// Taps are worked out from pointer events (not click), so a swipe that starts on a
+// light can still become a selection box. A second tap within a moment is a double tap.
 let suppressTapsUntil = 0;
-function fixture(hit, shape, onTap, onDouble) {
-  const g = el('g', { class: 'fx clickable' });
+const fxTap = new WeakMap();
+function fixture(hit, shape, onTap, onDouble, parent) {
+  const g = el('g', { class: 'fx clickable' }, null, parent);
   el(hit[0], Object.assign({ class: 'hit' }, hit[1]), null, g);
-  const n = el(shape[0], shape[1], null, g);
-  let last = 0;
-  g.addEventListener('click', () => {
-    const now = performance.now();
-    if (now < suppressTapsUntil) return;
-    if (onDouble && now - last < 350) { last = 0; onDouble(); } else { last = now; onTap(); }
-  });
+  const n = el(shape[0], shape[1], shape[2], g);
+  fxTap.set(g, { onTap, onDouble, last: 0 });
   return n;
+}
+function tapFixture(g) {
+  const h = fxTap.get(g), now = performance.now();
+  if (!h || now < suppressTapsUntil) return;
+  if (h.onDouble && now - h.last < 350) { h.last = 0; h.onDouble(); } else { h.last = now; h.onTap(); }
 }
 
 function buildPlan() {
@@ -398,11 +401,21 @@ function buildPlan() {
       ['rect', { x: x - 8, y: FACE_Y - 19, width: 16, height: 38, rx: 8, class: 'face' }],
       () => { state.face = (state.face + 1) % 4; commit(); }));
   }
+  // Shown over the stage while choosing where the selected LEDs should point.
+  planEls.zonePick = el('g', { class: 'zone-pick' });
+  for (let z = 0; z < 9; z++) {
+    const x = 495 + 336.7 * (z % 3), y = 218 + 203.3 * Math.floor(z / 3);
+    fixture(
+      ['rect', { x: x + 4, y: y + 4, width: 328.7, height: 195.3, rx: 10 }],
+      ['text', { x: x + 168, y: y + 128, 'text-anchor': 'middle', class: 'zone-num' }, z + 1],
+      () => { aiming = false; forSelection((id) => { state.aim[id] = z + 1; }); },
+      null, planEls.zonePick);
+  }
   applyView();
 }
 
-// One finger on empty plan space drags a selection box (a plain tap there deselects);
-// two fingers pinch to zoom and pan.
+// One finger: a tap toggles the light under it (or deselects on empty space), and a
+// swipe from anywhere drags a selection box. Two fingers pinch to zoom and pan.
 const svgPoint = (e) => svgPointAt(e.clientX, e.clientY);
 const pointers = new Map();
 let drag = null, pinch = null;
@@ -419,8 +432,8 @@ svg.addEventListener('pointerdown', (e) => {
     pinch = { dist: t.dist, width: view.w, anchor: svgPointAt(t.x, t.y) };
     return;
   }
-  if (pointers.size > 2 || e.target.closest('.clickable')) return;
-  drag = { start: svgPoint(e), rect: null };
+  if (pointers.size > 2) return;
+  drag = { fx: e.target.closest('.fx'), x: e.clientX, y: e.clientY, start: svgPoint(e), rect: null };
   svg.setPointerCapture(e.pointerId);
 });
 svg.addEventListener('pointermove', (e) => {
@@ -431,10 +444,10 @@ svg.addEventListener('pointermove', (e) => {
     suppressTapsUntil = performance.now() + 400;     // lifting fingers after a pinch is not a tap
     return;
   }
-  if (!drag) return;
-  const p = svgPoint(e), s = drag.start;
-  if (!drag.rect && Math.hypot(p.x - s.x, p.y - s.y) < 6) return;
+  if (!drag || aiming) return;
+  if (!drag.rect && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
   if (!drag.rect) drag.rect = el('rect', { class: 'box' });
+  const p = svgPoint(e), s = drag.start;
   const r = { x: Math.min(p.x, s.x), y: Math.min(p.y, s.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) };
   drag.area = r;
   drag.rect.setAttribute('x', r.x); drag.rect.setAttribute('y', r.y);
@@ -444,16 +457,23 @@ function endPointer(e) {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
   if (!drag) return;
-  if (drag.rect) {
-    const r = drag.area, inside = (x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  const d = drag;
+  drag = null;
+  if (d.rect) {
+    const r = d.area, inside = (x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
     for (const led of LEDS) if (inside(led.x, led.y)) selection.add(led.id);
     for (const s of SPOTS) if (inside(s.x, s.y)) selSpots.add(s.id);
     for (const side of SIDES) SIDE_Y.forEach((y, i) => { if (inside(SIDE_X[side], y)) selSides.add(side + i); });
-    drag.rect.remove();
+    d.rect.remove();
+  } else if (performance.now() < suppressTapsUntil) {
+    return;
+  } else if (d.fx) {
+    return tapFixture(d.fx);
+  } else if (aiming) {
+    aiming = false;                       // tapping outside the zones cancels aiming
   } else {
     clearSelection();
   }
-  drag = null;
   syncUI();
 }
 window.addEventListener('pointerup', endPointer);
@@ -471,7 +491,7 @@ svg.addEventListener('wheel', (e) => {
 // ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------
-const ui = { face: [], sideTypes: {}, cyclo: {}, zones: [] };
+const ui = { face: [], sideTypes: {}, cyclo: {} };
 
 function button(parent, text, cls, onClick) {
   const b = document.createElement('button');
@@ -490,14 +510,8 @@ function buildControls() {
     b.style.background = COLORS[name]; b.title = name;
   }
   button($('led-colors'), '', 'swatch off', () => forSelection((id) => { delete state.leds[id]; })).title = 'off';
-  ZONE_NAMES.forEach((name, i) => {
-    const b = button($('zones'), String(i + 1), '', () => forSelection((id) => { state.aim[id] = i + 1; }));
-    const text = document.createElement('span');
-    text.className = 'zone-name'; text.textContent = ' ' + name;
-    b.appendChild(text); b.title = name;
-    ui.zones.push(b);
-  });
-  $('aim-down').addEventListener('click', () => forSelection((id) => { delete state.aim[id]; }));
+  $('aim-down').addEventListener('click', () => { aiming = false; forSelection((id) => { delete state.aim[id]; }); });
+  $('aim-zone').addEventListener('click', () => { aiming = !aiming; syncUI(); });
   $('deselect').addEventListener('click', () => { clearSelection(); syncUI(); });
   each('[data-sel-spots]', (b) => b.addEventListener('click', () => {
     for (const id of selSpots) state.spots[id] = b.dataset.selSpots === 'on';
@@ -567,6 +581,7 @@ function buildControls() {
     const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
     if (e.key === 'Escape') {
       if (!$('menu').hidden) $('menu').hidden = true;
+      else if (aiming) { aiming = false; syncUI(); }
       else if (document.body.classList.contains('watch')) setWatch(false);
       else { clearSelection(); syncUI(); }
     } else if (typing) {
@@ -588,6 +603,32 @@ function setWatch(on) {
   document.body.classList.toggle('watch', on);
   $('watch').classList.toggle('active', on);
   $('watch').textContent = on ? 'Exit watch' : 'Watch';
+}
+
+function setupGrips() {
+  const root = document.documentElement;
+  const panes = { view: $('views'), plan: document.querySelector('.plan-col') };
+  const apply = () => {
+    for (const key in panes) if (prefs[key + 'H']) root.style.setProperty(`--${key}-h`, prefs[key + 'H'] + 'px');
+  };
+  each('.grip', (grip) => {
+    const key = grip.dataset.grip, other = key === 'view' ? 'plan' : 'view';
+    let start = null;
+    grip.addEventListener('pointerdown', (e) => {
+      start = { y: e.clientY, h: panes[key].getBoundingClientRect().height };
+      grip.setPointerCapture(e.pointerId);
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!start) return;
+      const room = document.querySelector('main').getBoundingClientRect().height - panes[other].getBoundingClientRect().height - 110;
+      prefs[key + 'H'] = Math.round(Math.max(70, Math.min(room, start.h + e.clientY - start.y)));
+      apply();
+    });
+    const end = () => { if (start) { start = null; store.set('kdt-lighting-prefs-v1', prefs); } };
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+  });
+  apply();
 }
 
 function applyPrefs() {
@@ -624,24 +665,22 @@ function syncUI() {
   planEls.cyclo.classList.toggle('none', state.cyclo === 'none');
 
   // The selection panel shows one section per kind of light that is selected.
-  const some = anySelected();
-  document.body.classList.toggle('has-selection', some);
-  $('selection').hidden = !some;
+  // Each section shows its extra controls only while lights of that kind are selected.
+  $('deselect').hidden = !anySelected();
   $('sel-leds').hidden = !selection.size;
   $('sel-spots').hidden = !selSpots.size;
   $('sel-sides').hidden = !selSides.size;
-  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  $('sel-summary').textContent = [
-    selection.size && plural(selection.size, 'LED'),
-    selSpots.size && plural(selSpots.size, 'spotlight'),
-    selSides.size && plural(selSides.size, 'side position'),
-  ].filter(Boolean).join(', ') + ' selected';
-  $('led-count').textContent = selection.size + ' selected';
-  $('spot-count').textContent = selSpots.size + ' selected';
-  $('side-count').textContent = selSides.size + ' selected';
+  const count = (n) => (n ? n + ' selected' : '');
+  $('led-count').textContent = count(selection.size);
+  $('spot-count').textContent = count(selSpots.size);
+  $('side-count').textContent = count(selSides.size);
+  if (!selection.size) aiming = false;
   const zones = new Set([...selection].map((id) => state.aim[id] || 0));
-  ui.zones.forEach((b, i) => b.classList.toggle('active', zones.size === 1 && zones.has(i + 1)));
-  $('aim-down').classList.toggle('active', zones.size === 1 && zones.has(0));
+  const zone = zones.size === 1 ? [...zones][0] : null;
+  $('aim-down').classList.toggle('active', !aiming && zone === 0);
+  $('aim-zone').classList.toggle('active', aiming || zone > 0);
+  $('aim-zone').textContent = aiming ? 'Tap a zone on the plan' : zone > 0 ? `Zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'Aim at zone';
+  planEls.zonePick.style.display = aiming ? '' : 'none';
   const allSame = (values) => values.length > 0 && values.every((v) => v === values[0]);
   const spotStates = [...selSpots].map((id) => !!state.spots[id]);
   const sideStates = [...selSides].map((key) => state.sidePos[key[0]][+key[1]]);
@@ -1029,11 +1068,13 @@ function duration() {
   return Math.max(60, lastCue + 10);
 }
 
+const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>';
 function setPlaying(on) {
   if (on && currentTime() >= duration() - 0.05) seek(0);
   player.playing = on;
   if (player.audio) on ? player.audio.play().catch(() => setPlaying(false)) : player.audio.pause();
-  $('play').textContent = on ? 'Pause' : 'Play';
+  $('play').innerHTML = on ? ICON_PAUSE : ICON_PLAY;
   $('play').classList.toggle('active', on);
 }
 
@@ -1226,6 +1267,22 @@ function cuesChanged() {          // after a cue is moved, added or deleted
 function selectCue(id) {
   selectedCue = id;
   renderCues();
+  if (id) $('mods').scrollTop = 0;       // its settings sit at the top of the controls list
+}
+function jumpToCue(cue) {
+  loadedIdx = -2;
+  seek(cue ? cue.time + 0.001 : 0);
+  selectCue(cue ? cue.id : null);
+}
+// Step back to the cue before the playhead (or the start), or on to the next one.
+function stepCue(forward) {
+  const T = currentTime();
+  if (forward) {
+    const next = show.cues.find((c) => c.time > T + 0.01);
+    if (next) jumpToCue(next);
+  } else {
+    jumpToCue([...show.cues].reverse().find((c) => c.time < T - 0.3) || null);
+  }
 }
 function deleteCue(cue) {
   show.cues.splice(show.cues.indexOf(cue), 1);
@@ -1246,8 +1303,7 @@ function renderCues() {
   const box = $('cue-edit');
   box.textContent = '';
   const cue = show.cues.find((c) => c.id === selectedCue);
-  box.hidden = !cue;
-  $('cue-hint').hidden = !!cue || !show.cues.length;
+  $('sec-cue').hidden = !cue;
   if (!cue) return;
   const tag = document.createElement('span');
   tag.className = 'cue-tag';
@@ -1269,6 +1325,7 @@ function renderCues() {
     secs.step = 0.1; secs.min = 0.1; secs.title = 'Fade length in seconds';
   }
   button(box, 'Delete', 'btn', () => deleteCue(cue));
+  button(box, 'Done', 'btn', () => selectCue(null));
 }
 
 function addCue() {
@@ -1313,6 +1370,8 @@ async function importShow(file) {
 function buildShow() {
   $('play').addEventListener('click', () => setPlaying(!player.playing));
   $('add-cue').addEventListener('click', addCue);
+  $('prev-cue').addEventListener('click', () => stepCue(false));
+  $('next-cue').addEventListener('click', () => stepCue(true));
   $('track-file').addEventListener('change', (e) => { if (e.target.files[0]) loadTrack(e.target.files[0]); e.target.value = ''; });
   $('export').addEventListener('click', exportShow);
   $('import').addEventListener('change', (e) => { if (e.target.files[0]) importShow(e.target.files[0]); e.target.value = ''; });
@@ -1326,6 +1385,7 @@ function buildShow() {
 buildPlan();
 buildControls();
 buildShow();
+setupGrips();
 buildThree();
 applyPrefs();
 sizeFront(); sizeWave();
@@ -1363,7 +1423,7 @@ function frame(ms) {
   if (text !== timeText) $('time').textContent = timeText = text;
   const next = show.cues[idx + 1];
   const nextNow = player.playing && next ? `Next: ${next.name} in ${(next.time - T).toFixed(1)} s` : '';
-  if (nextNow !== nextText) $('next-cue').textContent = nextText = nextNow;
+  if (nextNow !== nextText) $('next-text').textContent = nextText = nextNow;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
