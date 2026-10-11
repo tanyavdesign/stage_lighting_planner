@@ -253,11 +253,12 @@ function ease(dt) {
 // ---------------------------------------------------------------------------
 // What lands on each figure, kept apart by where it comes from, since each kind of light
 // falls on a body differently:
-//   [0-2] top light (LEDs and spotlights): colour, strongest on the head and shoulders
+//   [0-2] LED light: colour from above; a wide wash, so it spills well down the body
 //   [3]   face light: even, from the front
 //   [4-6] side light from stage left, at head / torso / leg height
 //   [7-9] side light from stage right, the same
-const figures = PEOPLE.map(() => new Float32Array(10));
+//   [10]  spotlight: white from above; a tight beam, so mostly head and shoulders
+const figures = PEOPLE.map(() => new Float32Array(11));
 
 // An LED beam is about 50% strong at the fixture and 10% where it lands. Beams that land
 // on the same spot share the floor between them, so a pile of them adds up to about 20%
@@ -325,10 +326,10 @@ function lightFigures(D) {
       const off = Math.hypot(s.x3 - p.x3, s.z3 - p.z3) / 1.6;
       if (off < 1) spot += Math.pow(1 - off * off, 1.5) * D[O_SPOT + i] * 0.75;
     });
-    r += WARM[0] * spot; g += WARM[1] * spot; b += WARM[2] * spot;
     // compress the brightness only, so strong coloured light keeps its hue
     const m = Math.max(r, g, b, 1e-4), k = tone(m) / m;
     out[0] = r * k; out[1] = g * k; out[2] = b * k;
+    out[10] = tone(spot);
 
     // Every light is stronger on whoever stands nearer to it.
     out[3] = D[O_FACE] * 0.82 * nearness(FACE_AT.z - p.z3, 6);        // face lights hang out front
@@ -345,8 +346,9 @@ function lightFigures(D) {
     }
   });
 }
-// How much of the top light reaches the head, torso and legs.
-const TOP_SHARE = [1, 0.5, 0.2];
+// How much light from above reaches the head, torso and legs. LEDs are soft and wide, so
+// plenty reaches the legs; a spotlight is tight and mostly catches the top of the body.
+const LED_SHARE = [1, 0.8, 0.58], SPOT_SHARE = [1, 0.5, 0.2];
 
 // ---------------------------------------------------------------------------
 // Stage plan (SVG)
@@ -907,12 +909,19 @@ function drawFigure(p, f) {
   ctx.clip();
   ctx.globalCompositeOperation = 'lighter';
 
-  if (f[0] + f[1] + f[2] > 0.01) {             // top light: crown and shoulders catch most of it
+  if (f[0] + f[1] + f[2] > 0.01) {             // LED wash: strongest up top, but it reaches the legs
     const g = ctx.createLinearGradient(0, top, 0, y);
     g.addColorStop(0, lit(f[0], f[1], f[2], 1));
-    g.addColorStop(0.2, lit(f[0], f[1], f[2], 0.8));
-    g.addColorStop(0.42, lit(f[0], f[1], f[2], 0.38));
-    g.addColorStop(1, lit(f[0], f[1], f[2], 0.12));
+    g.addColorStop(0.3, lit(f[0], f[1], f[2], 0.85));
+    g.addColorStop(1, lit(f[0], f[1], f[2], 0.5));
+    ctx.fillStyle = g; ctx.fillRect(left, top, wide, y - top);
+  }
+  if (f[10] > 0.01) {                          // spotlight: crown and shoulders catch most of it
+    const g = ctx.createLinearGradient(0, top, 0, y);
+    g.addColorStop(0, lit(WARM[0], WARM[1], WARM[2], f[10]));
+    g.addColorStop(0.2, lit(WARM[0], WARM[1], WARM[2], f[10] * 0.8));
+    g.addColorStop(0.42, lit(WARM[0], WARM[1], WARM[2], f[10] * 0.38));
+    g.addColorStop(1, lit(WARM[0], WARM[1], WARM[2], f[10] * 0.12));
     ctx.fillStyle = g; ctx.fillRect(left, top, wide, y - top);
   }
   if (f[3] > 0.01) {                           // face light: flat across the whole front
@@ -1242,7 +1251,7 @@ function buildThree() {
       // each part is one flat colour here, so the two sides are averaged
       const f = figures[n];
       p.parts.forEach((m, i) => {
-        const white = f[3] + (f[4 + i] + f[7 + i]) * 0.5, share = TOP_SHARE[i];
+        const white = f[3] + (f[4 + i] + f[7 + i]) * 0.5 + f[10] * SPOT_SHARE[i], share = LED_SHARE[i];
         m.material.color.setRGB(
           Math.min(1, UNLIT + f[0] * share + WARM[0] * white),
           Math.min(1, UNLIT + f[1] * share + WARM[1] * white),
