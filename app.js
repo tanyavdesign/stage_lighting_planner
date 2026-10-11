@@ -64,7 +64,26 @@ SPOT_ROWS.forEach((r, row) => SPOT_X.forEach((x, col) => {
 }));
 const SIDE_Z = SIDE_Y.map((y) => to3(0, y)[1]);
 const PEOPLE = PEOPLE_AT.map(([x, y]) => { const [x3, z3] = to3(x, y); return { x3, z3 }; });
-const zone3 = (zone) => to3(ZONE_X[(zone - 1) % 3], ZONE_Y[Math.floor((zone - 1) / 3)]);
+// Where each aimed LED lands, in plan units. LEDs sent to the same zone fan out across
+// it in the same arrangement they hang in, so together they cover the zone instead of
+// all meeting at its centre. A lone LED lands in the middle.
+function aimTargets(look) {
+  const groups = {}, out = {};
+  for (const led of LEDS) {
+    const zone = look.aim && look.aim[led.id];
+    if (zone) (groups[zone] = groups[zone] || []).push(led);
+  }
+  for (const zone in groups) {
+    const leds = groups[zone], cx = ZONE_X[(zone - 1) % 3], cy = ZONE_Y[Math.floor((zone - 1) / 3)];
+    const cols = leds.map((l) => l.col), rows = leds.map((l) => l.row);
+    const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
+    for (const led of leds) {
+      const u = c1 > c0 ? (led.col - c0) / (c1 - c0) - 0.5 : 0, v = r1 > r0 ? (led.row - r0) / (r1 - r0) - 0.5 : 0;
+      out[led.id] = [cx + u * ZONES.w * 0.72, cy + v * ZONES.h * 0.62];
+    }
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // State. A "look" is everything the lights are doing; `state` is the live look
@@ -154,10 +173,11 @@ function randomFade(led, beat, rate) {
 
 function compute(look, t, out) {
   const beat = t * (look.bpm || 120) / 60;
+  const targets = aimTargets(look);
   for (const led of LEDS) {
-    const o = led.idx * L, name = look.leds[led.id], zone = look.aim && look.aim[led.id];
+    const o = led.idx * L, name = look.leds[led.id], aimed = targets[led.id];
     let tx = led.x3, tz = led.z3, k = 0, wide = 1;
-    if (zone) [tx, tz] = zone3(zone);
+    if (aimed) [tx, tz] = to3(aimed[0], aimed[1]);
     if (name) {
       k = 1;
       switch (look.effect) {
@@ -681,6 +701,7 @@ function applyPrefs() {
 
 // Colour the stage plan for a look. `bare` leaves out the selection outlines.
 function paintPlan(look, bare) {
+  const targets = aimTargets(look);
   for (const led of LEDS) {
     const n = planEls.leds[led.id], c = look.leds[led.id], zone = look.aim[led.id];
     n.style.fill = c ? COLORS[c] : '';
@@ -690,8 +711,8 @@ function paintPlan(look, bare) {
     const line = planEls.aims[led.id];
     line.style.display = zone ? '' : 'none';
     if (zone) {
-      line.setAttribute('x2', ZONE_X[(zone - 1) % 3]);
-      line.setAttribute('y2', ZONE_Y[Math.floor((zone - 1) / 3)]);
+      line.setAttribute('x2', targets[led.id][0]);
+      line.setAttribute('y2', targets[led.id][1]);
     }
   }
   for (const s of SPOTS) {
