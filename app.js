@@ -171,6 +171,18 @@ function randomFade(led, beat, rate) {
   return Math.sin(Math.PI * (p - seg));
 }
 
+// Dimmer chase: a crest that steps back, mid, front, one beat apart, round and round.
+// A row is at 100% as the crest reaches it, 50% one beat later and 10% a beat after that,
+// then comes back up for the next crest. That slow tail behind a quicker rise is what
+// shows the light travelling towards the front. The levels are joined by a curve with
+// no corners and no overshoot.
+const CHASE = { level: [1, 0.5, 0.1, 1], slope: [0, -0.444, 0, 0] };
+function chaseLevel(beats) {
+  const t = ((beats % 3) + 3) % 3, i = Math.floor(t), u = t - i, u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * CHASE.level[i] + (u3 - 2 * u2 + u) * CHASE.slope[i]
+    + (3 * u2 - 2 * u3) * CHASE.level[i + 1] + (u3 - u2) * CHASE.slope[i + 1];
+}
+
 function compute(look, t, out) {
   const beat = t * (look.bpm || 120) / 60;
   const targets = aimTargets(look);
@@ -187,10 +199,7 @@ function compute(look, t, out) {
         case 'slowfade': k = 0.5 - 0.5 * Math.cos(beat * 0.5 * Math.PI); break;
         case 'party': k = randomFade(led, beat, 1); break;
         case 'chase':
-          // The three rows swell in turn, evenly spaced: back, mid, front, back, mid, front,
-          // with the same gap between every step, including from the front row round to the
-          // back row again. Each row follows one smooth sine and never drops to dark.
-          k = 0.3 + 0.7 * (0.5 + 0.5 * Math.cos(2 * Math.PI * (beat - led.row) / 3));
+          k = chaseLevel(beat - led.row);
           break;
         case 'moveparty':                      // stays lit the whole time; only the beams move
           tx += Math.sin(beat * 0.45 + led.s2 * 6.28) * 2.4;
