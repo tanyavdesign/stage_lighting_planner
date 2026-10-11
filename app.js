@@ -87,7 +87,7 @@ function aimTargets(look) {
         // height), then carry the line from the fixture through it on down to floor
         // level, which is how every aim is stored. The third and fourth numbers are
         // where to draw the plan's aim line to: the cyclorama bar.
-        const wx = u * CYC.halfW * 1.6, wy = 2.4 - v * 1.7, along = (RIG_H - wy) / RIG_H;
+        const wx = u * CYC.halfW * 1.85, wy = 1.5 - v * 1.3, along = (RIG_H - wy) / RIG_H;   // low on the wall, edge to edge
         const tx = led.x3 + (wx - led.x3) / along, tz = led.z3 + (CYC.z - led.z3) / along;
         out[led.id] = [tx * 101 + STAGE.cx, tz * 101 + STAGE.cy, wx * 101 + STAGE.cx, 218];
       } else {
@@ -291,7 +291,7 @@ function cycloHit(led, tx, tz) {
   return {
     x, y, s,
     strength: ground[led.idx] + (TOP - ground[led.idx]) * Math.pow(1 - s, 2.4),
-    radius: 0.4 + 1.0 * s,                                   // the beam is wider the further it has travelled
+    radius: 0.5 + 1.4 * s,                                   // the beam is wider the further it has travelled
     stretch: Math.min(1.9, length / Math.max(Math.abs(dz), 0.05)),   // a glancing beam smears into a longer oval
     fade: Math.min(1, (CYC.z - tz) / 0.7),                   // eases in as the beam climbs onto the wall
     angle: Math.atan2(-RIG_H, dx),                           // which way the oval points, on the wall
