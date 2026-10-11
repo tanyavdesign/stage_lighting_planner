@@ -307,11 +307,13 @@ const toggleIn = (set, key) => { set.has(key) ? set.delete(key) : set.add(key); 
 // The part of the drawing on screen. Phones crop to the stage so fixtures are as large
 // as possible; pinching zooms further in.
 const mqPhone = window.matchMedia('(max-width: 899px)');
-const baseView = () => (mqPhone.matches ? { x: 372, y: 150, w: 1256, h: 730 } : { x: 250, y: 110, w: 1500, h: 1010 });
+const FULL = { x: 250, y: 110, w: 1500, h: 1010 };       // the whole drawing, face lights included
+const baseView = () => (mqPhone.matches ? { x: 372, y: 150, w: 1256, h: 730 } : Object.assign({}, FULL));
 let view = baseView();
 function applyView() {
   svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
-  $('plan-reset').hidden = view.w > baseView().w * 0.98;
+  const base = baseView();
+  $('plan-reset').hidden = Math.abs(view.w - base.w) < base.w * 0.02 && Math.abs(view.x - base.x) < 8 && Math.abs(view.y - base.y) < 8;
 }
 function resetView() { view = baseView(); applyView(); }
 function svgPointAt(x, y) {
@@ -320,14 +322,15 @@ function svgPointAt(x, y) {
   return p.matrixTransform(svg.getScreenCTM().inverse());
 }
 function panTo(anchor, cx, cy) {       // slide the view so `anchor` sits under a screen point
-  const now = svgPointAt(cx, cy), base = baseView();
-  view.x = Math.max(base.x, Math.min(base.x + base.w - view.w, view.x + anchor.x - now.x));
-  view.y = Math.max(base.y, Math.min(base.y + base.h - view.h, view.y + anchor.y - now.y));
+  // the view can travel anywhere over the whole drawing, not just its starting crop
+  const now = svgPointAt(cx, cy);
+  view.x = Math.max(FULL.x, Math.min(FULL.x + FULL.w - view.w, view.x + anchor.x - now.x));
+  view.y = Math.max(FULL.y, Math.min(FULL.y + FULL.h - view.h, view.y + anchor.y - now.y));
   applyView();
 }
 function zoomTo(width, anchor, cx, cy) {
   const base = baseView();
-  view.w = Math.max(base.w * 0.3, Math.min(base.w, width));
+  view.w = Math.max(base.w * 0.3, Math.min(FULL.w, width));      // can zoom out to the whole drawing
   view.h = view.w * base.h / base.w;
   applyView();
   panTo(anchor, cx, cy);
@@ -487,7 +490,7 @@ window.addEventListener('pointercancel', endPointer);
 // Trackpad pinch or Cmd + scroll zooms the plan; plain scrolling pans it once zoomed in.
 svg.addEventListener('wheel', (e) => {
   const zooming = e.ctrlKey || e.metaKey;
-  if (!zooming && view.w > baseView().w * 0.98) return;
+  if (!zooming && view.w > FULL.w * 0.98) return;
   e.preventDefault();
   const anchor = svgPointAt(e.clientX, e.clientY);
   if (zooming) zoomTo(view.w * (1 + e.deltaY * (e.metaKey ? 0.001 : 0.01)), anchor, e.clientX, e.clientY);
