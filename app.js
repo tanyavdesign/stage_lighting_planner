@@ -33,8 +33,10 @@ const FACE_Y = 1062;
 const SIDE_Y = [303, 383, 502, 604, 715];
 const SIDE_X = { L: 412, R: 1588 };
 const CURTAIN_Y = [230, 338, 357, 443, 531, 631, 737];
-// Nine aiming zones: a 3 x 3 grid over the stage, numbered left to right, back to front.
-const ZONE_X = [663, 1000, 1337];
+// Nine aiming zones: a 3 x 3 grid as wide as the cyclorama and as deep as the stage,
+// numbered left to right, back to front.
+const ZONES = { x: 624, w: 253, y: 218, h: 203.3 };       // left edge and size of one zone
+const ZONE_X = [750.5, 1003.5, 1256.5];
 const ZONE_Y = [320, 523, 726];
 const ZONE_NAMES = ['Back L', 'Back C', 'Back R', 'Mid L', 'Mid C', 'Mid R', 'Front L', 'Front C', 'Front R'];
 const PEOPLE_AT = [[830, 455], [1000, 425], [1170, 455], [745, 600], [885, 680], [1000, 610], [1115, 680], [1255, 600]];
@@ -356,10 +358,10 @@ function tapFixture(g) {
 
 function buildPlan() {
   el('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
-  for (const x of [832, 1168]) el('line', { x1: x, y1: 244, x2: x, y2: 816, class: 'grid' });
-  for (const y of [421, 625]) el('line', { x1: 507, y1: y, x2: 1493, y2: y, class: 'grid' });
+  for (const c of [0, 1, 2, 3]) el('line', { x1: ZONES.x + ZONES.w * c, y1: 244, x2: ZONES.x + ZONES.w * c, y2: 816, class: 'grid' });
+  for (const y of [421, 625]) el('line', { x1: ZONES.x, y1: y, x2: ZONES.x + ZONES.w * 3, y2: y, class: 'grid' });
   for (let z = 0; z < 9; z++) {
-    el('text', { x: 495 + 337 * (z % 3) + 325, y: 218 + 203 * Math.floor(z / 3) + 192, 'text-anchor': 'end', class: 'zone' }, z + 1);
+    el('text', { x: ZONES.x + ZONES.w * (z % 3) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / 3) + 192, 'text-anchor': 'end', class: 'zone' }, z + 1);
   }
   planEls.cyclo = el('rect', { x: 624, y: 205, width: 759, height: 26, rx: 6, class: 'cyclo' });
   for (const y of CURTAIN_Y) {
@@ -413,10 +415,10 @@ function buildPlan() {
   // Shown over the stage while choosing where the selected LEDs should point.
   planEls.zonePick = el('g', { class: 'zone-pick' });
   for (let z = 0; z < 9; z++) {
-    const x = 495 + 336.7 * (z % 3), y = 218 + 203.3 * Math.floor(z / 3);
+    const x = ZONES.x + ZONES.w * (z % 3), y = ZONES.y + ZONES.h * Math.floor(z / 3);
     fixture(
-      ['rect', { x: x + 4, y: y + 4, width: 328.7, height: 195.3, rx: 10 }],
-      ['text', { x: x + 168, y: y + 128, 'text-anchor': 'middle', class: 'zone-num' }, z + 1],
+      ['rect', { x: x + 4, y: y + 4, width: ZONES.w - 8, height: ZONES.h - 8, rx: 10 }],
+      ['text', { x: x + ZONES.w / 2, y: y + 128, 'text-anchor': 'middle', class: 'zone-num' }, z + 1],
       () => { aiming = false; forSelection((id) => { state.aim[id] = z + 1; }); },
       null, planEls.zonePick);
   }
