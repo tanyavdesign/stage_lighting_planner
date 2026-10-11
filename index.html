@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>KDT Lighting Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-view="front" data-tab="face">
+<header class="toolbar">
+  <div class="title">Stage Lighting Planner</div>
+  <div class="divider"></div>
+  <label class="field">Effect <select id="effect"></select></label>
+  <label class="field">BPM <input id="bpm" type="number" min="20" max="300" step="1"></label>
+  <div class="spacer"></div>
+  <button id="watch" class="btn">Watch</button>
+  <div class="menu-wrap">
+    <button id="more" class="btn">More</button>
+    <div id="menu" class="menu" hidden>
+      <button id="people">Hide people</button>
+      <button id="theme">Dark mode</button>
+      <button id="export">Export show</button>
+      <label>Import show<input id="import" type="file" accept=".json,application/json" hidden></label>
+      <button id="reset">Clear lights</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="view-col">
+    <div class="seg view-switch">
+      <button class="btn small" data-view-pick="front">Front</button>
+      <button class="btn small" data-view-pick="three">3D</button>
+    </div>
+    <div class="panel view" data-view="front">
+      <div class="panel-head"><h2>Front view</h2></div>
+      <div class="fit"><canvas id="front"></canvas></div>
+    </div>
+    <div class="panel view" data-view="three">
+      <div class="panel-head"><h2>3D view</h2><span class="hint">Drag to orbit, Cmd + scroll or pinch to zoom</span></div>
+      <div id="three"><div id="three-fallback">The 3D view needs an internet connection to load Three.js.</div></div>
+    </div>
+  </section>
+
+  <section class="panel plan-col">
+    <div class="panel-head">
+      <h2>Stage plan</h2>
+      <div class="picks">
+        <span class="pick-label">LEDs</span>
+        <div class="seg">
+          <button class="btn small" data-pick="led:all">All</button>
+          <button class="btn small" data-pick="led:0">Back</button>
+          <button class="btn small" data-pick="led:1">Mid</button>
+          <button class="btn small" data-pick="led:2">Front</button>
+        </div>
+        <span class="pick-label">Spots</span>
+        <div class="seg">
+          <button class="btn small" data-pick="spot:all">All</button>
+          <button class="btn small" data-pick="spot:0">Back</button>
+          <button class="btn small" data-pick="spot:1">Mid</button>
+          <button class="btn small" data-pick="spot:2">Front</button>
+        </div>
+        <span class="pick-label">Sides</span>
+        <div class="seg">
+          <button class="btn small" data-pick="side:all">All</button>
+        </div>
+      </div>
+    </div>
+    <div class="plan-wrap">
+      <svg id="plan" viewBox="250 110 1500 1010" xmlns="http://www.w3.org/2000/svg"></svg>
+      <button id="plan-reset" class="btn small" hidden>Reset zoom</button>
+    </div>
+  </section>
+
+  <aside class="panel side">
+    <div id="selection" hidden>
+      <div class="sel-head"><span>Selected</span><button class="btn small" id="deselect">Deselect all</button></div>
+      <div class="group" id="sel-leds">
+        <h3>LED lights <span id="led-count" class="count"></span></h3>
+        <div class="row swatches" id="led-colors"></div>
+        <div class="aim">
+          <h4>Aim at zone</h4>
+          <div class="zones" id="zones"></div>
+          <button class="btn" id="aim-down">Straight down</button>
+        </div>
+      </div>
+      <div class="group" id="sel-spots">
+        <h3>Spotlights <span id="spot-count" class="count"></span></h3>
+        <div class="row seg">
+          <button class="btn" data-sel-spots="on">On</button>
+          <button class="btn" data-sel-spots="off">Off</button>
+        </div>
+      </div>
+      <div class="group" id="sel-sides">
+        <h3>Side positions <span id="side-count" class="count"></span></h3>
+        <div class="row seg">
+          <button class="btn" data-sel-sides="on">On</button>
+          <button class="btn" data-sel-sides="off">Off</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="globals">
+      <div class="group tip">
+        <p class="hint">Tap lights on the plan to select them, or drag a box. Double-tap a spotlight or side light to switch it.</p>
+      </div>
+      <div class="seg tabs">
+        <button class="btn" data-tab-pick="face">Face</button>
+        <button class="btn" data-tab-pick="side">Side</button>
+        <button class="btn" data-tab-pick="cyclo">Cyclo</button>
+      </div>
+      <div class="group" data-tab="face">
+        <h3>Face lights</h3>
+        <div class="row seg" id="face"></div>
+      </div>
+      <div class="group" data-tab="side">
+        <h3>Side lights</h3>
+        <div class="row seg" id="side-types"></div>
+        <p class="hint note">These apply to the side positions that are switched on.</p>
+      </div>
+      <div class="group" data-tab="cyclo">
+        <h3>Cyclorama</h3>
+        <div class="row swatches" id="cyclo-colors"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer class="dock">
+  <div class="transport">
+    <button id="play" class="btn play" title="Play or pause (space)">Play</button>
+    <span id="time" class="time">0:00.0 / 1:00.0</span>
+    <button id="add-cue" class="btn primary">Add cue</button>
+    <span id="cue-hint" class="hint" hidden>Click a cue marker to edit it</span>
+    <span id="cue-edit" class="cue-edit" hidden></span>
+    <span id="next-cue" class="hint"></span>
+    <div class="spacer"></div>
+    <span id="track-name" class="hint">No track loaded</span>
+    <label class="btn">Load track<input id="track-file" type="file" accept="audio/*" hidden></label>
+  </div>
+  <canvas id="wave"></canvas>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+.claude/
+.DS_Store
+# soundtracks stay on your computer
+*.mp3
+*.wav
+*.m4a
