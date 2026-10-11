@@ -1709,9 +1709,77 @@ function ranges(numbers, prefix) {
 const capital = (word) => word[0].toUpperCase() + word.slice(1);
 
 // A look as rows of text for the settings table: [label, [{ text, dot }]]
-function lookRows(look) {
+function effectText(look) {
   const known = EFFECTS.find(([id]) => id === look.effect);
-  const effect = !known || look.effect === 'none' ? 'Stage wash' : `${known[1]} at ${look.bpm} BPM`;
+  return !known || look.effect === 'none' ? 'Stage wash' : `${known[1]} at ${look.bpm} BPM`;
+}
+function sideText(look) {
+  const types = SIDE_TYPES.filter(([id]) => look.sideTypes[id]).map(([, name]) => name);
+  const places = SIDES.map((side) => {
+    const on = look.sidePos[side].map((v, i) => (v ? i + 1 : 0)).filter(Boolean);
+    return on.length ? `${side === 'L' ? 'Left' : 'Right'} ${ranges(on, '')}` : '';
+  }).filter(Boolean);
+  return types.length && places.length ? `${types.join(' + ')} on ${places.join(', ')}` : 'Off';
+}
+const zoneText = (zone) => (+zone ? `zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'straight down');
+
+// What changed going from one look to another, for the "same as Cue N, except" note.
+// `kinds` counts the kinds of thing that differ (LED colours, LED aim, spotlights, face
+// lights, side lights, cyclorama, effect); `lines` spells the changes out.
+function lookChanges(from, to) {
+  const lines = [];
+  let kinds = 0;
+  const grouped = (pairs, describe) => {       // pairs: [key, LED number]; one line per key
+    const groups = new Map();
+    for (const [key, n] of pairs) { if (!groups.has(key)) groups.set(key, []); groups.get(key).push(n); }
+    for (const [key, ids] of groups) lines.push(`LEDs ${ranges(ids, 'F')}: ${describe(...key.split('|'))}`);
+    if (groups.size) kinds++;
+  };
+  const colour = [], aim = [];
+  for (const led of LEDS) {
+    const n = +led.id.slice(1), a = from.leds[led.id] || '', b = to.leds[led.id] || '';
+    const za = (from.aim && from.aim[led.id]) || 0, zb = (to.aim && to.aim[led.id]) || 0;
+    if (a !== b) colour.push([`${a}|${b}|${b && !a ? zb : ''}`, n]);
+    if (a && b && za !== zb) aim.push([`${za}|${zb}`, n]);          // lit before and after, pointing somewhere new
+  }
+  grouped(colour, (a, b, zone) => (!b ? 'off' : !a ? `on, ${b}${+zone ? ', aimed at ' + zoneText(zone) : ''}` : `${a} → ${b}`));
+  grouped(aim, (za, zb) => `${zoneText(za)} → ${zoneText(zb)}`);
+
+  const on = [], off = [];
+  for (const spot of SPOTS) {
+    const a = !!from.spots[spot.id], b = !!to.spots[spot.id];
+    if (a !== b) (b ? on : off).push(+spot.id);
+  }
+  if (on.length) lines.push(`Spotlights ${ranges(on, '')}: on`);
+  if (off.length) lines.push(`Spotlights ${ranges(off, '')}: off`);
+  if (on.length || off.length) kinds++;
+
+  const simple = (name, a, b) => { if (a !== b) { lines.push(`${name}: ${a} → ${b}`); kinds++; } };
+  simple('Face lights', FACE_LEVELS[from.face] || 'Off', FACE_LEVELS[to.face] || 'Off');
+  simple('Side lights', sideText(from), sideText(to));
+  simple('Cyclorama', from.cyclo, to.cyclo);
+  simple('Effect', effectText(from), effectText(to));
+  return { kinds, lines };
+}
+
+// For each cue, the earlier cue it is most like, if they differ in three kinds of thing
+// or fewer. A tie goes to the more recent cue.
+const SIMILAR_MAX = 3;
+function similarCues(cues) {
+  return cues.map((cue, i) => {
+    let best = null;
+    for (let j = 0; j < i; j++) {
+      const diff = lookChanges(cues[j].look, cue.look);
+      if (!best || diff.kinds < best.kinds || (diff.kinds === best.kinds && diff.lines.length <= best.lines.length)) {
+        best = { index: j, kinds: diff.kinds, lines: diff.lines };
+      }
+    }
+    return best && best.kinds <= SIMILAR_MAX ? best : null;
+  });
+}
+
+function lookRows(look) {
+  const effect = effectText(look);
   const groups = new Map();              // LEDs grouped by colour and where they point
   for (const led of LEDS) {
     const colour = look.leds[led.id];
@@ -1722,20 +1790,15 @@ function lookRows(look) {
   }
   const leds = [...groups].map(([key, ids]) => {
     const [colour, zone] = key.split('|');
-    return { dot: COLORS[colour], text: `${capital(colour)}: ${ranges(ids, 'F')}, ${+zone ? `aimed at zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'straight down'}` };
+    return { dot: COLORS[colour], text: `${capital(colour)}: ${ranges(ids, 'F')}, ${+zone ? 'aimed at ' + zoneText(zone) : 'straight down'}` };
   });
   const spots = SPOTS.filter((s) => look.spots[s.id]).map((s) => +s.id);
-  const types = SIDE_TYPES.filter(([id]) => look.sideTypes[id]).map(([, name]) => name);
-  const places = SIDES.map((side) => {
-    const on = look.sidePos[side].map((v, i) => (v ? i + 1 : 0)).filter(Boolean);
-    return on.length ? `${side === 'L' ? 'Left' : 'Right'} ${ranges(on, '')}` : '';
-  }).filter(Boolean);
   return [
     ['Effect', [{ text: effect }]],
     ['LEDs', leds.length ? leds : [{ text: 'All off' }]],
     ['Spotlights', [{ text: spots.length ? ranges(spots, '') : 'All off' }]],
     ['Face lights', [{ text: FACE_LEVELS[look.face] || 'Off' }]],
-    ['Side lights', [{ text: types.length && places.length ? `${types.join(' + ')} on ${places.join(', ')}` : 'Off' }]],
+    ['Side lights', [{ text: sideText(look) }]],
     ['Cyclorama', [look.cyclo === 'none' ? { text: 'None' } : { text: capital(look.cyclo), dot: COLORS[look.cyclo] }]],
   ];
 }
@@ -1806,6 +1869,24 @@ function drawPage(c, page, mapImg, shotImg) {
   c.restore();
 
   const noteTop = PAGE_H - EDGE - 190;
+
+  // "Same as Cue N" note in the space under the lighting map
+  if (page.like) {
+    const boxTop = top + mapH + 22, boxH = noteTop - 20 - boxTop, room = Math.max(1, Math.floor((boxH - 62) / 31));
+    c.fillStyle = '#e8f0fe';
+    c.beginPath();
+    if (c.roundRect) c.roundRect(EDGE, boxTop, mapW, boxH, 12); else c.rect(EDGE, boxTop, mapW, boxH);
+    c.fill();
+    c.fillStyle = '#174ea6'; c.textAlign = 'left'; font(25, 600);
+    c.fillText(page.like.title, EDGE + 22, boxTop + 40);
+    c.fillStyle = '#202124'; font(22);
+    const shown = page.like.lines.length > room ? page.like.lines.slice(0, room - 1) : page.like.lines;
+    shown.forEach((line, i) => c.fillText('•  ' + line, EDGE + 22, boxTop + 76 + i * 31, mapW - 44));
+    if (shown.length < page.like.lines.length) {
+      c.fillStyle = '#5f6368';
+      c.fillText(`and ${page.like.lines.length - shown.length} more changes (see the settings on the right)`, EDGE + 22, boxTop + 76 + shown.length * 31);
+    }
+  }
   const rows = lookRows(page.look), labelW = 160;
   let size = 23, lead = 33;
   const layout = () => { font(size); return rows.map(([, items]) => items.map((item) => wrapText(c, item.text, rw - labelW - (item.dot ? 30 : 0)))); };
@@ -1843,6 +1924,35 @@ function drawPage(c, page, mapImg, shotImg) {
   noteLines.slice(0, 4).forEach((line, i) => {
     c.fillText(i === 3 && noteLines.length > 4 ? line + ' ...' : line, EDGE + 22, noteTop + 76 + i * 33);
   });
+}
+
+// The overview: every cue on one line, with which earlier cue it copies. `rows` is one
+// page's worth.
+const OVERVIEW_ROWS = 34;
+function drawOverview(c, rows, pageNo, pageCount) {
+  const font = (size, weight) => { c.font = `${weight || 400} ${size}px Inter, Helvetica, Arial, sans-serif`; };
+  c.fillStyle = '#fff'; c.fillRect(0, 0, PAGE_W, PAGE_H);
+  c.textBaseline = 'alphabetic';
+  c.fillStyle = '#202124'; c.textAlign = 'left'; font(46, 600);
+  c.fillText('Cue overview', EDGE, EDGE + 44);
+  c.fillStyle = '#5f6368'; c.textAlign = 'right'; font(23);
+  c.fillText((show.projectName ? show.projectName + '   |   ' : '') + `overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
+  c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
+
+  const cols = [['Cue', EDGE, 250], ['Time', EDGE + 270, 110], ['Transition', EDGE + 400, 150], ['Effect', EDGE + 570, 330], ['Similar to', EDGE + 920, PAGE_W - 2 * EDGE - 920]];
+  let y = EDGE + 122;
+  c.textAlign = 'left'; c.fillStyle = '#5f6368'; font(21, 600);
+  for (const [name, x] of cols) c.fillText(name, x, y);
+  c.fillStyle = '#dadce0'; c.fillRect(EDGE, y + 12, PAGE_W - 2 * EDGE, 2);
+  font(22);
+  for (const row of rows) {
+    y += 35;
+    row.forEach((text, i) => {
+      c.fillStyle = i === 4 && text !== '-' ? '#174ea6' : '#202124';
+      c.fillText(text, cols[i][1], y, cols[i][2]);
+    });
+    c.fillStyle = '#f1f3f4'; c.fillRect(EDGE, y + 10, PAGE_W - 2 * EDGE, 1);
+  }
 }
 
 // A PDF whose pages are each one full-page JPEG.
@@ -1892,11 +2002,14 @@ async function exportPdf() {
     //    (on the light theme) and the front view as a still with all its lights on.
     const theme = document.documentElement.dataset.theme, still = new Float32Array(FRAME_N);
     document.documentElement.dataset.theme = 'light';
+    const similar = similarCues(cues);
+    const likeTitle = (i) => (similar[i].kinds ? `Same as ${cueLabel(cues[similar[i].index])}, except:` : `Same look as ${cueLabel(cues[similar[i].index])}`);
     const pages = cues.map((cue, i) => {
       compute(Object.assign({}, cue.look, { effect: 'none' }), 0, still);
       shareGround(still); lightFigures(still); drawFront(still);
       return {
         look: cue.look, note: cue.note,
+        like: similar[i] && { title: likeTitle(i), lines: similar[i].lines },
         title: show.cues.length ? cueLabel(cue) : cue.name,
         meta: (show.projectName ? show.projectName + '   |   ' : '') + (show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
         map: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planSvgText(cue.look)),
@@ -1911,12 +2024,28 @@ async function exportPdf() {
     canvas.width = PAGE_W; canvas.height = PAGE_H;
     const c = canvas.getContext('2d'), jpegs = [];
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const addPage = async () => {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+      jpegs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: PAGE_W, h: PAGE_H });
+    };
+    if (show.cues.length > 1) {                  // overview first: every cue on one line
+      const rows = cues.map((cue, i) => [
+        cueLabel(cue), fmt(cue.time), cue.instant ? 'Instant' : `Fade ${cue.fade} s`, effectText(cue.look),
+        !similar[i] ? '-' : similar[i].kinds
+          ? `Cue ${similar[i].index + 1}, with ${similar[i].lines.length} change${similar[i].lines.length === 1 ? '' : 's'}: ${similar[i].lines.join('; ')}`
+          : `Cue ${similar[i].index + 1}, identical`,
+      ]);
+      const count = Math.ceil(rows.length / OVERVIEW_ROWS);
+      for (let n = 0; n < count; n++) {
+        drawOverview(c, rows.slice(n * OVERVIEW_ROWS, (n + 1) * OVERVIEW_ROWS), n + 1, count);
+        await addPage();
+      }
+    }
     for (let i = 0; i < pages.length; i++) {
       toast(`Building PDF: page ${i + 1} of ${pages.length}`);
       const [mapImg, shotImg] = await Promise.all([loadImage(pages[i].map), loadImage(pages[i].shot)]);
       drawPage(c, pages[i], mapImg, shotImg);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.88));
-      jpegs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: PAGE_W, h: PAGE_H });
+      await addPage();
     }
 
     // 3. Download.
@@ -1927,7 +2056,7 @@ async function exportPdf() {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 5000);
-    toast(`PDF downloaded: ${pages.length} page${pages.length === 1 ? '' : 's'}`);
+    toast(`PDF downloaded: ${jpegs.length} page${jpegs.length === 1 ? '' : 's'}`);
   } catch (e) {
     toast('Could not build the PDF: ' + e.message);
   }
