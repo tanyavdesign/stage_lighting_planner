@@ -385,17 +385,17 @@ body.watch .view-col { flex-direction: row; }
   .toolbar .btn { padding: 0 8px; }
   main { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
 
-  .view-col { flex: 0 0 29dvh; }
+  .view-col { flex: 0 1 24dvh; min-height: 15dvh; }
   .view { padding: 0; overflow: hidden; border-radius: 8px; }
   body[data-view="front"] .view[data-view="three"],
   body[data-view="three"] .view[data-view="front"] { display: none; }
   .seg.view-switch { display: flex; position: absolute; right: 6px; top: 6px; z-index: 2; opacity: .92; }
   #front, #three { border-radius: 0; }
 
-  .plan-col { flex: 1; padding: 6px; }
+  .plan-col { flex: 1 1 0; min-height: 30dvh; padding: 6px; }
   .panel-head { margin-bottom: 4px; }
 
-  .side { flex: 0 0 auto; max-height: 36dvh; }
+  .side { flex: 0 0 auto; max-height: 30dvh; }
   .side .group { padding: 8px 10px; }
   .seg.tabs { display: flex; padding: 8px 10px 0; }
   #globals .group[data-tab] { display: none; border-bottom: 0; }
@@ -405,18 +405,25 @@ body.watch .view-col { flex-direction: row; }
   #globals h3 { display: none; }
   body.has-selection #globals { display: none; }
   #selection { border-bottom: 0; }
-  .sel-head { padding: 6px 10px; }
-  /* compact selection sheet: one scrolling row of colours, a small number pad for the
-     zones (numbers match the plan), and On / Off beside each heading */
+  .sel-head { padding: 4px 10px; font-size: 12px; }
+  /* Compact selection sheet. LEDs: colours in a block on the left with Straight down
+     under them, the zone number pad on the right (numbers match the plan).
+     Spotlights and side positions: one line each, On / Off beside the name. */
   #selection h3 { margin: 0; white-space: nowrap; }
-  #sel-leds h3 { margin-bottom: 6px; }
-  #led-colors { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px; }
-  #led-colors .swatch { flex: 0 0 auto; }
-  .aim { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; margin-top: 8px; }
-  .aim h4 { margin: 0; }
-  .aim .zones { grid-template-columns: repeat(3, 40px); margin: 0; }
+  #sel-leds {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "colors label" "colors zones" "down zones";
+    gap: 4px 14px;
+    align-items: start;
+  }
+  #sel-leds h3 { display: none; }
+  #led-colors { grid-area: colors; display: grid; grid-template-columns: repeat(5, 34px); gap: 6px; }
+  .aim { display: contents; }
+  .aim h4 { grid-area: label; margin: 0; }
+  .aim .zones { grid-area: zones; grid-template-columns: repeat(3, 40px); margin: 0; }
   .aim .zones button { height: 30px; font-size: 13px; font-weight: 600; }
-  .aim #aim-down { justify-self: start; }
+  .aim #aim-down { grid-area: down; justify-self: start; align-self: end; height: 32px; }
   .zone-name { display: none; }
   #sel-spots, #sel-sides { display: flex; align-items: center; gap: 12px; }
   #sel-spots .row, #sel-sides .row { flex: 1; margin: 0; }
@@ -425,8 +432,11 @@ body.watch .view-col { flex-direction: row; }
   .time { min-width: 0; }
   .transport { gap: 6px; }
   #cue-hint { display: none !important; }
-  #track-name { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cue-edit { padding-left: 0; border-left: 0; flex-wrap: wrap; }
+  #track-name { display: none; }
+  #wave { height: 40px; margin-top: 4px; }
+  .cue-edit { padding-left: 0; border-left: 0; flex-wrap: wrap; order: 9; flex-basis: 100%; }
+  .transport .spacer { display: none; }
+  .transport label.btn { margin-left: auto; }
   .cue-edit .name { width: 110px; }
 
   body.watch .view-col { flex: 1; flex-direction: column; }

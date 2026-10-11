@@ -630,6 +630,12 @@ function syncUI() {
   $('sel-leds').hidden = !selection.size;
   $('sel-spots').hidden = !selSpots.size;
   $('sel-sides').hidden = !selSides.size;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  $('sel-summary').textContent = [
+    selection.size && plural(selection.size, 'LED'),
+    selSpots.size && plural(selSpots.size, 'spotlight'),
+    selSides.size && plural(selSides.size, 'side position'),
+  ].filter(Boolean).join(', ') + ' selected';
   $('led-count').textContent = selection.size + ' selected';
   $('spot-count').textContent = selSpots.size + ' selected';
   $('side-count').textContent = selSides.size + ' selected';
@@ -1131,16 +1137,16 @@ async function loadTrack(file) {
 // ---------------------------------------------------------------------------
 const wave = $('wave');
 const wctx = wave.getContext('2d');
-let waveW = 0;
+let waveW = 0, waveH = 54;
 function sizeWave() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  waveW = wave.clientWidth;
-  wave.width = waveW * dpr; wave.height = 54 * dpr;
+  waveW = wave.clientWidth; waveH = wave.clientHeight || 54;
+  wave.width = waveW * dpr; wave.height = waveH * dpr;
   wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function drawWave(T, active) {
-  const dark = prefs.theme === 'dark', H = 54, dur = duration(), x = (t) => t / dur * waveW;
+  const dark = prefs.theme === 'dark', H = waveH, dur = duration(), x = (t) => t / dur * waveW;
   wctx.fillStyle = dark ? '#26282c' : '#f1f3f4'; wctx.fillRect(0, 0, waveW, H);
   if (player.peaks) {
     wctx.fillStyle = dark ? '#5f6368' : '#bdc1c6';
