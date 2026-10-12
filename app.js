@@ -275,6 +275,7 @@ const ICONS = {
   refresh: '<path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.8v2.6h-2.6"/>',
   folder: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5z"/>',
   moveto: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5zM7 9h4M9.4 7.4 11 9l-1.6 1.6"/>',
+  help: '<circle cx="8" cy="8" r="5.5"/><path d="M6.4 6.5a1.7 1.7 0 1 1 2.5 1.5c-.6.3-.9.7-.9 1.2M8 11.2h.01"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -1097,6 +1098,98 @@ function setWatch(on) {
   $('watch').classList.toggle('active', on);
   $('watch').title = on ? 'Exit watch mode' : 'Watch: previews only';
   $('menu').hidden = true;
+}
+
+// ---------------------------------------------------------------------------
+// Tours: a short walk through the screen, one small card at a time, each pointing at the
+// real control it is about. There is one for the home screen (which depends on whether
+// you manage the lighting or plot an item) and one for the editor.
+// ---------------------------------------------------------------------------
+const TOURS = {
+  manager: [
+    ['#new-project', 'Projects', 'A project is one show. It holds the stage and every item (dance) in it. Start one here and choose how many items it begins with.'],
+    ['#home-more', 'Stage templates', 'A template is a stage: where the lights hang. Open this menu and choose Templates to look after them. Save a new one from a project with Edit stage layout.'],
+    ['#import-btn', 'Import and download', 'Bring in project or item files that others send you. Every card has a download button; tick several cards to download them together.'],
+    ['#drafts', 'Drafts', 'Items made or imported without a project wait here. The folder button on a draft moves it into a project.'],
+    ['#project-list', 'Inside a project', 'Open a project to see its items. Drag the six-dot handle to put them in running order, and use the arrows on a picture to flip through that item\'s cues.'],
+    ['.home-views', 'Views', 'Switch every list between large tiles, small tiles and rows.'],
+  ],
+  plotter: [
+    ['#import-btn', 'Got a file?', 'If your lighting manager sent you an item file, import it here and choose Item.'],
+    ['#draft-new', 'Or start fresh', 'New item makes an empty item for you to plot. It appears under Drafts.'],
+    ['#drafts', 'Open it', 'Tap an item to open it and start plotting. Your work saves as you go.'],
+  ],
+  editor: [
+    ['#plan', 'The stage plan', 'Tap a light to select it, or swipe across to select several. Pinch or scroll to zoom in.'],
+    ['#mods', 'Controls', 'Colors, effects, spotlights, side lights, face lights and the cyclorama. With lights selected, only their options show.'],
+    ['#views', 'Live preview', 'See the look as the audience would. Switch between Front and 3D.'],
+    ['#load-track', 'The song', 'Load the track for this item. It stays with the item.'],
+    ['#add-cue', 'Cues', 'Go to a moment in the song and press + to save the lights you see as a cue. Changes you make while on a cue save into it.'],
+    ['#wave', 'Timeline', 'Drag to move through the song and pinch to zoom. Drag a cue\'s flag to change when it happens.'],
+    ['#more', 'Menu', 'Export a PDF cue sheet, download the item, or switch to watch mode.'],
+  ],
+};
+let touring = null;                 // { steps, at, done }
+function showTourStep() {
+  const [selector, title, text] = touring.steps[touring.at];
+  const target = document.querySelector(selector), hole = $('tour-hole'), card = $('tour-card');
+  $('tour-title').textContent = title;
+  $('tour-text').textContent = text;
+  $('tour-count').textContent = `${touring.at + 1} of ${touring.steps.length}`;
+  $('tour-back').hidden = touring.at === 0;
+  $('tour-next').textContent = touring.at === touring.steps.length - 1 ? 'Done' : 'Next';
+  if (target && target.offsetParent) target.scrollIntoView({ block: 'nearest' });
+  let r = target ? target.getBoundingClientRect() : null;
+  if (r && (!r.width || !r.height)) r = null;                  // hidden on this screen: no pointer, the card sits in the middle
+  hole.hidden = !r;
+  const gap = 6, vw = innerWidth, vh = innerHeight;
+  if (r) {
+    const box = { left: Math.max(4, r.left - gap), top: Math.max(4, r.top - gap), right: Math.min(vw - 4, r.right + gap), bottom: Math.min(vh - 4, r.bottom + gap) };
+    Object.assign(hole.style, { left: box.left + 'px', top: box.top + 'px', width: box.right - box.left + 'px', height: box.bottom - box.top + 'px' });
+    r = box;
+  }
+  const w = card.offsetWidth, h = card.offsetHeight;
+  let left = r ? r.left + (r.right - r.left) / 2 - w / 2 : (vw - w) / 2, top;
+  if (!r) top = (vh - h) / 2;
+  else if (vh - r.bottom >= h + 20) top = r.bottom + 12;        // under it
+  else if (r.top >= h + 20) top = r.top - h - 12;               // over it
+  else top = Math.min(vh - h - 12, Math.max(12, r.bottom - h - 16));      // it fills the screen: sit inside its lower edge
+  card.style.left = Math.max(12, Math.min(vw - w - 12, left)) + 'px';
+  card.style.top = Math.max(12, Math.min(vh - h - 12, top)) + 'px';
+}
+function startTour(name) {
+  touring = { steps: TOURS[name], at: 0, name };
+  $('tour').hidden = false;
+  showTourStep();
+}
+function endTour() {
+  if (!touring) return;
+  prefs[touring.name === 'editor' ? 'tourEditor' : 'tourHome'] = true;
+  store.set('kdt-lighting-prefs-v1', prefs);
+  touring = null;
+  $('tour').hidden = true;
+}
+function buildTours() {
+  $('tour-next').addEventListener('click', () => { if (touring.at === touring.steps.length - 1) endTour(); else { touring.at++; showTourStep(); } });
+  $('tour-back').addEventListener('click', () => { touring.at--; showTourStep(); });
+  $('tour-skip').addEventListener('click', endTour);
+  window.addEventListener('resize', () => { if (touring) showTourStep(); });
+  document.addEventListener('keydown', (e) => { if (touring && e.key === 'Escape') endTour(); });
+  // the first question: which tour of the home screen fits
+  each('[data-role]', (b) => b.addEventListener('click', () => {
+    prefs.role = b.dataset.role;
+    store.set('kdt-lighting-prefs-v1', prefs);
+    $('role').hidden = true;
+    startTour(prefs.role);
+  }));
+  $('role-skip').addEventListener('click', () => {
+    Object.assign(prefs, { role: prefs.role || 'skipped', tourHome: true, tourEditor: true });
+    store.set('kdt-lighting-prefs-v1', prefs);
+    $('role').hidden = true;
+  });
+  $('home-tour').insertAdjacentHTML('afterbegin', svgIcon('help'));
+  $('home-tour').addEventListener('click', () => { $('role').hidden = false; });
+  $('tour-editor').addEventListener('click', () => startTour('editor'));
 }
 
 // A menu that would run off the side of the screen is slid back in.
@@ -3554,6 +3647,13 @@ function frame(ms) {
 requestAnimationFrame(frame);
 // everything is in place: show the page (it starts blank so a reload cannot flash the wrong screen)
 requestAnimationFrame(() => document.documentElement.classList.remove('booting'));
+// First visits: ask what the person is here for, then walk them through the screen they are on.
+buildTours();
+setTimeout(() => {
+  if (atHome && !currentId && !prefs.role) $('role').hidden = false;
+  else if (atHome && !currentId && !prefs.tourHome && TOURS[prefs.role]) startTour(prefs.role);
+  else if (!atHome && !layoutAsked && !prefs.tourEditor) startTour('editor');
+}, 500);
 
 // Installable app: keep a copy of the files on the device so it opens offline.
 // Only on the live site; a local preview should always show the files on disk.

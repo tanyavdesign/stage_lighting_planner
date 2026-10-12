@@ -803,6 +803,26 @@ body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing
 }
 }
 
+/* ---------- Tours: the first question, then cards that point at the real controls ---------- */
+.role-card { width: min(400px, 100%); }
+.role-body { display: flex; flex-direction: column; gap: 12px; padding: 24px 20px 20px; }
+.role-title { font-size: 16px; }
+.role-pick { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: var(--field); border: 1px solid transparent; border-radius: 10px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.role-pick:hover { border-color: var(--accent); }
+.role-pick b { font-weight: 550; font-size: 14px; }
+.role-pick span { color: var(--muted); }
+.role-skip { align-self: center; border-color: transparent; color: var(--muted); }
+#role { z-index: 80; padding: 16px; }
+#tour { position: fixed; inset: 0; z-index: 90; }                    /* covers the page, so only the card's buttons work */
+#tour-hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .6), 0 0 0 2px var(--accent); pointer-events: none; transition: left .2s, top .2s, width .2s, height .2s; }
+#tour-hole[hidden] + #tour-card { box-shadow: 0 0 0 9999px rgba(0, 0, 0, .6), var(--float); }
+#tour-card { position: fixed; width: min(320px, calc(100vw - 24px)); padding: 16px; background: var(--panel); border-radius: 13px; box-shadow: var(--float); transition: left .2s, top .2s; }
+#tour-title { font-size: 14px; margin-bottom: 6px; }
+#tour-text { color: var(--muted); line-height: 1.45; }
+.tour-foot { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.tour-foot .hint { flex: 1; }
+#tour-skip { border-color: transparent; color: var(--muted); }
+
 /* ---------- Short status message (PDF export) ---------- */
 #toast {
   position: fixed;

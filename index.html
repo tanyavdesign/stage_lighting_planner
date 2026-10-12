@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121357">
+<link rel="stylesheet" href="style.css?v=202610121409">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -46,6 +46,7 @@
           <hr>
           <button id="home-backup">Download all projects</button>
           <button id="home-reload">Reload to update</button>
+          <button id="home-tour">Show the tour</button>
           <div id="home-version" class="menu-foot"></div>
         </div>
       </div>
@@ -164,6 +165,8 @@
         <label>Replace from file<input id="import" type="file" hidden></label>
         <hr>
         <button id="reset">Clear lights</button>
+        <hr>
+        <button id="tour-editor">Show the tour</button>
       </div>
     </div>
     <span id="bar-name" class="bar-name"><span id="bar-project" class="bar-project"></span><span id="bar-item"></span></span>
@@ -354,7 +357,32 @@
 
 <div id="toast" hidden></div>
 
+<div id="role" class="tpl-back" hidden>
+  <div class="mini role-card" role="dialog" aria-label="Welcome">
+    <div class="role-body">
+      <h2 class="role-title">Welcome to Cueo</h2>
+      <p class="hint">What are you here to do? You get a short tour to match. It takes about a minute.</p>
+      <button class="role-pick" data-role="manager"><b>I manage the lighting</b><span>Set up shows, stages and items, and share them with the team</span></button>
+      <button class="role-pick" data-role="plotter"><b>I'm plotting an item</b><span>Program the lights and cues for one dance</span></button>
+      <button id="role-skip" class="btn role-skip">Skip the tour</button>
+    </div>
+  </div>
+</div>
+<div id="tour" hidden>
+  <div id="tour-hole"></div>
+  <div id="tour-card" role="dialog" aria-live="polite">
+    <h3 id="tour-title"></h3>
+    <p id="tour-text"></p>
+    <div class="tour-foot">
+      <span id="tour-count" class="hint"></span>
+      <button id="tour-skip" class="btn">Skip</button>
+      <button id="tour-back" class="btn">Back</button>
+      <button id="tour-next" class="btn primary">Next</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121357"></script>
+<script src="app.js?v=202610121409"></script>
 </body>
 </html>
