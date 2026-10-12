@@ -10,10 +10,10 @@ const COLORS = {
 };
 const CYCLO = ['none', 'cyan', 'blue', 'orange', 'red', 'green', 'pink'];
 const EFFECTS = [
-  ['none', 'Stage wash'], ['flash', 'Flashing'], ['alt', 'Alternating'],
-  ['fastfade', 'Fast fading'], ['slowfade', 'Slow fading'],
-  ['party', 'Stationary party'], ['moveparty', 'Moving party'],
-  ['chase', 'Dimmer chase'],
+  ['none', 'Stage Wash'], ['flash', 'Flashing'], ['alt', 'Alternating'],
+  ['fastfade', 'Fast Fading'], ['slowfade', 'Slow Fading'],
+  ['party', 'Stationary Party'], ['moveparty', 'Moving Party'],
+  ['chase', 'Dimmer Chase'],
 ];
 // Effects with their own usual tempo; every other effect runs at the song's tempo.
 const EFFECT_BPM = { chase: 130, party: 50, moveparty: 50 };
@@ -68,13 +68,17 @@ const KELVINS = Array.from({ length: 39 }, (_, i) => 2700 + i * 100);
 // How each kind of light is controlled, set by the project's stage template. Each kind has a
 // type: 'set' (a list of named colours), 'onoff', 'rgb' (any colour) or 'white' (warm to cool).
 // Without settings of its own a project gets the classic colours.
-const LIGHT_KINDS = [['led', 'LEDs'], ['cyclo', 'Cyclorama']];
-const LIGHT_TYPES = [['set', 'Color set'], ['onoff', 'On / off'], ['rgb', 'RGB spectrum'], ['white', 'White spectrum']];
+const LIGHT_KINDS = [['led', 'LEDs'], ['spot', 'Spotlights'], ['face', 'Face Lights'], ['side', 'Side Lights'], ['cyclo', 'Cyclorama']];
+const LIGHT_TYPES = [['set', 'Color Set'], ['onoff', 'On / Off'], ['rgb', 'RGB Spectrum'], ['white', 'White Spectrum']];
+const SWITCHED = ['spot', 'face', 'side'];       // kinds that are only ever on or off (or dimmed); their one choice is the colour when on
+const WARM_HEX = '#fff1be';
 function lightsOf(owner) {
   const named = (names) => names.map((name) => ({ name: name[0].toUpperCase() + name.slice(1), value: name }));
   const own = (owner && owner.lights) || {};
+  const switched = (kind) => ({ type: 'onoff', on: (own[kind] && own[kind].on) || WARM_HEX });
   return {
     led: own.led || { type: 'set', colors: named(Object.keys(COLORS)) },
+    spot: switched('spot'), face: switched('face'), side: switched('side'),
     cyclo: own.cyclo || { type: 'set', colors: named(CYCLO.filter((name) => name !== 'none')) },
   };
 }
@@ -334,6 +338,7 @@ const ICONS = {
   sliders: '<path d="M2.5 5h3.5M9.5 5h4M2.5 11h5M11 11h2.5"/><circle cx="7.7" cy="5" r="1.7"/><circle cx="9.3" cy="11" r="1.7"/>',
   layout: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M5 6.3h1.6M9.4 6.3H11M5 9.7h1.6M9.4 9.7H11"/>',
   share: '<circle cx="4" cy="8" r="1.7"/><circle cx="11.5" cy="4" r="1.7"/><circle cx="11.5" cy="12" r="1.7"/><path d="M5.5 7.2 10 4.8M5.5 8.8 10 11.2"/>',
+  check: '<path d="M3.5 8.5 6.5 11.5 12.5 4.8"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -856,7 +861,12 @@ svg.addEventListener('wheel', (e) => {
 // Controls
 // ---------------------------------------------------------------------------
 const ui = { face: [], sideTypes: {}, cyclo: {} };
-const LIGHTS = lightsOf(currentProject());      // how this project's LEDs and cyclorama are controlled
+const LIGHTS = lightsOf(currentProject());      // how this project's lights are controlled
+// the colour of the spotlights, face lights and side lights when they are on
+const onRgb = (kind) => (LIGHTS[kind].on.toLowerCase() === WARM_HEX ? WARM : hex2rgb(LIGHTS[kind].on));
+const SPOT_C = onRgb('spot'), FACE_C = onRgb('face'), SIDE_C = onRgb('side');
+// the plan shows them in those colours too, when they are not the usual warm white
+for (const kind of SWITCHED) if (LIGHTS[kind].on.toLowerCase() !== WARM_HEX) document.documentElement.style.setProperty(`--${kind}-on`, LIGHTS[kind].on);
 
 function button(parent, text, cls, onClick) {
   const b = document.createElement('button');
@@ -880,9 +890,10 @@ function palette(box, cfg, apply, mark) {
   if (cfg.type === 'onoff') {
     const seg = document.createElement('div');
     seg.className = 'seg palette-seg';
-    const on = button(seg, 'On', 'btn', () => apply('#ffffff'));
+    const lit = cfg.on || '#ffffff';
+    const on = button(seg, 'On', 'btn', () => apply(lit));
     const no = button(seg, 'Off', 'btn', () => apply(''));
-    if (mark) { mark['#ffffff'] = on; mark.none = no; }
+    if (mark) { mark[lit] = on; mark.none = no; }
     box.appendChild(seg);
   } else if (cfg.type === 'rgb') {
     const pick = document.createElement('input');
@@ -1213,7 +1224,7 @@ let wideFullscreen = false;
 async function setWide(on) {
   document.body.classList.toggle('wide', on);
   $('wide').innerHTML = svgIcon(on ? 'collapse' : 'expand');
-  $('wide').title = on ? 'Leave full screen' : 'Full screen, landscape';
+  $('wide').title = on ? 'Leave Full Screen' : 'Full Screen, Landscape';
   try {
     if (on) {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
@@ -1246,22 +1257,22 @@ function setWatch(on) {
 const TOURS = {
   manager: [
     ['#new-project', 'Projects', 'A project is one show. It holds the stage and every item (dance) in it. Start one here and choose how many items it begins with.'],
-    ['#home-more', 'Stage layouts', 'A layout is a stage: where the lights hang. Open this menu and choose Layouts to make, edit and share them. A layout can be shared with a code that others type in.'],
-    ['#import-btn', 'Import and download', 'Bring in project or item files that others send you. Every card has a download button; tick several cards to download them together.'],
+    ['#home-more', 'Stage Layouts', 'A layout is a stage: where the lights hang. Open this menu and choose Layouts to make, edit and share them. A layout can be shared with a code that others type in.'],
+    ['#import-btn', 'Import and Download', 'Bring in project or item files that others send you. Every card has a download button; tick several cards to download them together.'],
     ['#drafts', 'Drafts', 'Items made or imported without a project wait here. The folder button on a draft moves it into a project.'],
-    ['#project-list', 'Inside a project', 'Open a project to see its items. Drag the six-dot handle to put them in running order, and use the arrows on a picture to flip through that item\'s cues.'],
+    ['#project-list', 'Inside a Project', 'Open a project to see its items. Drag the six-dot handle to put them in running order, and use the arrows on a picture to flip through that item\'s cues.'],
     ['.home-views', 'Views', 'Switch every list between large tiles, small tiles and rows.'],
   ],
   plotter: [
-    ['#import-btn', 'Got a file?', 'If your lighting manager sent you an item file, import it here and choose Item.'],
-    ['#draft-new', 'Or start fresh', 'New item makes an empty item for you to plot. It appears under Drafts.'],
-    ['#drafts', 'Open it', 'Tap an item to open it and start plotting. Your work saves as you go.'],
+    ['#import-btn', 'Got a File?', 'If your lighting manager sent you an item file, import it here and choose Item.'],
+    ['#draft-new', 'Or Start Fresh', 'New item makes an empty item for you to plot. It appears under Drafts.'],
+    ['#drafts', 'Open It', 'Tap an item to open it and start plotting. Your work saves as you go.'],
   ],
   editor: [
-    ['#plan', 'The stage plan', 'Tap a light to select it, or swipe across to select several. Pinch or scroll to zoom in.'],
+    ['#plan', 'The Stage Plan', 'Tap a light to select it, or swipe across to select several. Pinch or scroll to zoom in.'],
     ['#mods', 'Controls', 'Colors, effects, spotlights, side lights, face lights and the cyclorama. With lights selected, only their options show.'],
-    ['#views', 'Live preview', 'See the look as the audience would. Switch between Front and 3D.'],
-    ['#load-track', 'The song', 'Load the track for this item. It stays with the item.'],
+    ['#views', 'Live Preview', 'See the look as the audience would. Switch between Front and 3D.'],
+    ['#load-track', 'The Song', 'Load the track for this item. It stays with the item.'],
     ['#add-cue', 'Cues', 'Go to a moment in the song and press + to save the lights you see as a cue. Changes you make while on a cue save into it.'],
     ['#wave', 'Timeline', 'Drag to move through the song and pinch to zoom. Drag a cue\'s flag to change when it happens.'],
     ['#more', 'Menu', 'Export a PDF cue sheet, download the item, or switch to watch mode.'],
@@ -1358,6 +1369,45 @@ function buildTips() {
   });
   for (const type of ['mousedown', 'wheel', 'keydown']) document.addEventListener(type, hide, true);
   document.addEventListener('mouseleave', hide);
+}
+
+// Dropdowns never use the browser's own list. Each <select> is kept (the rest of the app reads
+// and sets its value as before) but hidden behind a button that opens the app's menu.
+function dressSelect(select) {
+  if (select.dressed) return;
+  select.dressed = true;
+  const face = document.createElement('button');
+  face.type = 'button'; face.className = 'btn select-btn';
+  const text = document.createElement('span');
+  face.appendChild(text);
+  face.insertAdjacentHTML('beforeend', svgIcon('chevron'));
+  const show = () => { const now = select.options[select.selectedIndex]; text.textContent = now ? now.text : ''; };
+  // setting .value from code (the controls following a cue, say) must update the button too
+  const native = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  Object.defineProperty(select, 'value', { get() { return native.get.call(select); }, set(v) { native.set.call(select, v); show(); } });
+  face.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popMenu(face, [...select.options].map((option) => [option.text, () => {
+      select.value = option.value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }, option.value === select.value]));
+  });
+  select.hidden = true;
+  select.after(face);
+  new MutationObserver(show).observe(select, { childList: true });        // options filled in later
+  show();
+}
+function buildSelects() {
+  each('select', dressSelect);
+  new MutationObserver((changes) => {
+    for (const change of changes) {
+      for (const node of change.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (node.tagName === 'SELECT') dressSelect(node);
+        else node.querySelectorAll('select').forEach(dressSelect);
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
 }
 
 // A menu that would run off the side of the screen is slid back in.
@@ -1497,7 +1547,7 @@ function syncUI() {
   const zone = zones.size === 1 ? [...zones][0] : null;
   $('aim-down').classList.toggle('active', !aiming && zone === 0);
   $('aim-zone').classList.toggle('active', aiming || zone > 0);
-  $('aim-zone').textContent = aiming ? 'Tap a zone on the plan' : zone > 0 ? `Zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'Aim at zone';
+  $('aim-zone').textContent = aiming ? 'Tap a Zone on the Plan' : zone > 0 ? `Zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'Aim at Zone';
   planEls.zonePick.style.display = aiming ? '' : 'none';
   const allSame = (values) => values.length > 0 && values.every((v) => v === values[0]);
   const spotStates = [...selSpots].map((id) => !!state.spots[id]);
@@ -1605,14 +1655,14 @@ function drawFigure(p, f) {
   }
   if (f[10] > 0.01) {                          // spotlight: crown and shoulders catch most of it
     const g = ctx.createLinearGradient(0, top, 0, y);
-    g.addColorStop(0, lit(WARM[0], WARM[1], WARM[2], f[10]));
-    g.addColorStop(0.2, lit(WARM[0], WARM[1], WARM[2], f[10] * 0.8));
-    g.addColorStop(0.42, lit(WARM[0], WARM[1], WARM[2], f[10] * 0.38));
-    g.addColorStop(1, lit(WARM[0], WARM[1], WARM[2], f[10] * 0.12));
+    g.addColorStop(0, lit(SPOT_C[0], SPOT_C[1], SPOT_C[2], f[10]));
+    g.addColorStop(0.2, lit(SPOT_C[0], SPOT_C[1], SPOT_C[2], f[10] * 0.8));
+    g.addColorStop(0.42, lit(SPOT_C[0], SPOT_C[1], SPOT_C[2], f[10] * 0.38));
+    g.addColorStop(1, lit(SPOT_C[0], SPOT_C[1], SPOT_C[2], f[10] * 0.12));
     ctx.fillStyle = g; ctx.fillRect(left, top, wide, y - top);
   }
   if (f[3] > 0.01) {                           // face light: flat across the whole front
-    ctx.fillStyle = lit(WARM[0], WARM[1], WARM[2], f[3]);
+    ctx.fillStyle = lit(FACE_C[0], FACE_C[1], FACE_C[2], f[3]);
     ctx.fillRect(left, top, wide, y - top);
   }
   const bands = [[top, y - 1.45 * u], [y - 1.45 * u, y - 0.8 * u], [y - 0.8 * u, y]];   // head, torso, legs
@@ -1622,7 +1672,7 @@ function drawFigure(p, f) {
       const amount = f[4 + side * 3 + i];
       if (amount < 0.01) return;
       const g = ctx.createLinearGradient(from, 0, to, 0);
-      g.addColorStop(0, lit(WARM[0], WARM[1], WARM[2], amount)); g.addColorStop(1, 'rgb(0,0,0)');
+      g.addColorStop(0, lit(SIDE_C[0], SIDE_C[1], SIDE_C[2], amount)); g.addColorStop(1, 'rgb(0,0,0)');
       ctx.fillStyle = g; ctx.fillRect(left, y0, wide, y1 - y0);
     });
   }
@@ -1668,8 +1718,8 @@ function drawFront(D) {
     const lvl = D[O_SPOT + i];
     if (lvl < 0.01) return;
     const s = depthScale(sp.z3), x = frontX(sp.x3, sp.z3), y = floorY(sp.z3);
-    softBeam(x, rigY(s), 20 * s, x, y, 95 * s, WARM[0], WARM[1], WARM[2], 0.4 * lvl, 0.08 * lvl);
-    floorGlow(x, y, 62 * s, 9, WARM[0], WARM[1], WARM[2], 0.1 * lvl);
+    softBeam(x, rigY(s), 20 * s, x, y, 95 * s, SPOT_C[0], SPOT_C[1], SPOT_C[2], 0.4 * lvl, 0.08 * lvl);
+    floorGlow(x, y, 62 * s, 9, SPOT_C[0], SPOT_C[1], SPOT_C[2], 0.1 * lvl);
   });
   SIDES.forEach((side, sIdx) => {
     let n = 0;
@@ -1681,7 +1731,7 @@ function drawFront(D) {
       if (a < 0.005) return;
       const y = floorY(0) - SIDE_H[id] * PX * 0.9;
       const grad = hctx.createLinearGradient(edge, 0, tip, 0);
-      grad.addColorStop(0, css(WARM[0], WARM[1], WARM[2], a)); grad.addColorStop(1, css(WARM[0], WARM[1], WARM[2], 0));
+      grad.addColorStop(0, css(SIDE_C[0], SIDE_C[1], SIDE_C[2], a)); grad.addColorStop(1, css(SIDE_C[0], SIDE_C[1], SIDE_C[2], 0));
       hctx.fillStyle = grad;
       hctx.beginPath();
       hctx.moveTo(edge, y - 5); hctx.lineTo(tip, y - 20); hctx.lineTo(tip, y + 20); hctx.lineTo(edge, y + 5);
@@ -1690,8 +1740,8 @@ function drawFront(D) {
   });
   if (D[O_FACE] > 0.01) {                        // face lights wash down from above the audience
     const grad = hctx.createLinearGradient(0, 0, 0, FLOOR_Y);
-    grad.addColorStop(0, css(WARM[0], WARM[1], WARM[2], 0.02 * D[O_FACE]));
-    grad.addColorStop(1, css(WARM[0], WARM[1], WARM[2], 0.1 * D[O_FACE]));
+    grad.addColorStop(0, css(FACE_C[0], FACE_C[1], FACE_C[2], 0.02 * D[O_FACE]));
+    grad.addColorStop(1, css(FACE_C[0], FACE_C[1], FACE_C[2], 0.1 * D[O_FACE]));
     hctx.fillStyle = grad; hctx.fillRect(0, 0, FW, FLOOR_Y);
   }
   ctx.globalCompositeOperation = 'screen';
@@ -1914,35 +1964,33 @@ function buildThree() {
     spots.forEach((s, i) => {
       const lvl = D[O_SPOT + i];
       s.cone.visible = s.pool.visible = lvl > 0.01;
-      setLens(s.lens, lvl, lvl * 0.95, lvl * 0.75);
-      s.cone.material.uniforms.color.value.setRGB(WARM[0] * lvl * 0.15, WARM[1] * lvl * 0.15, WARM[2] * lvl * 0.15);
-      s.pool.material.color.setRGB(WARM[0] * lvl * 0.12, WARM[1] * lvl * 0.12, WARM[2] * lvl * 0.12);
+      setLens(s.lens, lvl * SPOT_C[0], lvl * SPOT_C[1], lvl * SPOT_C[2]);
+      s.cone.material.uniforms.color.value.setRGB(SPOT_C[0] * lvl * 0.15, SPOT_C[1] * lvl * 0.15, SPOT_C[2] * lvl * 0.15);
+      s.pool.material.color.setRGB(SPOT_C[0] * lvl * 0.12, SPOT_C[1] * lvl * 0.12, SPOT_C[2] * lvl * 0.12);
     });
     for (const s of sides) {
       const lvl = D[s.pos] * D[s.type];
       s.cone.visible = lvl > 0.01;
-      setLens(s.lens, lvl, lvl * 0.95, lvl * 0.75);
-      s.cone.material.uniforms.color.value.setRGB(WARM[0] * lvl * 0.14, WARM[1] * lvl * 0.14, WARM[2] * lvl * 0.14);
+      setLens(s.lens, lvl * SIDE_C[0], lvl * SIDE_C[1], lvl * SIDE_C[2]);
+      s.cone.material.uniforms.color.value.setRGB(SIDE_C[0] * lvl * 0.14, SIDE_C[1] * lvl * 0.14, SIDE_C[2] * lvl * 0.14);
     }
     const face = D[O_FACE];
     for (const f of faces) {
       f.cone.visible = face > 0.01;
-      setLens(f.lens, face, face * 0.95, face * 0.75);
-      f.cone.material.uniforms.color.value.setRGB(WARM[0] * face * 0.16, WARM[1] * face * 0.16, WARM[2] * face * 0.16);
+      setLens(f.lens, face * FACE_C[0], face * FACE_C[1], face * FACE_C[2]);
+      f.cone.material.uniforms.color.value.setRGB(FACE_C[0] * face * 0.16, FACE_C[1] * face * 0.16, FACE_C[2] * face * 0.16);
     }
     faceGlow.visible = face > 0.01;
-    faceGlow.material.color.setRGB(WARM[0] * face * 0.13, WARM[1] * face * 0.13, WARM[2] * face * 0.13);
+    faceGlow.material.color.setRGB(FACE_C[0] * face * 0.13, FACE_C[1] * face * 0.13, FACE_C[2] * face * 0.13);
     cyclo.material.color.setRGB(0.045 + D[O_CYC] * 0.5, 0.045 + D[O_CYC + 1] * 0.5, 0.06 + D[O_CYC + 2] * 0.5);
     people.forEach((p, n) => {
       p.g.visible = prefs.people;
       // each part is one flat colour here, so the two sides are averaged
       const f = figures[n];
       p.parts.forEach((m, i) => {
-        const white = f[3] + (f[4 + i] + f[7 + i]) * 0.5 + f[10] * SPOT_SHARE[i], share = LED_SHARE[i];
-        m.material.color.setRGB(
-          Math.min(1, UNLIT + f[0] * share + WARM[0] * white),
-          Math.min(1, UNLIT + f[1] * share + WARM[1] * white),
-          Math.min(1, UNLIT + f[2] * share + WARM[2] * white));
+        const face = f[3], side = (f[4 + i] + f[7 + i]) * 0.5, spot = f[10] * SPOT_SHARE[i], share = LED_SHARE[i];
+        const mix = (c) => Math.min(1, UNLIT + f[c] * share + FACE_C[c] * face + SIDE_C[c] * side + SPOT_C[c] * spot);
+        m.material.color.setRGB(mix(0), mix(1), mix(2));
       });
     });
     renderer.render(scene, camera);
@@ -2364,7 +2412,7 @@ function renderCues() {
   } else {
     tag.textContent = cueLabel(cue);
     tag.title = cueLabel(cue);
-    iconButton('pencil', 'Rename cue', () => { nameEditing = true; renderCues(); }, 'bare');
+    iconButton('pencil', 'Rename Cue', () => { nameEditing = true; renderCues(); }, 'bare');
   }
 
   input(box, 'text', 't', fmt(cue.time), (n) => {
@@ -2386,11 +2434,11 @@ function renderCues() {
   });
   box.appendChild(mode);
 
-  iconButton('copy', 'Duplicate cue', () => duplicateCue(cue));
-  iconButton('trash', 'Delete cue', () => deleteCue(cue));
+  iconButton('copy', 'Duplicate Cue', () => duplicateCue(cue));
+  iconButton('trash', 'Delete Cue', () => deleteCue(cue));
   // Optional comment for this cue; it goes on the cue's page in the PDF.
   // It opens and closes from the comment button, which carries a dot while the cue has one.
-  const noteButton = iconButton('comment', noteOpen ? 'Hide comment' : cue.note ? 'Show comment' : 'Add comment',
+  const noteButton = iconButton('comment', noteOpen ? 'Hide Comment' : cue.note ? 'Show Comment' : 'Add Comment',
     () => { noteOpen = !noteOpen; renderCues(); }, (noteOpen ? 'active' : '') + (cue.note ? ' has-note' : ''));
   if (noteOpen) {
     const note = document.createElement('textarea');
@@ -2491,7 +2539,7 @@ const capital = (word) => word[0].toUpperCase() + word.slice(1);
 // A look as rows of text for the settings table: [label, [{ text, dot }]]
 function effectText(look) {
   const known = EFFECTS.find(([id]) => id === look.effect);
-  return !known || look.effect === 'none' ? 'Stage wash' : `${known[1]} at ${look.bpm} BPM`;
+  return !known || look.effect === 'none' ? 'Stage Wash' : `${known[1]} at ${look.bpm} BPM`;
 }
 function sideText(look) {
   const types = SIDE_TYPES.filter(([id]) => look.sideTypes[id]).map(([, name]) => name);
@@ -2535,8 +2583,8 @@ function lookChanges(from, to) {
   if (on.length || off.length) kinds++;
 
   const simple = (name, a, b) => { if (a !== b) { lines.push(`${name}: ${a} → ${b}`); kinds++; } };
-  simple('Face lights', FACE_LEVELS[from.face] || 'Off', FACE_LEVELS[to.face] || 'Off');
-  simple('Side lights', sideText(from), sideText(to));
+  simple('Face Lights', FACE_LEVELS[from.face] || 'Off', FACE_LEVELS[to.face] || 'Off');
+  simple('Side Lights', sideText(from), sideText(to));
   simple('Cyclorama', from.cyclo, to.cyclo);
   simple('Effect', effectText(from), effectText(to));
   return { kinds, lines };
@@ -2577,8 +2625,8 @@ function lookRows(look) {
     ['Effect', [{ text: effect }]],
     ['LEDs', leds.length ? leds : [{ text: 'All off' }]],
     ['Spotlights', [{ text: spots.length ? ranges(spots, '') : 'All off' }]],
-    ['Face lights', [{ text: FACE_LEVELS[look.face] || 'Off' }]],
-    ['Side lights', [{ text: sideText(look) }]],
+    ['Face Lights', [{ text: FACE_LEVELS[look.face] || 'Off' }]],
+    ['Side Lights', [{ text: sideText(look) }]],
     ['Cyclorama', [look.cyclo === 'none' ? { text: 'None' } : { text: colorLabel(look.cyclo, LIGHTS.cyclo), dot: hexOf(look.cyclo) }]],
   ];
 }
@@ -2951,7 +2999,7 @@ function createProject(name, stage, from) {
   const id = newId(), tpl = stage || BUILTIN;
   const own = from && from.layout && Array.isArray(from.layout.leds) ? from.layout : (tpl.builtin ? null : copyLayout(tpl.layout));
   if (own) raw.set(projectKey(LAYOUT_KEY, id), own);
-  const project = { id, name: name || 'Untitled project', template: (from && from.template) || tpl.name, templateId: (from && from.templateId) || tpl.id, created: Date.now(), updated: Date.now(), cues: 0, items: [] };
+  const project = { id, name: name || 'Untitled Project', template: (from && from.template) || tpl.name, templateId: (from && from.templateId) || tpl.id, created: Date.now(), updated: Date.now(), cues: 0, items: [] };
   const lights = (from && from.lights) || tpl.lights;
   if (lights) project.lights = clone(lights);
   projects.unshift(project);
@@ -3227,11 +3275,15 @@ function lookPicture(look) {
 }
 
 // A small menu that opens under a button and closes on the next click anywhere. entries: [label, action]
-function popMenu(anchor, entries) {
+function popMenu(anchor, entries) {       // entries: [label, action, current?]
   each('.menu.pop', (old) => old.remove());
   const menu = document.createElement('div');
   menu.className = 'menu pop';
-  for (const [label, action] of entries) button(menu, label, '', action);
+  for (const [label, action, current] of entries) {
+    const b = button(menu, label, current ? 'on' : '', action);
+    if (current !== undefined) b.insertAdjacentHTML('afterbegin', current ? svgIcon('check') : '<svg viewBox="0 0 16 16"></svg>');
+  }
+  menu.style.minWidth = Math.max(160, Math.round(anchor.getBoundingClientRect().width)) + 'px';
   const r = anchor.getBoundingClientRect();
   menu.style.left = r.left + 'px';
   menu.style.top = Math.min(r.bottom + 6, innerHeight - 40 * entries.length - 24) + 'px';
@@ -3262,7 +3314,7 @@ function renderHome() {
   const loose = !project && projects.find((p) => p.drafts) ? projects.find((p) => p.drafts).items : [];       // drafts can be ticked too
   for (const id of [...picked]) if (![...things, ...loose].some((t) => t.id === id)) picked.delete(id);
   $('pick-all').hidden = !things.length;
-  $('pick-all').textContent = picked.size === things.length ? 'Select none' : 'Select all';
+  $('pick-all').textContent = picked.size === things.length ? 'Select None' : 'Select All';
   $('pick-download').hidden = !picked.size;
   $('pick-download').textContent = `Download ${picked.size}`;
   const plural = (n, word) => `${n || 0} ${word}${n === 1 ? '' : 's'}`;
@@ -3270,7 +3322,7 @@ function renderHome() {
     const card = document.createElement('div');
     card.className = 'project' + (picked.has(thing.id) ? ' picked' : '');
     const tick = document.createElement('label');
-    tick.className = 'pick'; tick.title = 'Select for download';
+    tick.className = 'pick'; tick.title = 'Select for Download';
     const box = document.createElement('input');
     box.type = 'checkbox'; box.checked = picked.has(thing.id);
     box.addEventListener('change', () => { if (box.checked) picked.add(thing.id); else picked.delete(thing.id); renderHome(); });
@@ -3305,8 +3357,8 @@ function renderHome() {
         const b = button(shot, '', 'skim ' + cls, skim(by));
         b.innerHTML = svgIcon(icon); b.title = label; b.setAttribute('aria-label', label);
       };
-      arrow('skim-back', 'back', 'Previous cue', -1);
-      arrow('skim-on', 'forward', 'Next cue', 1);
+      arrow('skim-back', 'back', 'Previous Cue', -1);
+      arrow('skim-on', 'forward', 'Next Cue', 1);
       shot.appendChild(tag);
     }
     card.appendChild(shot);
@@ -3348,7 +3400,7 @@ function renderHome() {
     };
     if (project) {
       // Items keep the order you give them: drag the handle onto another card to move this one there.
-      const grip = act('grip', 'Drag to reorder', () => {});
+      const grip = act('grip', 'Drag to Reorder', () => {});
       grip.classList.add('grip-handle');
       // The card lifts and follows the pointer; the card it is over is outlined, and on release it
       // takes that card's place. Nothing is moved in the page until then, so the drag cannot break off.
@@ -3396,7 +3448,7 @@ function renderHome() {
     act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
     if (project && project.drafts) {
       // a draft can be filed into a project: pick which from a small menu
-      const file = act('moveto', 'Move to a project', (e) => {
+      const file = act('moveto', 'Move to a Project', (e) => {
         e.stopPropagation();
         const choices = realProjects();
         if (!choices.length) return toast('Create a project first, then move the draft into it.', 3000);
@@ -3431,7 +3483,7 @@ function renderHome() {
   if (!project && drafts) for (const item of drafts.items) addCard(item, drafts, drafts.items, draftList);
   if (!project) {
     const addDraft = button(draftList, '', 'project new-card', () => $('draft-new').click());
-    addDraft.innerHTML = svgIcon('plus') + '<span>New item</span>';
+    addDraft.innerHTML = svgIcon('plus') + '<span>New Item</span>';
   }
   // On the project list: the items worked on last, across all projects, to pick up where you left off.
   const recent = project ? [] : projects.filter((p) => !p.scratch).flatMap((p) => p.items.map((item) => ({ p, item })))
@@ -3454,7 +3506,7 @@ function renderHome() {
   }
   // a dashed card at the end: the same as the New project (or New item) button
   const add = button(list, '', 'project new-card', () => $(project ? 'new-item' : 'new-project').click());
-  add.innerHTML = svgIcon('plus') + `<span>${project ? 'New item' : 'New project'}</span>`;
+  add.innerHTML = svgIcon('plus') + `<span>${project ? 'New Item' : 'New Project'}</span>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -3627,9 +3679,9 @@ function editLights(title, owner, save) {
   const now = lightsOf(owner);
   // work on a copy with every colour as a hex value, so each row has a colour to show
   lightsDraft = {};
-  for (const [kind] of LIGHT_KINDS) lightsDraft[kind] = { type: now[kind].type, colors: (now[kind].colors || []).map((c) => ({ name: c.name, value: hexOf(c.value).toLowerCase() })) };
+  for (const [kind] of LIGHT_KINDS) lightsDraft[kind] = { type: now[kind].type, on: now[kind].on || (SWITCHED.includes(kind) ? WARM_HEX : '#ffffff'), colors: (now[kind].colors || []).map((c) => ({ name: c.name, value: hexOf(c.value).toLowerCase() })) };
   lightsDone = () => { owner.lights = lightsDraft; save(); if (templates.includes(owner)) republish(owner); };
-  $('lights-title').textContent = 'Light settings · ' + title;
+  $('lights-title').textContent = 'Light Settings · ' + title;
   $('lights').hidden = false;
   renderLights();
 }
@@ -3644,7 +3696,7 @@ function renderLights() {
     const name = document.createElement('span');
     name.className = 'lbl mini-lbl'; name.textContent = label;
     const type = document.createElement('select');
-    for (const [id, text] of LIGHT_TYPES) type.add(new Option(text, id, false, id === cfg.type));
+    for (const [id, text] of LIGHT_TYPES) if (!SWITCHED.includes(kind) || id === 'onoff') type.add(new Option(text, id, false, id === cfg.type));
     type.addEventListener('change', () => { cfg.type = type.value; renderLights(); });
     head.appendChild(name); head.appendChild(type); block.appendChild(head);
     if (cfg.type === 'set') {
@@ -3655,27 +3707,33 @@ function renderLights() {
         pick.type = 'color'; pick.className = 'color-pick'; pick.value = color.value;
         pick.addEventListener('input', () => { color.value = pick.value; });
         const text = document.createElement('input');
-        text.type = 'text'; text.value = color.name; text.maxLength = 24; text.placeholder = 'Color name';
+        text.type = 'text'; text.value = color.name; text.maxLength = 24; text.placeholder = 'Color Name';
         text.addEventListener('input', () => { color.name = text.value; });
         row.appendChild(pick); row.appendChild(text);
         const drop = button(row, '', 'btn icon', () => { cfg.colors.splice(i, 1); renderLights(); });
-        drop.innerHTML = svgIcon('close'); drop.title = 'Remove this color';
+        drop.innerHTML = svgIcon('close'); drop.title = 'Remove This Color';
         block.appendChild(row);
       });
-      const add = button(block, 'Add color', 'btn lights-add', () => { cfg.colors.push({ name: '', value: '#ffffff' }); renderLights(); });
+      const add = button(block, 'Add Color', 'btn lights-add', () => { cfg.colors.push({ name: '', value: '#ffffff' }); renderLights(); });
       add.insertAdjacentHTML('afterbegin', svgIcon('plus'));
+    } else if (cfg.type === 'onoff') {
+      const row = document.createElement('div');
+      row.className = 'line lights-color';
+      const pick = document.createElement('input');
+      pick.type = 'color'; pick.className = 'color-pick'; pick.value = cfg.on;
+      pick.addEventListener('input', () => { cfg.on = pick.value; });
+      const text = document.createElement('span');
+      text.className = 'lbl mini-lbl'; text.textContent = 'Color When On';
+      row.appendChild(text); row.appendChild(pick);
+      block.appendChild(row);
     } else {
       const note = document.createElement('p');
       note.className = 'hint lights-note';
-      note.textContent = { onoff: 'A simple On and Off pair.', rgb: 'A color picker: any color at all.', white: 'A slider from warm white (2700 K) to cool white (6500 K).' }[cfg.type];
+      note.textContent = { rgb: 'A color picker: any color at all.', white: 'A slider from warm white (2700 K) to cool white (6500 K).' }[cfg.type];
       block.appendChild(note);
     }
     body.appendChild(block);
   }
-  const rest = document.createElement('p');
-  rest.className = 'hint lights-note';
-  rest.textContent = 'Spotlights are on or off. Face lights and side lights keep their own controls.';
-  body.appendChild(rest);
 }
 function buildLights() {
   const close = () => { $('lights').hidden = true; lightsDraft = lightsDone = null; };
@@ -3720,17 +3778,17 @@ function renderTemplates() {
     card.className = 'tpl-card' + (tpl === tplPicked ? ' picked' : '');
     const pick = button(card, '', 'tpl-pick' + (tpl === SCRATCH ? ' scratch' : ''), () => { tplPicked = tpl; renderTemplates(); });
     pick.innerHTML = tpl === SCRATCH ? svgIcon('plus') : templatePreview(tpl.layout);
-    pick.title = tpl === SCRATCH ? 'Start from scratch' : tpl.name;
+    pick.title = tpl === SCRATCH ? 'Start From Scratch' : tpl.name;
     pick.addEventListener('dblclick', () => { tplPicked = tpl; newFromTemplate(); });
     const row = document.createElement('div');
     row.className = 'tpl-row';
     const info = document.createElement('div');
     info.className = 'tpl-info';
     const name = document.createElement('div');
-    name.className = 'tpl-name'; name.textContent = tpl === SCRATCH ? 'Start from scratch' : tpl.name;
+    name.className = 'tpl-name'; name.textContent = tpl === SCRATCH ? 'Start From Scratch' : tpl.name;
     const meta = document.createElement('div');
     meta.className = 'hint';
-    meta.textContent = tpl === SCRATCH ? 'An empty stage' : countText(tpl.layout) + (tpl.share ? ` · code ${tpl.share.code}` : '');
+    meta.textContent = tpl === SCRATCH ? 'An Empty Stage' : countText(tpl.layout) + (tpl.share ? ` · code ${tpl.share.code}` : '');
     const follows = tpl.share && !tpl.share.key;         // someone else's layout: it changes only when they change it
     info.appendChild(name); info.appendChild(meta); row.appendChild(info);
     const act = (icon, label, onClick) => {
@@ -3753,10 +3811,10 @@ function renderTemplates() {
       });
     }
     if (tpl !== SCRATCH && !follows) {
-      act('layout', 'Edit layout', () => editTemplateLayout(tpl));
-      act('sliders', 'Light settings', () => editLights(tpl.name, tpl, saveTemplates));
+      act('layout', 'Edit Layout', () => editTemplateLayout(tpl));
+      act('sliders', 'Light Settings', () => editLights(tpl.name, tpl, saveTemplates));
     }
-    if (tpl !== SCRATCH) act('share', tpl.share ? 'Shared with a code' : 'Share with a code', () => openShare(tpl));
+    if (tpl !== SCRATCH) act('share', tpl.share ? 'Shared With a Code' : 'Share With a Code', () => openShare(tpl));
     if (tpl !== SCRATCH) {
       act('copy', 'Duplicate', () => {
         templates.unshift({ id: 't' + newId(), name: tpl.name + ' copy', layout: copyLayout(tpl.layout), lights: tpl.lights && clone(tpl.lights), created: Date.now() });
@@ -3808,14 +3866,14 @@ function buildHome() {
   const openTemplates = (manage) => {
     tplManage = manage; tplPicked = null;
     dialog.querySelector('.tpl').classList.toggle('manage', manage);
-    $('tpl-title').textContent = manage ? 'Layouts' : 'New project';
+    $('tpl-title').textContent = manage ? 'Layouts' : 'New Project';
     dialog.hidden = false;
     renderTemplates();
     $('new-name').value = '';
   };
   $('new-project').addEventListener('click', () => openTemplates(false));
   $('tpl-new').addEventListener('click', () => {
-    const tpl = { id: 't' + newId(), name: 'Untitled layout', layout: { leds: [], spots: [] }, created: Date.now() };
+    const tpl = { id: 't' + newId(), name: 'Untitled Layout', layout: { leds: [], spots: [] }, created: Date.now() };
     templates.unshift(tpl);
     saveTemplates();
     editTemplateLayout(tpl);
@@ -3825,7 +3883,7 @@ function buildHome() {
   if (backToLayouts && !currentId) openTemplates(true);
   // The app menu behind the icon: things that are about the app, not one project.
   const homeMenu = $('home-menu');
-  const themeLabel = () => { $('home-theme').innerHTML = prefs.theme === 'dark' ? svgIcon('sun') + 'Light mode' : svgIcon('moon') + 'Dark mode'; };
+  const themeLabel = () => { $('home-theme').innerHTML = prefs.theme === 'dark' ? svgIcon('sun') + 'Light Mode' : svgIcon('moon') + 'Dark Mode'; };
   for (const [id, icon] of [['home-templates', 'viewtile'], ['home-backup', 'download'], ['home-reload', 'refresh']]) $(id).insertAdjacentHTML('afterbegin', svgIcon(icon));
   themeLabel();
   $('home-more').addEventListener('click', (e) => { e.stopPropagation(); homeMenu.hidden = !homeMenu.hidden; keepOnScreen(homeMenu); });
@@ -3981,7 +4039,7 @@ function buildShow() {
   // Click the item's name to rename it in place.
   const label = $('bar-item'), item = currentItem();
   label.textContent = item ? item.name : '';
-  label.title = 'Rename this item';
+  label.title = 'Rename This Item';
   label.addEventListener('click', () => {
     if (!item) return;
     const field = document.createElement('input');
@@ -4089,6 +4147,7 @@ requestAnimationFrame(() => document.documentElement.classList.remove('booting')
 // First visits: ask what the person is here for, then walk them through the screen they are on.
 buildTours();
 buildTips();
+buildSelects();
 setTimeout(() => {
   if (atHome && !currentId && !prefs.role) $('role').hidden = false;
   else if (atHome && !currentId && !prefs.tourHome && TOURS[prefs.role]) startTour(prefs.role);

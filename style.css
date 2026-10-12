@@ -365,16 +365,16 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
 .plan .fx:hover > .led, .plan .fx:hover > .spot, .plan .fx:hover > .side, .plan .fx:hover > .face { stroke: var(--muted); }
 .plan .spot.selected, .plan .side.selected, .plan .fx:hover > .selected { stroke: var(--blue); stroke-width: 4; }
 .plan .spot { fill: var(--panel); stroke: var(--plan-label); stroke-width: 2; }
-.plan .spot.on { fill: #fde68a; stroke: #f29900; stroke-width: 2.5; filter: drop-shadow(0 0 7px rgba(251, 188, 4, .9)); }
+.plan .spot.on { fill: var(--spot-on, #fde68a); stroke: #f29900; stroke-width: 2.5; filter: drop-shadow(0 0 7px rgba(251, 188, 4, .9)); }
 .plan .face { fill: var(--panel); stroke: var(--fix-line); stroke-width: 1.5; }
-.plan .face.f1 { fill: #fef3c7; }
-.plan .face.f2 { fill: #fde68a; }
-.plan .face.f3 { fill: #fbbf24; stroke: #f29900; filter: drop-shadow(0 0 5px rgba(251, 188, 4, .8)); }
+.plan .face.f1 { fill: var(--face-on, #fef3c7); fill-opacity: .45; }
+.plan .face.f2 { fill: var(--face-on, #fde68a); fill-opacity: .75; }
+.plan .face.f3 { fill: var(--face-on, #fbbf24); stroke: #f29900; filter: drop-shadow(0 0 5px rgba(251, 188, 4, .8)); }
 .plan .fx:hover > .cyclo { stroke: var(--muted); stroke-width: 3; }
 .plan .cyclo.selected, .plan .fx:hover > .cyclo.selected { stroke: var(--blue); stroke-width: 5; }
 .plan .cyclo.none { fill: var(--fix-off); }
 .plan .side { fill: var(--fix-off); stroke: var(--fix-line); stroke-width: 2; stroke-linejoin: round; }
-.plan .side.on { fill: #fde68a; stroke: #f29900; filter: drop-shadow(0 0 6px rgba(251, 188, 4, .85)); }
+.plan .side.on { fill: var(--side-on, #fde68a); stroke: #f29900; filter: drop-shadow(0 0 6px rgba(251, 188, 4, .85)); }
 /* Selected spotlights and side lights get a blue halo, so they read as selected whether
    they are on or off. */
 .plan .fx.sel > .hit { fill: var(--blue); fill-opacity: .22; stroke: var(--blue); stroke-width: 3; rx: 10px; }
@@ -837,6 +837,14 @@ body.tpl-edit #layout-template, body.tpl-edit #layout-keep, body.tpl-edit #layou
 
 /* the name tag that appears under a button on hover */
 #tip { position: fixed; z-index: 100; max-width: 260px; padding: 4px 8px; background: var(--text); color: var(--panel); border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 1.3; pointer-events: none; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); }
+
+/* the app's own dropdown: a button that shows the choice, and a menu of the others */
+.select-btn { flex: 1; min-width: 0; justify-content: space-between; gap: 6px; padding: 0 6px 0 8px; font-weight: 450; }
+.select-btn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.select-btn svg { flex: 0 0 14px; width: 14px; height: 14px; fill: none; stroke: var(--muted); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.cue-edit .select-btn { flex: 1 1 76px; min-width: 70px; }
+.lights-kind .select-btn { flex: 0 1 180px; }
+.menu.pop > button.on { font-weight: 550; }
 
 /* ---------- Tours: the first question, then cards that point at the real controls ---------- */
 .role-card { width: min(400px, 100%); }

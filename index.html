@@ -31,30 +31,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121452">
+<link rel="stylesheet" href="style.css?v=202610121458">
 </head>
 <body data-view="front">
 <div id="home" hidden>
   <div class="home-inner">
     <div class="home-head">
-      <button id="home-back" class="btn icon" aria-label="All projects" title="All projects" hidden></button>
+      <button id="home-back" class="btn icon" aria-label="All Projects" title="All Projects" hidden></button>
       <div id="home-logo" class="home-menu">
-        <button id="home-more" class="logo-btn" aria-label="App menu" title="App menu"><img src="icons/icon.svg" width="32" height="32" alt=""></button>
+        <button id="home-more" class="logo-btn" aria-label="App Menu" title="App Menu"><img src="icons/icon.svg" width="32" height="32" alt=""></button>
         <div id="home-menu" class="menu" hidden>
-          <button id="home-theme">Light mode</button>
+          <button id="home-theme">Light Mode</button>
           <button id="home-templates">Layouts</button>
           <hr>
-          <button id="home-backup">Download all projects</button>
-          <button id="home-reload">Reload to update</button>
-          <button id="home-tour">Show the tour</button>
+          <button id="home-backup">Download All Projects</button>
+          <button id="home-reload">Reload to Update</button>
+          <button id="home-tour">Show the Tour</button>
           <div id="home-version" class="menu-foot"></div>
         </div>
       </div>
       <h1 id="home-title" hidden></h1>
       <div class="spacer"></div>
       <div class="seg home-views">
-        <button class="btn icon" data-home-view="tile" aria-label="Large tiles" title="Large tiles"></button>
-        <button class="btn icon" data-home-view="small" aria-label="Small tiles" title="Small tiles"></button>
+        <button class="btn icon" data-home-view="tile" aria-label="Large Tiles" title="Large Tiles"></button>
+        <button class="btn icon" data-home-view="small" aria-label="Small Tiles" title="Small Tiles"></button>
         <button class="btn icon" data-home-view="list" aria-label="List" title="List"></button>
       </div>
       <div class="drop">
@@ -65,12 +65,12 @@
           <button data-import="project">Project</button>
         </div>
       </div>
-      <button id="draft-new" class="btn">New item</button>
-      <button id="new-project" class="btn primary">New project</button>
+      <button id="draft-new" class="btn">New Item</button>
+      <button id="new-project" class="btn primary">New Project</button>
       <div id="new-item-wrap" class="split" hidden>
-        <button id="new-item" class="btn primary">New item</button>
+        <button id="new-item" class="btn primary">New Item</button>
         <button id="new-item-more" class="btn primary icon" aria-label="More ways to add items" title="More ways to add items"></button>
-        <div id="new-item-menu" class="menu" hidden><button id="new-item-many">Add several items…</button></div>
+        <div id="new-item-menu" class="menu" hidden><button id="new-item-many">Add Several Items…</button></div>
       </div>
     </div>
     <div id="drafts">
@@ -80,73 +80,73 @@
     <div class="home-sub">
       <h2 class="home-title" id="home-heading">Projects</h2>
       <div class="spacer"></div>
-      <button id="home-layout" class="btn" hidden>Edit stage layout</button>
-      <button id="home-lights" class="btn" hidden>Light settings</button>
+      <button id="home-layout" class="btn" hidden>Edit Stage Layout</button>
+      <button id="home-lights" class="btn" hidden>Light Settings</button>
       <button id="pick-download" class="btn" hidden>Download</button>
-      <button id="pick-all" class="btn" hidden>Select all</button>
+      <button id="pick-all" class="btn" hidden>Select All</button>
     </div>
     <div id="layout-news" class="news" hidden>
       <span>The stage layout this project uses was updated by its publisher.</span>
-      <button id="news-apply" class="btn primary">Use the new layout</button>
-      <button id="news-later" class="btn">Not now</button>
+      <button id="news-apply" class="btn primary">Use the New Layout</button>
+      <button id="news-later" class="btn">Not Now</button>
     </div>
     <div id="project-list" class="project-list"></div>
     <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
     <div id="recent" hidden>
-      <div class="home-sub"><h2 class="home-title">Recently edited</h2></div>
+      <div class="home-sub"><h2 class="home-title">Recently Edited</h2></div>
       <div id="recent-list" class="recent-list"></div>
     </div>
   </div>
   <div id="items-new" class="tpl-back" hidden>
-    <div class="mini" role="dialog" aria-label="Add several items">
-      <div class="tpl-head"><h2>Add several items</h2><button type="button" id="many-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+    <div class="mini" role="dialog" aria-label="Add Several Items">
+      <div class="tpl-head"><h2>Add Several Items</h2><button type="button" id="many-close" class="btn icon" aria-label="Close" title="Close"></button></div>
       <div class="mini-body">
         <div class="line">
-          <span class="lbl mini-lbl">How many</span>
+          <span class="lbl mini-lbl">How Many</span>
           <div class="tpl-count">
-            <button type="button" id="many-less" class="btn icon" aria-label="One fewer"></button>
+            <button type="button" id="many-less" class="btn icon" aria-label="One Fewer"></button>
             <input id="many-count" type="number" min="1" max="60" step="1" value="2" inputmode="numeric" aria-label="Number of items">
-            <button type="button" id="many-more" class="btn icon" aria-label="One more"></button>
+            <button type="button" id="many-more" class="btn icon" aria-label="One More"></button>
           </div>
         </div>
         <p class="hint mini-note">Names are optional. Paste a list (one name per line) into any field to fill them all.</p>
         <div id="many-names" class="mini-names"></div>
       </div>
-      <div class="tpl-foot"><span class="hint"></span><button id="many-create" class="btn primary" type="button">Add items</button></div>
+      <div class="tpl-foot"><span class="hint"></span><button id="many-create" class="btn primary" type="button">Add Items</button></div>
     </div>
   </div>
   <div id="tpl" class="tpl-back" hidden>
-    <div class="tpl" role="dialog" aria-label="New project">
+    <div class="tpl" role="dialog" aria-label="New Project">
       <div class="tpl-side">
         <h2>Layouts</h2>
-        <button class="tpl-tab" data-tpl-tab="all">All layouts</button>
-        <button class="tpl-tab" data-tpl-tab="shared">Shared by code</button>
-        <button class="tpl-tab" data-tpl-tab="mine">My layouts</button>
+        <button class="tpl-tab" data-tpl-tab="all">All Layouts</button>
+        <button class="tpl-tab" data-tpl-tab="shared">Shared by Code</button>
+        <button class="tpl-tab" data-tpl-tab="mine">My Layouts</button>
       </div>
       <div class="tpl-main">
-        <div class="tpl-head"><h2 id="tpl-title">New project</h2><button id="tpl-create" class="btn primary" type="button">Create project</button><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+        <div class="tpl-head"><h2 id="tpl-title">New Project</h2><button id="tpl-create" class="btn primary" type="button">Create Project</button><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
         <div class="tpl-scroll">
           <div class="tpl-details">
-            <label class="tpl-field tpl-field-name"><span>Project name</span>
-              <input id="new-name" type="text" placeholder="Untitled project" maxlength="60" autocomplete="off">
+            <label class="tpl-field tpl-field-name"><span>Project Name</span>
+              <input id="new-name" type="text" placeholder="Untitled Project" maxlength="60" autocomplete="off">
             </label>
             <div class="tpl-field"><span>Items</span>
               <div class="tpl-count">
-                <button type="button" id="items-less" class="btn icon" aria-label="One fewer"></button>
+                <button type="button" id="items-less" class="btn icon" aria-label="One Fewer"></button>
                 <input id="items-count" type="number" min="1" max="60" step="1" value="1" inputmode="numeric" aria-label="Number of items">
-                <button type="button" id="items-more" class="btn icon" aria-label="One more"></button>
+                <button type="button" id="items-more" class="btn icon" aria-label="One More"></button>
               </div>
             </div>
             <div id="items-names" class="tpl-names"></div>
             <p class="hint tpl-tip">Paste a list (one name per line) into any item field to fill them all.</p>
           </div>
           <div class="tpl-codeline">
-            <input id="tpl-code" type="text" placeholder="Layout code" autocomplete="off" autocapitalize="none" spellcheck="false">
-            <button id="tpl-code-go" class="btn" type="button">Import layout</button>
-            <button id="tpl-new" class="btn" type="button">New layout</button>
+            <input id="tpl-code" type="text" placeholder="Layout Code" autocomplete="off" autocapitalize="none" spellcheck="false">
+            <button id="tpl-code-go" class="btn" type="button">Import Layout</button>
+            <button id="tpl-new" class="btn" type="button">New Layout</button>
           </div>
           <div class="tpl-pickhead">
-            <h3>Stage layout</h3>
+            <h3>Stage Layout</h3>
             <div class="seg tpl-tabs">
               <button type="button" class="btn" data-tpl-tab="all">All</button>
               <button type="button" class="btn" data-tpl-tab="shared">Shared</button>
@@ -165,7 +165,7 @@
         <div id="share-new">
           <p class="hint mini-note">Choose a code. Anyone who types it gets this layout, and keeps getting your changes to it.</p>
           <div class="line">
-            <input id="share-code" type="text" maxlength="60" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Layout code">
+            <input id="share-code" type="text" maxlength="60" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Layout Code">
             <button id="share-go" class="btn primary" type="button">Publish</button>
           </div>
           <p class="hint mini-note">Lowercase letters, numbers and dashes. Only this device will be able to change the layout afterwards.</p>
@@ -178,8 +178,8 @@
     </div>
   </div>
   <div id="lights" class="tpl-back" hidden>
-    <div class="mini" role="dialog" aria-label="Light settings">
-      <div class="tpl-head"><h2 id="lights-title">Light settings</h2><button id="lights-save" class="btn primary" type="button">Save</button><button id="lights-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+    <div class="mini" role="dialog" aria-label="Light Settings">
+      <div class="tpl-head"><h2 id="lights-title">Light Settings</h2><button id="lights-save" class="btn primary" type="button">Save</button><button id="lights-close" class="btn icon" aria-label="Close" title="Close"></button></div>
       <div class="mini-body" id="lights-body"></div>
     </div>
   </div>
@@ -197,12 +197,12 @@
           <button id="theme" class="btn icon" aria-label="Light or dark mode"></button>
         </div>
         <button id="export-pdf">Export PDF</button>
-        <button id="export">Download item</button>
-        <label>Replace from file<input id="import" type="file" hidden></label>
+        <button id="export">Download Item</button>
+        <label>Replace From File<input id="import" type="file" hidden></label>
         <hr>
-        <button id="reset">Clear lights</button>
+        <button id="reset">Clear Lights</button>
         <hr>
-        <button id="tour-editor">Show the tour</button>
+        <button id="tour-editor">Show the Tour</button>
       </div>
     </div>
     <span id="bar-name" class="bar-name"><span id="bar-project" class="bar-project"></span><span id="bar-item"></span></span>
@@ -211,18 +211,18 @@
   <button id="toggle-right" class="btn icon" data-icon="panelRight" aria-label="Hide or show the previews" title="Hide or show the previews"></button>
 
   <section class="view-col" id="views">
-    <button id="wide" class="btn icon" aria-label="Full screen, landscape" title="Full screen, landscape"></button>
+    <button id="wide" class="btn icon" aria-label="Full Screen, Landscape" title="Full Screen, Landscape"></button>
     <div class="seg view-switch">
       <button class="btn small" data-view-pick="front">Front</button>
       <button class="btn small" data-view-pick="three">3D</button>
     </div>
     <div class="panel view" data-view="front">
-      <div class="panel-head"><h2>Front view</h2></div>
+      <div class="panel-head"><h2>Front View</h2></div>
       <div class="fit"><canvas id="front"></canvas></div>
     </div>
     <div class="grip split" data-grip="split" title="Drag to resize"></div>
     <div class="panel view" data-view="three">
-      <div class="panel-head"><h2>3D view</h2><span class="hint">Drag to orbit, Cmd + scroll or pinch to zoom</span></div>
+      <div class="panel-head"><h2>3D View</h2><span class="hint">Drag to orbit, Cmd + scroll or pinch to zoom</span></div>
       <div id="three"><div id="three-fallback">The 3D view needs an internet connection to load Three.js.</div></div>
     </div>
   </section>
@@ -233,7 +233,7 @@
     <div class="plan-wrap">
       <svg id="plan" class="plan" viewBox="250 110 1500 1010" xmlns="http://www.w3.org/2000/svg"></svg>
       <button id="deselect" class="btn small chip" hidden>Deselect</button>
-      <button id="plan-reset" class="btn small chip" hidden>Reset zoom</button>
+      <button id="plan-reset" class="btn small chip" hidden>Reset Zoom</button>
       <div class="history">
         <button id="undo" class="btn icon" data-icon="undo" title="Undo (Cmd+Z)" aria-label="Undo"></button>
         <button id="redo" class="btn icon" data-icon="redo" title="Redo (Cmd+Shift+Z)" aria-label="Redo"></button>
@@ -246,7 +246,7 @@
   <aside class="panel side" id="mods">
     <div id="layout-panel">
       <div class="group">
-        <div class="sec-head"><h3>Edit layout</h3><span id="layout-count" class="count"></span></div>
+        <div class="sec-head"><h3>Edit Layout</h3><span id="layout-count" class="count"></span></div>
         <p class="hint note">Drag a light on the plan to move it. The previews update when you press Done.</p>
         <div class="line">
           <span class="lbl">Add</span>
@@ -271,17 +271,17 @@
         <div class="line">
           <button class="btn primary" id="layout-done">Done</button>
           <button class="btn" id="layout-cancel">Cancel</button>
-          <button class="btn" id="layout-template">Reset to saved layout</button>
+          <button class="btn" id="layout-template">Reset to Saved Layout</button>
         </div>
       </div>
       <div class="group" id="layout-keep">
-        <div class="sec-head"><h3>Save as a layout</h3></div>
+        <div class="sec-head"><h3>Save as a Layout</h3></div>
         <p class="hint note">Keep this layout to start new projects from.</p>
         <div class="line">
-          <input id="layout-tpl-name" type="text" placeholder="Layout name" maxlength="60" autocomplete="off">
+          <input id="layout-tpl-name" type="text" placeholder="Layout Name" maxlength="60" autocomplete="off">
           <button class="btn" id="layout-save-tpl">Save</button>
         </div>
-        <div class="line"><button class="btn" id="layout-update-tpl" hidden>Update layout</button></div>
+        <div class="line"><button class="btn" id="layout-update-tpl" hidden>Update Layout</button></div>
       </div>
     </div>
     <div class="group" id="sec-cue" hidden>
@@ -302,8 +302,8 @@
         <div class="line">
           <span class="lbl">Aim</span>
           <div class="seg">
-            <button class="btn" id="aim-down">Straight down</button>
-            <button class="btn" id="aim-zone">Aim at zone</button>
+            <button class="btn" id="aim-down">Straight Down</button>
+            <button class="btn" id="aim-zone">Aim at Zone</button>
           </div>
         </div>
       </div>
@@ -333,10 +333,10 @@
     </div>
 
     <div class="group" id="sec-sides">
-      <div class="sec-head"><h3>Side lights</h3><span id="side-count" class="count"></span></div>
+      <div class="sec-head"><h3>Side Lights</h3><span id="side-count" class="count"></span></div>
       <div class="line">
         <span class="lbl">Select</span>
-        <div class="seg"><button class="btn" data-pick="side:all">All positions</button></div>
+        <div class="seg"><button class="btn" data-pick="side:all">All Positions</button></div>
       </div>
       <div id="sel-sides" hidden>
         <div class="line">
@@ -354,7 +354,7 @@
     </div>
 
     <div class="group" id="sec-face">
-      <div class="sec-head"><h3>Face lights</h3></div>
+      <div class="sec-head"><h3>Face Lights</h3></div>
       <div class="line">
         <span class="lbl">Level</span>
         <div class="seg" id="face"></div>
@@ -378,13 +378,13 @@
       <span id="next-text" class="hint"></span>
     </div>
     <div class="t-group t-mid">
-      <button id="prev-cue" class="btn icon" data-icon="prev" title="Previous cue"></button>
+      <button id="prev-cue" class="btn icon" data-icon="prev" title="Previous Cue"></button>
       <button id="play" class="btn icon" data-icon="play" title="Play or pause (space)"></button>
-      <button id="next-cue" class="btn icon" data-icon="next" title="Next cue"></button>
+      <button id="next-cue" class="btn icon" data-icon="next" title="Next Cue"></button>
     </div>
     <div class="t-group t-right">
-      <button id="add-cue" class="btn icon primary" data-icon="plus" title="Add a cue here"></button>
-      <label class="btn icon" id="load-track" data-icon="note" title="Load a track" aria-label="Load a track">
+      <button id="add-cue" class="btn icon primary" data-icon="plus" title="Add a Cue Here"></button>
+      <label class="btn icon" id="load-track" data-icon="note" title="Load a Track" aria-label="Load a Track">
         <input id="track-file" type="file" accept="audio/*" hidden>
       </label>
     </div>
@@ -401,7 +401,7 @@
       <p class="hint">What are you here to do? You get a short tour to match. It takes about a minute.</p>
       <button class="role-pick" data-role="manager"><b>I manage the lighting</b><span>Set up shows, stages and items, and share them with the team</span></button>
       <button class="role-pick" data-role="plotter"><b>I'm plotting an item</b><span>Program the lights and cues for one dance</span></button>
-      <button id="role-skip" class="btn role-skip">Skip the tour</button>
+      <button id="role-skip" class="btn role-skip">Skip the Tour</button>
     </div>
   </div>
 </div>
@@ -420,6 +420,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121452"></script>
+<script src="app.js?v=202610121458"></script>
 </body>
 </html>
