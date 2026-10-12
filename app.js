@@ -2717,6 +2717,25 @@ try { buildThree(); } catch (e) { /* no WebGL here: the rest of the app still wo
 applyPrefs();
 sizeFront(); sizeWave();
 window.addEventListener('resize', () => { sizeFront(); sizeWave(); });
+
+// The app is exactly as tall as the window. Installed on Android, the browser can report
+// the wrong height when the app opens and only correct it later without saying so, which
+// pushed the track bar off the bottom; so the height is measured here and re-checked.
+let appH = 0;
+function fitWindow() {
+  const h = Math.round(window.visualViewport ? visualViewport.height : innerHeight);
+  if (!h || h === appH) return;
+  if (h < appH && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;   // only the keyboard opening
+  appH = h;
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+  sizeFront(); sizeWave();
+}
+fitWindow();
+for (const type of ['resize', 'orientationchange', 'pageshow', 'focus']) window.addEventListener(type, fitWindow);
+if (window.visualViewport) visualViewport.addEventListener('resize', fitWindow);
+document.addEventListener('visibilitychange', fitWindow);
+for (const ms of [100, 400, 1000, 2500]) setTimeout(fitWindow, ms);
+setInterval(fitWindow, 2000);
 new ResizeObserver(sizeWave).observe(wave);
 show.cues.forEach((cue) => { if (!cue.id) cue.id = Date.now() + '-' + (cueSeq++); });
 syncUI();

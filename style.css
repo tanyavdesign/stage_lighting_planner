@@ -56,7 +56,7 @@
 html, body { height: 100%; width: 100%; overflow: hidden; }
 body {
   margin: 0;
-  height: 100dvh;
+  height: var(--app-h, 100dvh);      /* --app-h is the measured window height, set by the script */
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-columns: minmax(0, 1fr);       /* never wider than the screen */
