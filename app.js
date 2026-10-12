@@ -492,6 +492,8 @@ function chaseLevel(beat, row) {
 }
 
 function compute(look, t, out) {
+  // a look from an older or outside file may lack parts: fill them in rather than fail
+  if (!look.leds || !look.aim || !look.spots || !look.sidePos || !look.sideTypes) look = Object.assign(blankLook(), look);
   const beat = t * (look.bpm || 120) / 60;
   const targets = aimTargets(look);
   for (const led of LEDS) {
@@ -1384,6 +1386,48 @@ function editTemplateLayout(tpl) {
   saveProjects();
   try { sessionStorage.setItem('slp-layout', 'tpl:' + tpl.id); } catch (e) { /* no session storage */ }
   setOpen(id, itemId);
+}
+
+// Play Show: every item of a project in running order, each with its track and cues, in
+// watch mode. The run is remembered while the pages change from item to item (`slp-show`).
+let showRun = false, showStarted = false;
+try { showRun = !!sessionStorage.getItem('slp-show') && !!currentItemId && !currentProject().draft; } catch (e) { /* no session storage */ }
+function showLeave(itemId) {              // on to another item of the run, or (with none) back to the project
+  if (!itemId) { try { sessionStorage.removeItem('slp-show'); } catch (e) { /* no session storage */ } }
+  setOpen(currentId, itemId || null);
+}
+function showNext() {
+  const items = currentProject().items, at = items.findIndex((it) => it.id === currentItemId);
+  showStarted = false;
+  showLeave(at + 1 < items.length ? items[at + 1].id : null);
+}
+function showBegin() {
+  seek(0);
+  setPlaying(true);
+  showStarted = true;
+  // a browser that will not start sound by itself (iPhone does this) gets a button to tap
+  setTimeout(() => { if (showRun && !player.playing && currentTime() < 0.2) { showStarted = false; $('show-tap').hidden = false; } }, 700);
+}
+function buildShowRun() {
+  if (!showRun) return;
+  const items = currentProject().items, at = items.findIndex((it) => it.id === currentItemId);
+  document.body.classList.add('show-run');
+  setWatch(true);
+  $('show-bar').hidden = false;
+  $('show-text').textContent = `${at + 1} of ${items.length} · ${items[at].name}`;
+  $('show-skip').hidden = at + 1 >= items.length;
+  $('show-skip').addEventListener('click', showNext);
+  $('show-stop').addEventListener('click', () => showLeave(null));
+  $('show-tap').addEventListener('click', () => { $('show-tap').hidden = true; setPlaying(true); showStarted = true; });
+  // an item is over when its track ends; without a track, a few seconds after its last cue
+  const lastCue = show.cues.length ? show.cues[show.cues.length - 1] : null;
+  const quietEnd = lastCue ? lastCue.time + (lastCue.instant ? 0 : lastCue.fade || 0) + 4 : 3;
+  setInterval(() => {
+    if (!showStarted) return;
+    const T = currentTime();
+    const over = player.audio ? player.audio.ended || (!player.playing && T >= duration() - 0.15) : T >= quietEnd;
+    if (over) showNext();
+  }, 250);
 }
 
 // Phone: the preview alone, full screen and in landscape. Where the browser allows it the
@@ -3201,6 +3245,7 @@ function saveThumbnail() {
   } catch (e) { /* keep the old picture */ }
 }
 function goHome() {
+  try { sessionStorage.removeItem('slp-show'); } catch (e) { /* no session storage */ }
   if (currentProject().scratch) return leaveLayout(false);            // leaving a layout being edited: nothing is kept
   saveThumbnail(); setOpen(currentProject().draft ? null : currentId, null);
 }     // back to this project's items (a draft goes home)
@@ -3548,6 +3593,7 @@ function renderHome() {
   list.className = 'project-list view-' + view;
   each('[data-home-view]', (b) => b.classList.toggle('active', b.dataset.homeView === view));
   $('home-layout').hidden = $('home-lights').hidden = !project;
+  $('home-play').hidden = !(project && project.items.length);
   $('layout-news').hidden = !(project && project.layoutNews);
   $('home-back').hidden = $('new-item-wrap').hidden = !project;
   $('home-logo').hidden = $('new-project').hidden = $('draft-new').hidden = !!project;
@@ -4308,6 +4354,12 @@ function buildHome() {
     b.innerHTML = svgIcon('view' + b.dataset.homeView);
     b.addEventListener('click', () => { prefs.homeView = b.dataset.homeView; store.set('kdt-lighting-prefs-v1', prefs); renderHome(); });
   });
+  $('home-play').insertAdjacentHTML('afterbegin', svgIcon('play'));
+  $('home-play').addEventListener('click', () => {
+    const project = currentProject();
+    try { sessionStorage.setItem('slp-show', '1'); } catch (e) { /* no session storage */ }
+    setOpen(project.id, project.items[0].id);
+  });
   buildLights();
   buildShare();
   refreshShared();
@@ -4346,9 +4398,20 @@ function buildShow() {
   if (show.trackName) $('load-track').title = `Track: ${show.trackName}`;
   $('back').addEventListener('click', goHome);
   window.addEventListener('pagehide', saveThumbnail);
-  if (currentItemId) audioStore.get(currentItemId).then((file) => { if (file) loadTrack(file, true); });
+  if (currentItemId) audioStore.get(currentItemId).then((file) => { if (file) loadTrack(file, true); }).then(() => { if (showRun) showBegin(); });
   // The bar shows "project / item"; items are renamed from their card in the project.
   $('bar-project').textContent = show.projectName || '';
+  // The arrow beside the name lists the project's items, to go straight to another one.
+  const others = currentProject() && !currentProject().draft && !currentProject().scratch ? currentProject().items : [];
+  $('bar-items').hidden = others.length < 2;
+  $('bar-items').addEventListener('click', (e) => {
+    e.stopPropagation();
+    popMenu($('bar-items'), others.map((it, i) => [`${i + 1}. ${it.name}`, () => {
+      if (it.id === currentItemId) return;
+      saveThumbnail();
+      setOpen(currentId, it.id);
+    }, it.id === currentItemId]));
+  });
   // Click the item's name to rename it in place.
   const label = $('bar-item'), item = currentItem();
   label.textContent = item ? item.name : '';
@@ -4461,10 +4524,11 @@ requestAnimationFrame(() => document.documentElement.classList.remove('booting')
 buildTours();
 buildTips();
 buildSelects();
+buildShowRun();
 setTimeout(() => {
   if (atHome && !currentId && !prefs.role) $('role').hidden = false;
   else if (atHome && !currentId && !prefs.tourHome && TOURS[prefs.role]) startTour(prefs.role);
-  else if (!atHome && !layoutAsked && !prefs.tourEditor) startTour('editor');
+  else if (!atHome && !layoutAsked && !showRun && !prefs.tourEditor) startTour('editor');
 }, 500);
 
 // Installable app: keep a copy of the files on the device so it opens offline.

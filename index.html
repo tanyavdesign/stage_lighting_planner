@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121544">
+<link rel="stylesheet" href="style.css?v=202610121626">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -80,6 +80,7 @@
     <div class="home-sub">
       <h2 class="home-title" id="home-heading">Projects</h2>
       <div class="spacer"></div>
+      <button id="home-play" class="btn" hidden>Play Show</button>
       <button id="home-layout" class="btn" hidden>Edit Stage Layout</button>
       <button id="home-lights" class="btn" hidden>Light Settings</button>
       <button id="pick-download" class="btn" hidden>Download</button>
@@ -213,6 +214,7 @@
       </div>
     </div>
     <span id="bar-name" class="bar-name"><span id="bar-project" class="bar-project"></span><span id="bar-item"></span></span>
+    <button id="bar-items" class="btn icon" data-icon="chevron" aria-label="Go to Another Item" title="Go to Another Item" hidden></button>
     <button id="toggle-left" class="btn icon" data-icon="panelLeft" aria-label="Hide or show the controls" title="Hide or show the controls"></button>
   </div>
   <button id="toggle-right" class="btn icon" data-icon="panelRight" aria-label="Hide or show the previews" title="Hide or show the previews"></button>
@@ -408,6 +410,13 @@
 
 <div id="toast" hidden></div>
 
+<div id="show-bar" hidden>
+  <span id="show-text"></span>
+  <button id="show-skip" class="btn">Next Item</button>
+  <button id="show-stop" class="btn">Stop Show</button>
+</div>
+<button id="show-tap" class="btn primary" hidden>Tap to Play</button>
+
 <div id="role" class="tpl-back" hidden>
   <div class="mini role-card" role="dialog" aria-label="Welcome">
     <div class="role-body">
@@ -434,6 +443,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121544"></script>
+<script src="app.js?v=202610121626"></script>
 </body>
 </html>

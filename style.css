@@ -645,6 +645,10 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .pick input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .project.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .bar-project { color: var(--muted); font-weight: 450; }
+/* the name takes only the room it needs, so the arrow that lists the items sits right after it */
+.bar .bar-name { flex: 0 1 auto; }
+.bar #toggle-left { margin-left: auto; }
+#bar-items { width: 22px; margin-left: -2px; }
 .bar-project:not(:empty)::after { content: " / "; }
 #bar-item { cursor: text; }
 #bar-item:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
@@ -857,6 +861,15 @@ body.tpl-edit #layout-template, body.tpl-edit #layout-keep, body.tpl-edit #layou
 .cue-edit .select-btn { flex: 1 1 76px; min-width: 70px; }
 .lights-kind .select-btn { flex: 0 1 180px; }
 .menu.pop > button.on { font-weight: 550; }
+
+/* ---------- Play Show: the whole project in running order ---------- */
+#home-play { gap: 6px; }
+#home-play svg { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+#show-bar { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 24px); padding: 6px 6px 6px 14px; background: var(--panel); border-radius: 13px; box-shadow: var(--float); }
+#show-text { min-width: 0; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#show-tap { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 31; height: 48px; padding: 0 24px; font-size: 15px; box-shadow: var(--float); }
+body.show-run .bar, body.show-run #wide + .seg.view-switch { }
+body.show-run .bar { display: none; }
 
 /* ---------- Tours: the first question, then cards that point at the real controls ---------- */
 .role-card { width: min(400px, 100%); }
