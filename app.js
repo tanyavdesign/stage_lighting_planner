@@ -32,7 +32,6 @@ const FACE_X = [684, 729, 777, 827, 877, 926, 1074, 1119, 1167, 1217, 1267, 1316
 const FACE_Y = 1062;
 const SIDE_Y = [303, 383, 502, 604, 715];
 const SIDE_X = { L: 412, R: 1588 };
-const CURTAIN_Y = [230, 338, 357, 443, 531, 631, 737];
 // Nine aiming zones: a 3 x 3 grid as wide as the cyclorama and as deep as the stage,
 // numbered left to right, back to front.
 const ZONES = { x: 624, w: 253, y: 218, h: 203.3 };       // left edge and size of one zone
@@ -167,6 +166,11 @@ const customsOf = (layout) => layout.customs || [];
 // x and y are where its centre is on the plan; z is how far its underside is above the stage
 // floor, and w, d, h its width, depth and height, all in metres; rot turns it, in degrees.
 const objectsOf = (layout) => layout.objects || [];
+// The cyclorama (the lit back wall, the bar across the back of the plan) is part of a layout
+// only if it says so: `layout.cyclo`. A layout that never said has one if it has LEDs, as
+// every layout did before this could be chosen.
+const cycloOf = (layout) => (layout.cyclo != null ? !!layout.cyclo : layout.leds.length > 0);
+let CYCLO_ON = true;
 // The library an object is picked from. Each entry is one kind of object: its starting size
 // in metres, how far off the stage floor it starts (z), how it is drawn (look), and for
 // truss and bars where other pieces connect (joins: places on its outline, as fractions of
@@ -200,7 +204,7 @@ const ASSETS = [
   { type: 'screen', group: 'screen', name: 'Projection Screen', w: 4, d: 0.05, h: 2.25, z: 1, look: 'screen' },
   { type: 'booth', group: 'old', name: 'DJ Booth', w: 2, d: 0.8, h: 1, z: 0, look: 'solid' },
   { type: 'speaker', group: 'old', name: 'Speaker', w: 0.5, d: 0.5, h: 1.2, z: 0, look: 'solid' },
-  { type: 'curtain', group: 'old', name: 'Curtain', w: 3, d: 0.1, h: 5, z: 0, look: 'curtain' },
+  { type: 'curtain', group: 'stage', name: 'Curtain', w: 1, d: 0.1, h: 5, z: 0, look: 'curtain' },
   { type: 'hazer', group: 'old', name: 'Haze Machine', w: 0.5, d: 0.3, h: 0.25, z: 0, look: 'solid' },
 ];
 // The lights in the library, under plain names (`was` is the trade name, shown in the hover
@@ -318,6 +322,7 @@ const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], CUSTOMS = [], KINDS = [
 let ledRows = 0, spotRows = 0, FACE_Z = 0;
 function useLayout(layout) {
   setStage(layout.stage);
+  CYCLO_ON = cycloOf(layout);
   PEOPLE.length = OBJECTS.length = 0;
   for (const [x, y] of PEOPLE_AT) { const [x3, z3] = to3(sx(x), sy(y)); PEOPLE.push({ x3, z3 }); }
   for (const o of objectsOf(layout)) { const [x3, z3] = to3(o.x, o.y); OBJECTS.push(Object.assign({}, o, { x3, z3 })); }
@@ -496,6 +501,7 @@ function copyLayout(layout) {
     });
   }
   if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
+  if (layout.cyclo != null) out.cyclo = !!layout.cyclo;
   if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h, media }) => (media ? { id, type, name, x, y, z, rot, w, d, h, media: { id: media.id, name: media.name, type: media.type } } : { id, type, name, x, y, z, rot, w, d, h }));
   return out;
 }
@@ -755,7 +761,7 @@ function compute(look, t, out) {
   out[O_FACE] = look.face / 3;
   SIDE_TYPES.forEach(([id], i) => { out[O_TYPE + i] = look.sideTypes[id] ? 1 : 0; });
   SIDES.forEach((side, s) => SIDE_LIGHTS[side].forEach((light, j) => { out[sideAt(s, j)] = look.sidePos[side] && look.sidePos[side][j] ? 1 : 0; }));
-  const c = look.cyclo === 'none' ? ZERO : rgbOf(look.cyclo);
+  const c = look.cyclo === 'none' || !CYCLO_ON ? ZERO : rgbOf(look.cyclo);
   out[O_CYC] = c[0]; out[O_CYC + 1] = c[1]; out[O_CYC + 2] = c[2];
   CUSTOMS.forEach((light, i) => {
     const value = look.custom && look.custom[light.id], rgb = value ? rgbOf(value) : ZERO;
@@ -1106,14 +1112,10 @@ function drawStage() {
   for (let z = 0; z < 9; z++) {
     put('text', { x: ZONES.x + ZONES.w * (z % 3) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / 3) + ZONES.h - 11, 'text-anchor': 'end', class: 'zone' }, z + 1);
   }
-  planEls.cyclo = fixture(
+  planEls.cyclo = (layoutMode ? cycloOf(work) : CYCLO_ON) ? fixture(
     ['rect', { x: ZONES.x, y: STAGE.y0 - 26, width: ZONES.w * 3, height: 52 }],
     ['rect', { x: ZONES.x, y: STAGE.y0 - 13, width: ZONES.w * 3, height: 26, rx: 6, class: 'cyclo' }],
-    () => { selCyclo = !selCyclo; syncUI(); }, null, layer);
-  for (const y of CURTAIN_Y) {
-    put('line', { x1: STAGE.x0 + 20, y1: sy(y), x2: STAGE.x0 + 114, y2: sy(y), class: 'curtain' });
-    put('line', { x1: STAGE.x1 - 113, y1: sy(y), x2: STAGE.x1 - 19, y2: sy(y), class: 'curtain' });
-  }
+    () => { selCyclo = !selCyclo; syncUI(); }, null, layer) : null;
   area(STAGE.cx, sy(168), 'BACKSTAGE');
   area(STAGE.cx, sy(866), 'STAGE FRONT');
   area(sx(318), STAGE.cy - 15, 'STAGE LEFT');
@@ -1137,7 +1139,7 @@ function buildPlan() {
       () => { aiming = false; forSelection((id) => { state.aim[id] = z + 1; }); },
       null, planEls.zonePick);
   }
-  fixture(                                     // zone 10: the cyclorama itself
+  if (CYCLO_ON) fixture(                                     // zone 10: the cyclorama itself
     ['rect', { x: ZONES.x + 4, y: STAGE.y0 - 34, width: ZONES.w * 3 - 8, height: 34, rx: 8 }],
     ['text', { x: ZONES.x + ZONES.w * 1.5, y: STAGE.y0 - 8, 'text-anchor': 'middle', class: 'zone-num small' }, '10  Cyclorama'],
     () => { aiming = false; forSelection((id) => { state.aim[id] = CYCLO_ZONE; }); },
@@ -1493,6 +1495,7 @@ function buildControls() {
     redrawLayout();
   });
   $('layout-snap').addEventListener('click', () => { snapOn = !snapOn; redrawLayout(); });
+  $('layout-cyclo').addEventListener('click', () => { layoutKeep(); work.cyclo = !cycloOf(work); drawStage(); redrawLayout(); });
   // Typed numbers. A value that cannot be used puts the old one back.
   const typed = (id, low, high, apply) => $(id).addEventListener('change', () => {
     const v = parseFloat($(id).value);
@@ -1550,7 +1553,7 @@ function buildControls() {
     const template = copyLayout(findTemplate(currentProject() && currentProject().templateId).layout), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
     const keep = (list) => list.map((it) => (had.has(it.id) ? Object.assign({ was: it.id }, it) : it));
     layoutKeep();
-    Object.assign(work, { leds: keep(template.leds), spots: keep(template.spots), faces: facesOf(template), sides: sidesOf(template), customs: customsOf(template), kinds: kindsOf(template), objects: objectsOf(template), stage: template.stage || null, sel: [] });
+    Object.assign(work, { leds: keep(template.leds), spots: keep(template.spots), faces: facesOf(template), sides: sidesOf(template), customs: customsOf(template), kinds: kindsOf(template), objects: objectsOf(template), stage: template.stage || null, cyclo: template.cyclo, sel: [] });
     $('layout-kinds').dataset.shown = '';
     applyStage();
   });
@@ -1642,7 +1645,7 @@ const boundsOf = (kind) => (kind === 'object' || kind === 'custom' ? { x0: STAGE
 const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
 // Undo and redo inside the editor: the layout as it was before each change, and after each undo.
 const layoutPast = [], layoutNext = [];
-const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage });
+const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage, cyclo: work.cyclo });
 function layoutKeep() { layoutPast.push(layoutNow()); if (layoutPast.length > 80) layoutPast.shift(); layoutNext.length = 0; }
 function layoutStep(from, to, none) {
   if (!from.length) return toast(none, 1500);
@@ -1651,7 +1654,7 @@ function layoutStep(from, to, none) {
   Object.assign(work, JSON.parse(from.pop()));
   work.sel = work.sel.filter((one) => itemOf(one));
   $('layout-kinds').dataset.shown = '';
-  if (JSON.stringify(work.stage) !== sized) applyStage(); else redrawLayout();
+  if (JSON.stringify(work.stage) !== sized) applyStage(); else { drawStage(); redrawLayout(); }
 }
 const layoutUndo = () => layoutStep(layoutPast, layoutNext, 'Nothing to undo.');
 const layoutRedo = () => layoutStep(layoutNext, layoutPast, 'Nothing to redo.');
@@ -1681,7 +1684,7 @@ function enterLayout() {
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
   work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)),
-    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, sel: [] };
+    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, cyclo: layout.cyclo, sel: [] };
   Object.defineProperty(work, 'picked', {
     get() { return this.sel.length === 1 ? this.sel[0] : null; },
     set(one) { this.sel = one ? [one] : []; },
@@ -1703,7 +1706,6 @@ function redrawLayout() {
   renderKinds();
   const item = pickedItem(), many = work.sel.length;
   $('layout-picked').hidden = !many;
-  $('layout-none').hidden = !!many;
   $('layout-single').hidden = !item;
   $('layout-align').hidden = many < 2;
   each('[data-spread]', (b) => { b.disabled = many < 3; });
@@ -1744,6 +1746,7 @@ function redrawLayout() {
   const stage = stageOf(work);
   for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
   $('layout-snap').classList.toggle('active', snapOn);
+  $('layout-cyclo').classList.toggle('active', cycloOf(work));
   $('layout-undo').disabled = !layoutPast.length; $('layout-redo').disabled = !layoutNext.length;
 }
 let boxing = null;                     // a selection box being dragged out over empty plan
@@ -1767,6 +1770,7 @@ function layoutPress(e) {
   }
   if (!isSelected(one.kind, one.id)) work.sel = [one];        // pressing one of a selected group keeps the group
   moving = { start: svgPoint(e), kept: false, items: selected().map(({ kind, item }) => ({ kind, item, x: item.x, y: item.y })) };
+  moving.lead = moving.items.find((m) => m.kind === one.kind && m.item.id === one.id);       // the one under the finger: it is what lines up
   // lights mounted on a piece that is moving ride along with it
   const carried = new Set(moving.items.filter((m) => m.kind === 'object').map((m) => m.item.id));
   for (const light of work.customs) if (carried.has(light.on) && !moving.items.some((m) => m.item === light)) moving.items.push({ kind: 'custom', item: light, x: light.x, y: light.y, rider: true });
@@ -1798,6 +1802,20 @@ function layoutDrag(e) {
   if (!moving.kept) { moving.kept = true; const now = moving.items.map((m) => [m.item, m.item.x, m.item.y]); for (const m of moving.items) { m.item.x = m.x; m.item.y = m.y; } layoutKeep(); for (const [it, x, y] of now) { it.x = x; it.y = y; } }
   for (const m of moving.items) Object.assign(m.item, hold(m.kind, m.x + dx, m.y + dy));      // the whole group moves together
   const alone = moving.items.filter((m) => !m.rider);
+  // Lining up: the dragged one clicks level with any other light or object, or with the
+  // middle of the stage, when it comes within 9 cm, and a guide line shows what it met.
+  guides.length = 0;
+  if (snapOn && moving.lead) {
+    const lead = moving.lead.item, still = KINDS_OF_LIGHT.flatMap((kind) => seen(kind)).filter((it) => !moving.items.some((m) => m.item === it));
+    for (const axis of ['x', 'y']) {
+      let best = null;
+      for (const at of [axis === 'x' ? STAGE.cx : STAGE.cy, ...still.map((it) => it[axis])]) if (Math.abs(at - lead[axis]) <= 9 && (best == null || Math.abs(at - lead[axis]) < Math.abs(best - lead[axis]))) best = at;
+      if (best == null) continue;
+      const by = best - lead[axis];
+      for (const m of moving.items) m.item[axis] += by;
+      guides.push([axis, best]);
+    }
+  }
   if (snapOn && alone.length === 1 && alone[0].kind === 'object') {
     const it = alone[0].item, was = { x: it.x, y: it.y, z: it.z || 0 };
     joinUp(it);
@@ -1805,7 +1823,11 @@ function layoutDrag(e) {
   }
   if (alone.length === 1 && alone[0].kind === 'custom') mountUp(alone[0].item);
   redrawLayout();
+  for (const [axis, at] of guides) {
+    el('line', axis === 'x' ? { x1: at, y1: FULL.y, x2: at, y2: FULL.y + FULL.h, class: 'guide' } : { x1: FULL.x, y1: at, x2: FULL.x + FULL.w, y2: at, class: 'guide' }, null, planEls.fixtureLayer);
+  }
 }
+const guides = [];                     // the lines a dragged light is level with right now: ['x' or 'y', where]
 // A piece that turns takes the lights mounted on it round with it.
 function swing(piece, by) {
   const a = by * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
@@ -1854,7 +1876,7 @@ function joinUp(item) {
 function layoutRelease() {
   if ((moving || turning) && growDrawing(work.objects)) resetView();
   moving = turning = null;
-  if (boxing) { boxing = null; redrawLayout(); }
+  if (boxing || guides.length) { boxing = null; guides.length = 0; redrawLayout(); }
 }
 // What was copied, kept for this browser tab so it can be pasted into another layout too.
 function layoutClip() {
@@ -1993,7 +2015,6 @@ function renderKinds() {
   if (box.dataset.shown === now) return;          // nothing about the kinds changed (a light was only dragged)
   box.dataset.shown = now;
   box.textContent = '';
-  $('layout-kinds-none').hidden = work.kinds.length > 0;
   for (const kind of work.kinds) {
     const row = document.createElement('div');
     row.className = 'line kind-row';
@@ -2018,7 +2039,6 @@ function renderKinds() {
     drop.innerHTML = svgIcon('trash'); drop.title = 'Remove This Kind and Its Lights';
     box.appendChild(row);
   }
-  $('layout-kinds-none').hidden = work.kinds.length > 0;
 }
 // Carry a look over to the edited layout: deleted fixtures drop out, renumbered ones follow.
 // `resides` does the same for the side lights, which a look lists by position rather than by name.
@@ -2528,9 +2548,11 @@ function paintPlan(look, bare) {
     n.classList.toggle('selected', !bare && selSides.has(side + i));
     n.parentNode.classList.toggle('sel', !bare && selSides.has(side + i));
   });
-  planEls.cyclo.style.fill = look.cyclo === 'none' ? '' : hexOf(look.cyclo);
-  planEls.cyclo.classList.toggle('none', look.cyclo === 'none');
-  planEls.cyclo.classList.toggle('selected', !bare && selCyclo);
+  if (planEls.cyclo) {
+    planEls.cyclo.style.fill = look.cyclo === 'none' ? '' : hexOf(look.cyclo);
+    planEls.cyclo.classList.toggle('none', look.cyclo === 'none');
+    planEls.cyclo.classList.toggle('selected', !bare && selCyclo);
+  }
 
   // The selection panel shows one section per kind of light that is selected.
 }
@@ -2547,7 +2569,7 @@ function syncUI() {
   $('sec-spots').hidden = !SPOTS.length || (some && !selSpots.size);
   $('sec-sides').hidden = !(SIDE_LIGHTS.L.length + SIDE_LIGHTS.R.length) || (some && !selSides.size);
   $('sec-face').hidden = !FACES.length || some;
-  $('sec-cyclo').hidden = some && !selCyclo;
+  $('sec-cyclo').hidden = !CYCLO_ON || (some && !selCyclo);
   for (const kind of KINDS) {
     const mine = CUSTOMS.filter((light) => light.kind === kind.id), picked = mine.filter((light) => selCustom.has(light.id)).length;
     const section = $('sec-kind-' + kind.id);
@@ -2893,6 +2915,7 @@ function buildThree() {
   floor.rotation.x = -Math.PI / 2;
   add(new THREE.Mesh(new THREE.BoxGeometry(stageW + 0.4, drop, stageD + 0.4), solid(0x15151a)), 0, -drop / 2, 0);
   const cyclo = add(new THREE.Mesh(new THREE.PlaneGeometry(CYC.halfW * 2, CYC.top), solid(0x0c0c11)), 0, CYC.top / 2, CYC.z);
+  cyclo.visible = CYCLO_ON;
   for (const y of LED_ROW_Y) add(new THREE.Mesh(new THREE.BoxGeometry(6.6 / FIT.x, 0.06, 0.06), solid(0x222228)), 0, RIG_H + 0.1, to3(0, y)[1]);
   // stage objects: plain blocks of their own size, standing where the plan puts them
   const shaded = (color) => [0.78, 0.78, 1.25, 0.6, 1, 0.9].map((k) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(k) }));    // each face its own shade, so shapes read without real light
@@ -5011,7 +5034,7 @@ function templatePreview(layout) {
   const st = layout.stage, hw = st ? st.w * UNIT / 2 : 505, hd = st ? st.d * UNIT / 2 : 305, x0 = STAGE.cx - hw, y0 = STAGE.cy - hd;
   const objects = objectsOf(layout).map((o) => `<rect class="tp-obj" x="${o.x - o.w * UNIT / 2}" y="${o.y - o.d * UNIT / 2}" width="${o.w * UNIT}" height="${o.d * UNIT}" rx="4" transform="rotate(${o.rot || 0} ${o.x} ${o.y})"/>`).join('');
   return `<svg viewBox="${x0 - 165} ${y0 - 68} ${hw * 2 + 330} ${hd * 2 + 350}"><rect class="tp-stage" x="${x0}" y="${y0}" width="${hw * 2}" height="${hd * 2}" rx="10"/>`
-    + `<rect class="tp-cyc" x="${STAGE.cx - hw * 0.7515}" y="${y0 - 16}" width="${hw * 1.503}" height="12" rx="5"/>${objects}${leds}${spots}</svg>`;
+    + (cycloOf(layout) ? `<rect class="tp-cyc" x="${STAGE.cx - hw * 0.7515}" y="${y0 - 16}" width="${hw * 1.503}" height="12" rx="5"/>` : '') + `${objects}${leds}${spots}</svg>`;
 }
 const countText = (layout) => `${layout.leds.length} LED${layout.leds.length === 1 ? '' : 's'} · ${layout.spots.length} spotlight${layout.spots.length === 1 ? '' : 's'}`;
 
