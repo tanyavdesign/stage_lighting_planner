@@ -260,6 +260,7 @@ const ICONS = {
   moveback: '<path d="M13 8H3.5M7 4.2 3.2 8 7 11.8"/>',
   moveon: '<path d="M3 8h9.5M9 4.2 12.8 8 9 11.8"/>',
   grip: '<path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" stroke-width="2"/>',
+  refresh: '<path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.8v2.6h-2.6"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -3219,7 +3220,8 @@ function buildHome() {
   $('new-project').addEventListener('click', () => openTemplates(false));
   // The app menu behind the icon: things that are about the app, not one project.
   const homeMenu = $('home-menu');
-  const themeLabel = () => { $('home-theme').textContent = prefs.theme === 'dark' ? 'Light mode' : 'Dark mode'; };
+  const themeLabel = () => { $('home-theme').innerHTML = prefs.theme === 'dark' ? svgIcon('sun') + 'Light mode' : svgIcon('moon') + 'Dark mode'; };
+  for (const [id, icon] of [['home-templates', 'viewtile'], ['home-backup', 'download'], ['home-reload', 'refresh']]) $(id).insertAdjacentHTML('afterbegin', svgIcon(icon));
   themeLabel();
   $('home-more').addEventListener('click', (e) => { e.stopPropagation(); homeMenu.hidden = !homeMenu.hidden; });
   document.addEventListener('click', () => { homeMenu.hidden = true; });
