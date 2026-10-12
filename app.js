@@ -1105,6 +1105,11 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
     const lit = only.kind === 'custom', a = ((lit ? turn.pan : turn.rot) || 0) * Math.PI / 180, near = lit ? 24 : turn.d * UNIT / 2, far = near + 38;
     el('line', { x1: turn.x + Math.sin(a) * near, y1: turn.y - Math.cos(a) * near, x2: turn.x + Math.sin(a) * far, y2: turn.y - Math.cos(a) * far, class: 'rot-stem' }, null, layer);
     el('circle', { cx: turn.x + Math.sin(a) * far, cy: turn.y - Math.cos(a) * far, r: 10, class: 'rot-handle', 'data-rot': turn.id, 'data-of': only.kind }, null, layer);
+    // an object also has a square at each corner: drag one to change its width and depth
+    if (!lit) for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const lx = cx * turn.w * UNIT / 2, ly = cy * turn.d * UNIT / 2, x = turn.x + lx * Math.cos(a) - ly * Math.sin(a), y = turn.y + lx * Math.sin(a) + ly * Math.cos(a);
+      el('rect', { x: x - 8, y: y - 8, width: 16, height: 16, rx: 3, class: 'size-handle', 'data-size': `${cx},${cy}`, 'data-id': turn.id }, null, layer);
+    }
   }
 }
 
@@ -1131,6 +1136,10 @@ function drawStage() {
   area(sx(1684), STAGE.cy - 15, 'STAGE RIGHT');
   put('line', { x1: sx(522), y1: sy(FACE_Y), x2: sx(1478), y2: sy(FACE_Y), class: 'rail' });
   area(STAGE.cx, sy(1110), 'AUDIENCE');
+  if (layoutMode) {                      // drag the stage's right or front edge to change its width or depth
+    put('rect', { x: STAGE.x1 - 7, y: STAGE.cy - 26, width: 14, height: 52, rx: 5, class: 'size-handle stage-grip across', 'data-stage': 'w' });
+    put('rect', { x: STAGE.cx - 26, y: STAGE.y1 - 7, width: 52, height: 14, rx: 5, class: 'size-handle stage-grip down', 'data-stage': 'd' });
+  }
 }
 function buildPlan() {
   planEls.stageLayer = el('g', {});
@@ -1834,6 +1843,7 @@ function enterLayout() {
   $('layout-update-tpl').hidden = !own;
   if (own) $('layout-update-tpl').textContent = `Update “${own.name}”` + (own.share ? ' and publish' : '');
   $('deselect').hidden = true;
+  drawStage();                           // again, now with the handles that resize it
   redrawLayout();
 }
 function redrawLayout() {
@@ -1923,10 +1933,20 @@ function redrawLayout() {
 }
 let boxing = null;                     // a selection box being dragged out over empty plan
 let turning = null;                    // an object being turned by its handle
+let sizing = null;                     // an object's corner, or an edge of the stage, being dragged
 function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   const handle = e.target.closest('[data-rot]');
+  const grip = e.target.closest('[data-size]'), edge = e.target.closest('[data-stage]');
+  if (grip) {                          // a corner of an object: the opposite corner stays where it is
+    const item = work.objects.find((o) => o.id === grip.dataset.id), [cx, cy] = grip.dataset.size.split(',').map(Number), a = (item.rot || 0) * Math.PI / 180;
+    const lx = -cx * item.w * UNIT / 2, ly = -cy * item.d * UNIT / 2;
+    sizing = { item, cx, cy, kept: false, fx: item.x + lx * Math.cos(a) - ly * Math.sin(a), fy: item.y + lx * Math.sin(a) + ly * Math.cos(a) };
+    moving = null;
+    return;
+  }
+  if (edge) { sizing = { stage: edge.dataset.stage, kept: false }; moving = null; return; }
   if (handle && handle.dataset.of === 'row') { turning = { row: wholeRow(), kept: false }; moving = null; return; }
   if (handle) { const lit = handle.dataset.of === 'custom'; turning = { item: work[lit ? 'customs' : 'objects'].find((o) => o.id === handle.dataset.rot), key: lit ? 'pan' : 'rot', kept: false }; moving = null; return; }
   if (!g) {                            // empty plan: drag out a box; what it touches is selected
@@ -1954,6 +1974,24 @@ function layoutPress(e) {
 }
 function layoutDrag(e) {
   const p = svgPoint(e), snap = snapTo;
+  if (sizing) {
+    const step = (v) => (snapOn ? Math.round(v * 20) / 20 : Math.round(v * 100) / 100);        // 5 cm steps with snapping on
+    if (!sizing.kept) { sizing.kept = true; layoutKeep(); }
+    if (sizing.stage) {                  // the stage grows both ways from its middle
+      const stage = stageOf(work);
+      if (sizing.stage === 'w') stage.w = Math.max(2, Math.min(40, step(2 * (p.x - STAGE.cx) / UNIT)));
+      else stage.d = Math.max(2, Math.min(30, step(2 * (p.y - STAGE.cy) / UNIT)));
+      work.stage = stage;
+      setStage(stage); growDrawing(work.objects); drawStage();
+      return redrawLayout();
+    }
+    const { item, cx, cy, fx, fy } = sizing, a = (item.rot || 0) * Math.PI / 180, dx = p.x - fx, dy = p.y - fy;
+    const lx = dx * Math.cos(a) + dy * Math.sin(a), ly = -dx * Math.sin(a) + dy * Math.cos(a);       // the drag, seen along the object's own sides
+    item.w = Math.max(0.05, step(cx * lx / UNIT)); item.d = Math.max(0.05, step(cy * ly / UNIT));
+    const mx = cx * item.w * UNIT / 2, my = cy * item.d * UNIT / 2;
+    item.x = Math.round(fx + mx * Math.cos(a) - my * Math.sin(a)); item.y = Math.round(fy + mx * Math.sin(a) + my * Math.cos(a));
+    return redrawLayout();
+  }
   if (turning && turning.row) {          // an auto layout turned by its handle
     const row = turning.row, to = Math.atan2(p.x - row.x, row.y - p.y) * 180 / Math.PI, step = snapOn ? 15 : 1;
     const rot = ((Math.round(to / step) * step) % 360 + 360) % 360;
@@ -2058,11 +2096,12 @@ function joinUp(item) {
   item.z = metres(assetOf(best.other).up ? (best.other.z || 0) + best.other.h - item.h : best.other.z || 0);
 }
 function layoutRelease() {
-  if ((moving || turning) && growDrawing(work.objects)) resetView();
-  const was = moving;
-  moving = turning = null;
+  if ((moving || turning || sizing) && growDrawing(work.objects)) resetView();
+  if (sizing && sizing.stage && sizing.kept) resetView();
+  const was = moving || sizing;
+  moving = turning = sizing = null;
   if (was && was.drill && !was.kept) work.sel = [was.drill];
-  if (was && was.kept) settleRows(was.items.map((m) => m.item));
+  if (was && was.kept && was.items) settleRows(was.items.map((m) => m.item));
   if (boxing || guides.length || was) { boxing = null; guides.length = 0; redrawLayout(); }
 }
 // What was copied, kept for this browser tab so it can be pasted into another layout too.

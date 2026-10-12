@@ -636,7 +636,7 @@ body.layout-mode .history { display: none; }
 .row-btn.sub { font-weight: 400; color: var(--muted); margin-top: 10px; }
 .row-btn.sub span:first-child { flex: 1; }
 #more-fields { margin-top: 4px; }
-#layout-panel #obj-z { width: 72px; }
+#layout-panel #obj-z, #layout-panel #obj-h { width: 72px; }
 #layout-panel .slide-value { flex: 0 0 44px; }
 #fix-moves.active { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
 /* typed measurements: a small label over each number */
@@ -671,6 +671,11 @@ body.layout-mode .history { display: none; }
 #layout-panel #row-gap, #layout-panel #row-count, #layout-panel #row-rot { width: 72px; }
 #layout-row .slide-value { flex: 0 0 16px; text-align: left; }
 .plan .guide { stroke: #ff3b8d; stroke-width: 1.5; pointer-events: none; }
+.plan .size-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; cursor: nwse-resize; }
+.plan .stage-grip { stroke-width: 2; opacity: .75; }
+.plan .stage-grip:hover { opacity: 1; }
+.plan .stage-grip.across { cursor: ew-resize; }
+.plan .stage-grip.down { cursor: ns-resize; }
 .plan .rot-stem { stroke: var(--accent); stroke-width: 2; }
 .plan .rot-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; cursor: grab; }
 .tp-obj { fill: currentColor; fill-opacity: .18; stroke: none; }

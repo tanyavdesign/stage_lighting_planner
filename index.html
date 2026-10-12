@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610130014">
+<link rel="stylesheet" href="style.css?v=202610130015">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -305,10 +305,9 @@
               <span class="lbl" id="layout-number-lbl">Number</span>
               <input id="layout-number" type="number" min="1" step="1">
             </div>
-            <div class="line nums obj-only">
-              <label class="num"><span>Width</span><input id="obj-w" type="number" step="0.05"></label>
-              <label class="num"><span>Depth</span><input id="obj-d" type="number" step="0.05"></label>
-              <label class="num"><span>Height</span><input id="obj-h" type="number" step="0.05"></label>
+            <div class="line obj-only" title="How Tall It Is. Drag Its Corners on the Plan to Change Its Width and Depth">
+              <span class="lbl">Tall</span>
+              <input id="obj-h" type="number" step="0.05"><span class="slide-value">m</span>
             </div>
             <div class="line" id="obj-media">
               <span class="lbl">Shows</span>
@@ -341,6 +340,10 @@
                 <label class="num" title="Metres Right of the Stage Centre"><span>X</span><input id="pos-x" type="number" step="0.05"></label>
                 <label class="num" title="Metres Forward of the Stage Centre"><span>Y</span><input id="pos-y" type="number" step="0.05"></label>
                 <label class="num obj-only" title="Degrees, Clockwise Seen From Above"><span>Turn</span><input id="obj-rot" type="number" step="5"></label>
+              </div>
+              <div class="line nums obj-only">
+                <label class="num"><span>Width</span><input id="obj-w" type="number" step="0.05"></label>
+                <label class="num"><span>Depth</span><input id="obj-d" type="number" step="0.05"></label>
               </div>
               <div class="line nums lit-only">
                 <label class="num" title="Which Way It Points: Degrees Clockwise From Upstage"><span>Pan</span><input id="fix-pan" type="number" step="5"></label>
@@ -575,6 +578,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610130014"></script>
+<script src="app.js?v=202610130015"></script>
 </body>
 </html>
