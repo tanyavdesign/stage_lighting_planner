@@ -481,26 +481,27 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
   .seg.view-switch { display: flex; position: absolute; right: 8px; top: 8px; z-index: 2; background: var(--panel); box-shadow: var(--float); }
   .seg.view-switch .btn.active { background: var(--accent-bg); border-color: transparent; color: var(--accent-text); }
 
-  .plan-col { flex: 0 0 min(var(--plan-h, 34dvh), 60dvh); padding: 4px; }
+  .plan-col { flex: 0 0 min(var(--plan-h, 34dvh), 60dvh); }
   .chip { top: 4px; }
   #deselect { left: 4px; }
   #plan-reset { right: 4px; }
   .history { left: 4px; bottom: 4px; padding: 2px; }
 
-  /* a slim strip with a handle; the touch area reaches a little past it */
-  .grip { flex: 0 0 12px; background: var(--panel); border: solid var(--line); border-width: 1px 0; cursor: row-resize; }
-  .grip:hover, .grip:active { background: var(--panel); }
-  .grip::before { inset: -6px 0; }
+  /* a hairline with a small handle sitting on it; the touch area reaches well past it */
+  .grip { flex: 0 0 1px; background: var(--line); cursor: row-resize; }
+  .grip:hover, .grip:active { background: var(--line); }
+  .grip::before { inset: -11px 0; }
   .grip::after {
     content: "";
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 44px;
-    height: 4px;
-    margin: -2px 0 0 -22px;
-    border-radius: 2px;
+    width: 36px;
+    height: 5px;
+    margin: -2.5px 0 0 -18px;
+    border-radius: 3px;
     background: var(--fix-line);
+    box-shadow: 0 0 0 2px var(--bg);
   }
   .grip.split { display: none; }
   .view, .view[data-view="front"] { flex: 1 1 0; }
