@@ -31,20 +31,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121642">
+<link rel="stylesheet" href="style.css?v=202610121643">
 </head>
 <body data-view="front">
 <div id="home" hidden>
   <div class="home-inner">
     <div class="home-head">
-      <button id="home-back" class="btn icon" aria-label="All Projects" title="All Projects" hidden></button>
+      <button id="home-back" class="btn icon" aria-label="All Shows" title="All Shows" hidden></button>
       <div id="home-logo" class="home-menu">
         <button id="home-more" class="logo-btn" aria-label="App Menu" title="App Menu"><img src="icons/icon.svg" width="32" height="32" alt=""></button>
         <div id="home-menu" class="menu" hidden>
           <button id="home-theme">Light Mode</button>
           <button id="home-templates">Layouts</button>
           <hr>
-          <button id="home-backup">Download All Projects</button>
+          <button id="home-backup">Download All Shows</button>
           <button id="home-reload">Reload to Update</button>
           <button id="home-tour">Show the Tour</button>
           <div id="home-version" class="menu-foot"></div>
@@ -62,11 +62,11 @@
         <input id="home-import" type="file" multiple hidden>
         <div id="import-menu" class="menu" hidden>
           <button data-import="item">Item</button>
-          <button data-import="project">Project</button>
+          <button data-import="project">Show</button>
         </div>
       </div>
       <button id="draft-new" class="btn">New Item</button>
-      <button id="new-project" class="btn primary">New Project</button>
+      <button id="new-project" class="btn primary">New Show</button>
       <div id="new-item-wrap" class="split" hidden>
         <button id="new-item" class="btn primary">New Item</button>
         <button id="new-item-more" class="btn primary icon" aria-label="More ways to add items" title="More ways to add items"></button>
@@ -78,7 +78,7 @@
       <div id="draft-list" class="project-list"></div>
     </div>
     <div class="home-sub">
-      <h2 class="home-title" id="home-heading">Projects</h2>
+      <h2 class="home-title" id="home-heading">Shows</h2>
       <div class="spacer"></div>
       <button id="home-play" class="btn" hidden>Play Show</button>
       <div id="home-settings" class="drop home-settings" hidden>
@@ -96,12 +96,12 @@
       <button id="pick-all" class="btn" hidden>Select All</button>
     </div>
     <div id="layout-news" class="news" hidden>
-      <span>The stage layout this project uses was updated by its publisher.</span>
+      <span>The stage layout this show uses was updated by its publisher.</span>
       <button id="news-apply" class="btn primary">Use the New Layout</button>
       <button id="news-later" class="btn">Not Now</button>
     </div>
     <div id="project-list" class="project-list"></div>
-    <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
+    <p id="home-empty" class="hint" hidden>No shows yet. Press New Show to start one.</p>
     <div id="recent" hidden>
       <div class="home-sub"><h2 class="home-title">Recently Edited</h2></div>
       <div id="recent-list" class="recent-list"></div>
@@ -126,7 +126,7 @@
     </div>
   </div>
   <div id="tpl" class="tpl-back" hidden>
-    <div class="tpl" role="dialog" aria-label="New Project">
+    <div class="tpl" role="dialog" aria-label="New Show">
       <div class="tpl-side">
         <h2>Layouts</h2>
         <button class="tpl-tab" data-tpl-tab="all">All Layouts</button>
@@ -134,11 +134,11 @@
         <button class="tpl-tab" data-tpl-tab="mine">My Layouts</button>
       </div>
       <div class="tpl-main">
-        <div class="tpl-head"><h2 id="tpl-title">New Project</h2><button id="tpl-create" class="btn primary" type="button">Create Project</button><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+        <div class="tpl-head"><h2 id="tpl-title">New Show</h2><button id="tpl-create" class="btn primary" type="button">Create Show</button><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
         <div class="tpl-scroll">
           <div class="tpl-details">
-            <label class="tpl-field tpl-field-name"><span id="new-name-lbl">Project Name</span>
-              <input id="new-name" type="text" placeholder="Untitled Project" maxlength="60" autocomplete="off">
+            <label class="tpl-field tpl-field-name"><span id="new-name-lbl">Show Name</span>
+              <input id="new-name" type="text" placeholder="Untitled Show" maxlength="60" autocomplete="off">
             </label>
             <div class="tpl-field tpl-field-items"><span>Items</span>
               <div class="tpl-count">
@@ -210,7 +210,7 @@
 
 <main>
   <div class="bar" id="bar">
-    <button id="back" class="btn icon" data-icon="back" aria-label="Back to this project's items" title="Back to this project's items"></button>
+    <button id="back" class="btn icon" data-icon="back" aria-label="Back to this show's items" title="Back to this show's items"></button>
     <div class="menu-wrap">
       <button id="more" class="btn icon" data-icon="menu" aria-label="Menu" title="Menu"></button>
       <div id="menu" class="menu" hidden>
@@ -307,7 +307,7 @@
       </div>
       <div class="group" id="layout-keep">
         <div class="sec-head"><h3>Save as a Layout</h3></div>
-        <p class="hint note">Keep this layout to start new projects from.</p>
+        <p class="hint note">Keep this layout to start new shows from.</p>
         <div class="line">
           <input id="layout-tpl-name" type="text" placeholder="Layout Name" maxlength="60" autocomplete="off">
           <button class="btn" id="layout-save-tpl">Save</button>
@@ -459,6 +459,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121642"></script>
+<script src="app.js?v=202610121643"></script>
 </body>
 </html>

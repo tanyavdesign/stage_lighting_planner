@@ -232,7 +232,7 @@ if (!projects) {
     const id = newId();
     raw.set(projectKey(LOOK_KEY, id), oldLook || {});
     raw.set(projectKey(SHOW_KEY, id), oldShow || {});
-    projects.push({ id, name: (oldShow && oldShow.projectName) || 'My first project', template: TEMPLATE, created: Date.now(), updated: Date.now(), cues: oldShow && oldShow.cues ? oldShow.cues.length : 0 });
+    projects.push({ id, name: (oldShow && oldShow.projectName) || 'My first show', template: TEMPLATE, created: Date.now(), updated: Date.now(), cues: oldShow && oldShow.cues ? oldShow.cues.length : 0 });
   }
   raw.set(PROJECTS_KEY, projects);
 }
@@ -1553,11 +1553,11 @@ function setWatch(on) {
 // ---------------------------------------------------------------------------
 const TOURS = {
   manager: [
-    ['#new-project', 'Projects', 'A project is one show. It holds the stage and every item (dance) in it. Start one here and choose how many items it begins with.'],
+    ['#new-project', 'Shows', 'A show holds the stage and every item (dance) in it. Start one here and choose how many items it begins with.'],
     ['#home-more', 'Stage Layouts', 'A layout is a stage: where the lights hang. Open this menu and choose Layouts to make, edit and share them. A layout can be shared with a code that others type in.'],
-    ['#import-btn', 'Import and Download', 'Bring in project or item files that others send you. Every card has a download button; tick several cards to download them together.'],
-    ['#drafts', 'Drafts', 'Items made or imported without a project wait here. The folder button on a draft moves it into a project.'],
-    ['#project-list', 'Inside a Project', 'Open a project to see its items. Drag the six-dot handle to put them in running order, and use the arrows on a picture to flip through that item\'s cues.'],
+    ['#import-btn', 'Import and Download', 'Bring in show or item files that others send you. Every card has a download button; tick several cards to download them together.'],
+    ['#drafts', 'Drafts', 'Items made or imported without a show wait here. The folder button on a draft moves it into a show.'],
+    ['#project-list', 'Inside a Show', 'Open a show to see its items. Drag the six-dot handle to put them in running order, and use the arrows on a picture to flip through that item\'s cues.'],
     ['.home-views', 'Views', 'Switch every list between large tiles, small tiles and rows.'],
   ],
   plotter: [
@@ -3368,7 +3368,7 @@ function createProject(name, stage, from) {
   const id = newId(), tpl = stage || BUILTIN;
   const own = from && from.layout && Array.isArray(from.layout.leds) ? from.layout : (tpl.builtin ? null : copyLayout(tpl.layout));
   if (own) raw.set(projectKey(LAYOUT_KEY, id), own);
-  const project = { id, name: name || 'Untitled Project', template: (from && from.template) || tpl.name, templateId: (from && from.templateId) || tpl.id, created: Date.now(), updated: Date.now(), cues: 0, items: [] };
+  const project = { id, name: name || 'Untitled Show', template: (from && from.template) || tpl.name, templateId: (from && from.templateId) || tpl.id, created: Date.now(), updated: Date.now(), cues: 0, items: [] };
   const lights = (from && from.lights) || tpl.lights;
   if (lights) project.lights = clone(lights);
   if (from && from.showGap) project.showGap = from.showGap;
@@ -3608,7 +3608,7 @@ async function importFiles(fileList, as) {
   }
   renderHome();
   const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  const parts = [made && count(made, 'project'), items && count(items, 'item') + (project ? '' : ' into Drafts')].filter(Boolean);
+  const parts = [made && count(made, 'show'), items && count(items, 'item') + (project ? '' : ' into Drafts')].filter(Boolean);
   toast((parts.length ? `Imported ${parts.join(' and ')}.` : '') + (bad.length ? ` Could not read ${bad.join(', ')}.` : ''), 4500);
 }
 // Download projects (from the project list) or items (inside a project): one file, or a zip of them.
@@ -3626,9 +3626,9 @@ async function downloadFiles(list, owner) {       // owner: the project the item
   else {
     const inside = [];
     for (const file of files) inside.push({ name: file.name, bytes: new Uint8Array(await file.blob.arrayBuffer()) });
-    saveBlob(zipWrite(inside), (project ? safeName(project.name) + ' - items' : 'Cueo projects') + '.zip');
+    saveBlob(zipWrite(inside), (project ? safeName(project.name) + ' - items' : 'Cueo shows') + '.zip');
   }
-  toast(`Downloaded ${files.length} ${project ? 'item' : 'project'}${files.length === 1 ? '' : 's'}.`, 3000);
+  toast(`Downloaded ${files.length} ${project ? 'item' : 'show'}${files.length === 1 ? '' : 's'}.`, 3000);
 }
 
 const when = (ms) => {
@@ -3688,9 +3688,9 @@ function renderHome() {
   $('import-arrow').hidden = !!project;
   $('home-title').textContent = project ? project.name : '';       // the project list has no title, only the small icon
   $('home-title').hidden = !project;
-  $('home-heading').textContent = project ? `Items · ${project.template}` : 'Projects';
+  $('home-heading').textContent = project ? `Items · ${project.template}` : 'Shows';
   $('home-empty').hidden = true;                 // the dashed card below says it instead
-  $('home-empty').textContent = project ? 'No items yet. Press New item to add one.' : 'No projects yet. Press New project to start one.';
+  $('home-empty').textContent = project ? 'No items yet. Press New item to add one.' : 'No shows yet. Press New Show to start one.';
   const loose = project ? [] : draftProjects().map((p) => p.items[0]);       // drafts can be ticked too
   for (const id of [...picked]) if (![...things, ...loose].some((t) => t.id === id)) picked.delete(id);
   $('pick-all').hidden = !things.length;
@@ -3815,7 +3815,7 @@ function renderHome() {
           grip.removeEventListener('pointercancel', end);
           document.body.classList.remove('reordering');
           if (target && ev.type === 'pointerup' && project.draft) {
-            if (target.classList.contains('drop-no')) toast('That project uses a different stage layout, so this draft does not fit it.', 3500);
+            if (target.classList.contains('drop-no')) toast('That show uses a different stage layout, so this draft does not fit it.', 3500);
             else return moveDraft(project, projects.find((p) => p.id === target.dataset.pid));
           } else if (target && ev.type === 'pointerup') {
             const at = project.items.indexOf(thing), to = project.items.findIndex((it) => it.id === target.dataset.id);
@@ -3833,10 +3833,10 @@ function renderHome() {
     act('copy', 'Duplicate', () => (project && !project.draft ? duplicateItem(project, thing) : duplicateProject(project || thing)));
     if (project && project.draft) {
       // a draft can be filed into a project: pick which from a small menu
-      const file = act('moveto', 'Move to a Project', (e) => {
+      const file = act('moveto', 'Move to a Show', (e) => {
         e.stopPropagation();
         const print = layoutPrint(project), choices = realProjects().filter((p) => layoutPrint(p) === print);
-        if (!choices.length) return toast(realProjects().length ? 'No project uses the same stage layout as this draft.' : 'Create a project first, then move the draft into it.', 3500);
+        if (!choices.length) return toast(realProjects().length ? 'No show uses the same stage layout as this draft.' : 'Create a show first, then move the draft into it.', 3500);
         popMenu(file, choices.map((p) => [p.name, () => moveDraft(project, p)]));
       });
     }
@@ -3885,7 +3885,7 @@ function renderHome() {
   }
   // a dashed card at the end: the same as the New project (or New item) button
   const add = button(list, '', 'project new-card', () => $(project ? 'new-item' : 'new-project').click());
-  add.innerHTML = svgIcon('plus') + `<span>${project ? 'New Item' : 'New Project'}</span>`;
+  add.innerHTML = svgIcon('plus') + `<span>${project ? 'New Item' : 'New Show'}</span>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -4316,10 +4316,10 @@ function buildHome() {
     tplManage = manage; tplDraft = !!draft; tplPicked = null;
     dialog.querySelector('.tpl').classList.toggle('manage', manage);
     dialog.querySelector('.tpl').classList.toggle('draft', tplDraft);
-    $('tpl-title').textContent = manage ? 'Layouts' : draft ? 'New Item' : 'New Project';
-    $('tpl-create').textContent = draft ? 'Create Item' : 'Create Project';
-    $('new-name-lbl').textContent = draft ? 'Item Name' : 'Project Name';
-    $('new-name').placeholder = draft ? 'Untitled Item' : 'Untitled Project';
+    $('tpl-title').textContent = manage ? 'Layouts' : draft ? 'New Item' : 'New Show';
+    $('tpl-create').textContent = draft ? 'Create Item' : 'Create Show';
+    $('new-name-lbl').textContent = draft ? 'Item Name' : 'Show Name';
+    $('new-name').placeholder = draft ? 'Untitled Item' : 'Untitled Show';
     dialog.hidden = false;
     renderTemplates();
     $('new-name').value = '';
@@ -4467,7 +4467,7 @@ function buildHome() {
   $('home-lights').addEventListener('click', () => editLights(currentProject().name, currentProject(), saveProjects, kindsOf(projectLayout(currentProject()))));
   $('home-layout').addEventListener('click', () => {
     const project = currentProject();
-    if (!project.items.length) return toast('Add an item first: the layout editor opens on one of the project\'s items.', 3500);
+    if (!project.items.length) return toast('Add an item first: the layout editor opens on one of the show\'s items.', 3500);
     try { sessionStorage.setItem('slp-layout', '1'); } catch (e) { /* no session storage */ }
     setOpen(project.id, project.items[0].id);
   });
