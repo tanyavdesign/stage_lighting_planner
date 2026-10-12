@@ -868,6 +868,8 @@ body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing
 .swatches .btn { padding: 0 10px; }
 .palette-seg .btn { min-width: 56px; }
 .white-slide { flex: 1 1 120px; min-width: 100px; accent-color: var(--accent); }
+.slide-value { flex: 0 0 38px; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+body.pointing .plan { cursor: crosshair; }
 .white-tag { min-width: 52px; font-variant-numeric: tabular-nums; }
 
 /* ---------- Layouts shared with a code ---------- */

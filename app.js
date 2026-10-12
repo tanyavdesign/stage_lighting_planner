@@ -237,6 +237,22 @@ function reachOf(light) {
   const tilt = light.tilt || 0, h = heightOf(light);
   return tilt < 85 && h > 0 ? h * Math.tan(tilt * Math.PI / 180) : tilt < 85 ? 0 : null;
 }
+// Where a light's beam goes for a pan, tilt and beam width in degrees: which way it points,
+// how long the throw is, and where and how wide it lands on the stage floor, in metres.
+// Worked out from the light's height and angles; one shared result is reused, since this
+// runs for every light on every frame.
+const THROW = { dx: 0, dy: -1, dz: 0, len: 0, r: 0, x: 0, z: 0, lands: true };
+function throwOf(light, pan, tilt, beam) {
+  const h = heightOf(light), t = tilt * Math.PI / 180, p = pan * Math.PI / 180, half = Math.min(60, beam / 2) * Math.PI / 180;
+  THROW.dx = Math.sin(p) * Math.sin(t); THROW.dy = -Math.cos(t); THROW.dz = -Math.cos(p) * Math.sin(t);
+  THROW.lands = THROW.dy < -0.08 && h > 0.05 && h / -THROW.dy <= 30;
+  THROW.len = THROW.lands ? h / -THROW.dy : 10;                  // a beam that never lands is drawn 10 m long
+  THROW.r = Math.max(0.15, THROW.len * Math.tan(half));
+  THROW.x = light.x3 + THROW.dx * THROW.len; THROW.z = light.z3 + THROW.dz * THROW.len;
+  return THROW;
+}
+// Light arrives weaker after a long throw, and a tight beam is brighter than a wide one.
+const punch = (len, beam) => Math.min(1.6, Math.pow(5 / Math.max(1, len), 1.2)) * Math.min(1.6, Math.sqrt(30 / Math.max(2, beam)));
 const assetOf = (o) => ASSETS.find((a) => a.type === o.type) || { type: o.type, name: 'Block', look: 'solid' };
 // Where an object's connecting points are on the plan, turned with it.
 function joinsOf(o) {
@@ -296,7 +312,10 @@ function useLayout(layout) {
   for (const side of SIDES) SIDE_LIGHTS[side] = wings[side].map(metres);
   KINDS.length = CUSTOMS.length = 0;
   KINDS.push(...kindsOf(layout));
-  for (const it of customsOf(layout)) if (KINDS.some((k) => k.id === it.kind)) CUSTOMS.push(Object.assign(metres(it), { kind: it.kind, z: it.z, pan: it.pan, tilt: it.tilt, beam: it.beam, name: it.name }));
+  for (const it of customsOf(layout)) if (KINDS.some((k) => k.id === it.kind)) {
+    const fx = fixtureOf(KINDS.find((k) => k.id === it.kind));
+    CUSTOMS.push(Object.assign(metres(it), { kind: it.kind, z: it.z, pan: it.pan || 0, tilt: it.tilt || 0, beam: it.beam || (fx ? fx.beam : 30), name: it.name, fx, moving: !!(fx && fx.moving) }));
+  }
 }
 const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
 
@@ -341,6 +360,8 @@ const blankLook = () => ({
   sidePos: { L: SIDE_LIGHTS.L.map(() => false), R: SIDE_LIGHTS.R.map(() => false) },
   cyclo: 'none', effect: 'none', bpm: 120,
   custom: {},            // custom lights: id -> colour, missing when off
+  dim: {},               // custom lights: id -> brightness from 0 to 1, missing when full
+  point: {},             // moving heads: id -> { pan, tilt } in degrees, missing when left as the layout has them
 });
 // Projects. Everything is kept on this device. The list of projects is one entry in
 // local storage; each project's lights and cues are stored under keys that carry its id.
@@ -622,7 +643,8 @@ const L = 6;
 const O_SPOT = LEDS.length * L, O_FACE = O_SPOT + SPOTS.length, O_TYPE = O_FACE + 1, O_POS = O_TYPE + 3, O_CYC = O_POS + SIDE_LIGHTS.L.length + SIDE_LIGHTS.R.length;
 const sideAt = (s, j) => O_POS + (s ? SIDE_LIGHTS.L.length : 0) + j;       // side s (0 left, 1 right), light j from the back
 const O_CUS = O_CYC + 3;                       // then r, g, b for each custom light
-const FRAME_N = O_CUS + CUSTOMS.length * 3;
+const O_MOV = O_CUS + CUSTOMS.length * 3;    // then pan, tilt and beam width in degrees for each custom light
+const FRAME_N = O_MOV + CUSTOMS.length * 3;
 
 // Random fade pulses: each LED runs its own offset timeline of segments, and each
 // segment is either a fade up and down or dark.
@@ -679,7 +701,9 @@ function compute(look, t, out) {
   out[O_CYC] = c[0]; out[O_CYC + 1] = c[1]; out[O_CYC + 2] = c[2];
   CUSTOMS.forEach((light, i) => {
     const value = look.custom && look.custom[light.id], rgb = value ? rgbOf(value) : ZERO;
-    out[O_CUS + i * 3] = rgb[0]; out[O_CUS + i * 3 + 1] = rgb[1]; out[O_CUS + i * 3 + 2] = rgb[2];
+    const dim = look.dim && look.dim[light.id] != null ? look.dim[light.id] : 1, to = light.moving && look.point && look.point[light.id];
+    out[O_CUS + i * 3] = rgb[0] * dim; out[O_CUS + i * 3 + 1] = rgb[1] * dim; out[O_CUS + i * 3 + 2] = rgb[2] * dim;
+    out[O_MOV + i * 3] = to ? to.pan : light.pan; out[O_MOV + i * 3 + 1] = to ? to.tilt : light.tilt; out[O_MOV + i * 3 + 2] = light.beam;
   });
 }
 
@@ -708,10 +732,10 @@ function timelineFrame(T, t, out) {
 // (so it lands on the next drawn frame), and beam aim takes a little longer, like a
 // fixture swinging round.
 function ease(dt) {
-  const a = 1 - Math.exp(-dt / 0.002), b = 1 - Math.exp(-dt / 0.15);
+  const a = 1 - Math.exp(-dt / 0.002), b = 1 - Math.exp(-dt / 0.15), c = 1 - Math.exp(-dt / 0.3);
   for (let i = 0; i < FRAME_N; i++) {
     const isAim = i < O_SPOT && (i % L === 3 || i % L === 4);
-    shown[i] += (target[i] - shown[i]) * (isAim ? b : a);
+    shown[i] += (target[i] - shown[i]) * (i >= O_MOV ? c : isAim ? b : a);         // a moving head takes a moment to swing round
   }
 }
 
@@ -792,6 +816,16 @@ function lightFigures(D) {
     SPOTS.forEach((s, i) => {                  // brightest directly underneath, fading towards the edge
       const off = Math.hypot(s.x3 - p.x3, s.z3 - p.z3) / 1.6;
       if (off < 1) spot += Math.pow(1 - off * off, 1.5) * D[O_SPOT + i] * 0.75;
+    });
+    CUSTOMS.forEach((light, i) => {             // library and custom lights: whoever stands in the pool is lit
+      const cr = D[O_CUS + i * 3], cg = D[O_CUS + i * 3 + 1], cb = D[O_CUS + i * 3 + 2];
+      if (cr + cg + cb < 0.01) return;
+      const T = throwOf(light, D[O_MOV + i * 3], D[O_MOV + i * 3 + 1], D[O_MOV + i * 3 + 2]);
+      if (!T.lands) return;
+      const d = Math.hypot(T.x - p.x3, T.z - p.z3) / (T.r + 0.35);
+      if (d > 1.6) return;
+      const w = Math.exp(-d * d * 1.5) * 0.55 * punch(T.len, D[O_MOV + i * 3 + 2]);
+      r += cr * w; g += cg * w; b += cb * w;
     });
     // compress the brightness only, so strong coloured light keeps its hue
     const m = Math.max(r, g, b, 1e-4), k = tone(m) / m;
@@ -1266,6 +1300,46 @@ function buildControls() {
       commit();
     });
     line('Color').appendChild(swatches);
+    // the lights these controls act on: the selected ones of this kind, or all of them
+    const chosen = () => { const picked = mine().filter((light) => selCustom.has(light.id)); return picked.length ? picked : mine(); };
+    const slider = (label, key, min, max, unit, read, write) => {
+      const row = line(label), slide = document.createElement('input'), value = document.createElement('span');
+      slide.type = 'range'; slide.min = min; slide.max = max; slide.step = 1; slide.className = 'white-slide'; slide.dataset.slide = key;
+      value.className = 'slide-value';
+      row.appendChild(slide); row.appendChild(value);
+      slide.read = () => { const first = chosen()[0]; if (first && document.activeElement !== slide) slide.value = read(first); value.textContent = Math.round(slide.value) + unit; };
+      slide.addEventListener('input', () => { for (const light of chosen()) write(light, +slide.value); value.textContent = Math.round(slide.value) + unit; });    // the previews follow while it is dragged
+      slide.addEventListener('change', () => { slide.blur(); commit(); });
+      return row;
+    };
+    slider('Intensity', 'dim', 0, 100, '%',
+      (light) => Math.round((state.dim && state.dim[light.id] != null ? state.dim[light.id] : 1) * 100),
+      (light, v) => { if (!state.dim) state.dim = {}; if (v >= 100) delete state.dim[light.id]; else state.dim[light.id] = v / 100; });
+    if (fixtureOf(kind) && fixtureOf(kind).moving) {
+      const at = (light) => (state.point && state.point[light.id]) || { pan: light.pan, tilt: light.tilt };
+      const set = (light, key, v) => { if (!state.point) state.point = {}; state.point[light.id] = Object.assign({}, at(light), { [key]: v }); };
+      slider('Pan', 'pan', 0, 359, '°', (light) => Math.round(at(light).pan), (light, v) => set(light, 'pan', v));
+      slider('Tilt', 'tilt', 0, 120, '°', (light) => Math.round(at(light).tilt), (light, v) => set(light, 'tilt', v));
+      // Point At: the next tap on the plan is where these lights aim
+      const row = line('Aim'), go = button(row, 'Point at a Spot on the Plan', 'btn', () => {
+        if (document.body.classList.toggle('pointing')) {
+          toast('Tap the plan where the light should point.', 2500);
+          svg.addEventListener('pointerdown', pointAt, { capture: true, once: true });
+        } else svg.removeEventListener('pointerdown', pointAt, { capture: true });
+      });
+      go.title = 'Then Tap Where the Selected Moving Heads Should Point';
+      const pointAt = (e) => {
+        e.stopImmediatePropagation(); e.preventDefault();
+        document.body.classList.remove('pointing');
+        const p = svgPoint(e);
+        if (!state.point) state.point = {};
+        for (const light of chosen()) {
+          const dx = (p.x - light.x) / UNIT, dy = (p.y - light.y) / UNIT;
+          state.point[light.id] = { pan: Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360), tilt: Math.round(Math.atan2(Math.hypot(dx, dy), Math.max(0.1, heightOf(light))) * 180 / Math.PI) };
+        }
+        commit();
+      };
+    }
     $('mods').appendChild(section);
   }
 
@@ -1837,6 +1911,7 @@ function relook(look, renamed, alive, resides) {
     return out;
   };
   look.leds = move(look.leds); look.aim = move(look.aim); look.spots = move(look.spots); look.custom = move(look.custom);
+  look.dim = move(look.dim); look.point = move(look.point);
   if (resides) resides(look);
   return look;
 }
@@ -2350,10 +2425,10 @@ function syncUI() {
   // With a selection, only the sections for the kinds of light selected are shown;
   // with nothing selected, every section is.
   const some = anySelected();
-  $('sec-leds').hidden = some && !selection.size;
-  $('sec-spots').hidden = some && !selSpots.size;
-  $('sec-sides').hidden = some && !selSides.size;
-  $('sec-face').hidden = some;
+  $('sec-leds').hidden = !LEDS.length || (some && !selection.size);          // a kind of light the layout does not have is never shown
+  $('sec-spots').hidden = !SPOTS.length || (some && !selSpots.size);
+  $('sec-sides').hidden = !(SIDE_LIGHTS.L.length + SIDE_LIGHTS.R.length) || (some && !selSides.size);
+  $('sec-face').hidden = !FACES.length || some;
   $('sec-cyclo').hidden = some && !selCyclo;
   for (const kind of KINDS) {
     const mine = CUSTOMS.filter((light) => light.kind === kind.id), picked = mine.filter((light) => selCustom.has(light.id)).length;
@@ -2361,6 +2436,7 @@ function syncUI() {
     if (!section) continue;
     section.hidden = !mine.length || (some && !picked);
     section.querySelector('.count').textContent = picked ? picked + ' selected' : '';
+    for (const slide of section.querySelectorAll('[data-slide]')) slide.read();
   }
   $('sel-leds').hidden = !selection.size;
   $('sel-spots').hidden = !selSpots.size;
@@ -2551,9 +2627,14 @@ function drawFront(D) {
   CUSTOMS.forEach((light, i) => {
     const r = D[O_CUS + i * 3], g = D[O_CUS + i * 3 + 1], b = D[O_CUS + i * 3 + 2];
     if (r + g + b < 0.01) return;
-    const s = depthScale(light.z3), x = frontX(light.x3, light.z3), y = floorY(light.z3);
-    softBeam(x, rigY(s), 20 * s, x, y, 105 * s, r, g, b, 0.4, 0.09);
-    floorGlow(x, y, 70 * s, 9, r, g, b, 0.11);
+    const T = throwOf(light, D[O_MOV + i * 3], D[O_MOV + i * 3 + 1], D[O_MOV + i * 3 + 2]), k = punch(T.len, D[O_MOV + i * 3 + 2]);
+    const s = depthScale(light.z3), x = frontX(light.x3, light.z3), h = heightOf(light);
+    const top = h >= RIG_H - 0.3 ? rigY(s) : floorY(light.z3) - h * PX * s;      // lights on the rig start above the picture; lower ones where they hang
+    if (T.lands) {
+      const s2 = depthScale(T.z), x2 = frontX(T.x, T.z), y2 = floorY(T.z), wide = Math.max(12, T.r * 52 * s2);
+      softBeam(x, top, 20 * s, x2, y2, wide * 1.5, r, g, b, 0.4 * k, 0.09 * k);
+      floorGlow(x2, y2, wide, 9, r, g, b, 0.11 * k);
+    } else softBeam(x, top, 14 * s, frontX(light.x3 + T.dx * 4, light.z3 + T.dz * 4), top - T.dy * 4 * PX * s, 70 * s, r, g, b, 0.35, 0.02);    // pointing out or up: a beam that fades into the air
   });
   SIDES.forEach((side, sIdx) => {
     let n = 0;
@@ -2725,22 +2806,16 @@ function buildThree() {
     pool: add(pool(1.6), s.x3, 0.012, s.z3),
   }));
   const customs = CUSTOMS.map((s) => {
-    const h = heightOf(s), tilt = (s.tilt || 0) * Math.PI / 180, pan = (s.pan || 0) * Math.PI / 180, kind = KINDS.find((k) => k.id === s.kind), fx = fixtureOf(kind);
-    const half = Math.min(60, (s.beam || (fx ? fx.beam : 30)) / 2) * Math.PI / 180;
-    const way = new THREE.Vector3(Math.sin(pan) * Math.sin(tilt), -Math.cos(tilt), -Math.cos(pan) * Math.sin(tilt));
-    const lands = way.y < -0.08 && h > 0.05 && h / -way.y <= 30;          // does the beam reach the stage floor
-    const length = lands ? h / -way.y : 10;
-    const cone = add(beam(0.06, Math.max(0.05, length * Math.tan(half)), length), s.x3, h, s.z3);
-    cone.quaternion.setFromUnitVectors(DOWN, way);
-    const spot = add(pool(Math.max(0.15, length * Math.tan(half))), s.x3 + way.x * length, 0.013, s.z3 + way.z * length);
-    spot.rotation.z = -pan;                                              // the pool stretches along the throw
-    spot.scale.y = Math.min(4, 1 / Math.max(0.2, Math.cos(tilt)));
-    if (fx) {                                                            // a body for the fixture, turned with it
-      const body = add(new THREE.Group(), s.x3, h, s.z3);
-      if (fx.shape === 'batten' || fx.shape === 'strobe') { box(1, 0.1, 0.12, 0x2a2a31, 0, 0.05, 0, body); body.rotation.y = -pan; }
-      else { body.quaternion.setFromUnitVectors(DOWN, way); add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.32, 14), solid(0x2a2a31)), 0, 0.16, 0, body); }
+    const h = heightOf(s), fx = s.fx, bar = fx && (fx.shape === 'batten' || fx.shape === 'strobe');
+    const cone = add(beam(0.04, 1, 1), s.x3, h, s.z3);                    // sized and turned every frame, from its pan, tilt and beam
+    const spot = add(pool(1), s.x3, 0.013, s.z3);
+    let body = null;
+    if (fx) {                                                             // a body for the fixture, turned with it
+      body = add(new THREE.Group(), s.x3, h, s.z3);
+      if (bar) box(1, 0.1, 0.12, 0x2a2a31, 0, 0.05, 0, body);
+      else add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.32, 14), solid(0x2a2a31)), 0, 0.16, 0, body);
     }
-    return { cone, lens: lens(s.x3, h, s.z3), pool: spot, lands };
+    return { light: s, cone, lens: lens(s.x3, h, s.z3), pool: spot, body, bar };
   });
 
   const sides = [];
@@ -2857,11 +2932,20 @@ function buildThree() {
     });
     customs.forEach((s, i) => {
       const r = D[O_CUS + i * 3], g = D[O_CUS + i * 3 + 1], b = D[O_CUS + i * 3 + 2];
+      const pan = D[O_MOV + i * 3], T = throwOf(s.light, pan, D[O_MOV + i * 3 + 1], D[O_MOV + i * 3 + 2]), k = punch(T.len, D[O_MOV + i * 3 + 2]);
+      dir.set(T.dx, T.dy, T.dz);
+      if (s.body) { if (s.bar) s.body.rotation.y = -pan * Math.PI / 180; else s.body.quaternion.setFromUnitVectors(DOWN, dir); }
       s.cone.visible = r + g + b > 0.01;
-      s.pool.visible = s.cone.visible && s.lands;
+      s.pool.visible = s.cone.visible && T.lands;
       setLens(s.lens, r, g, b);
-      s.cone.material.uniforms.color.value.setRGB(r * 0.15, g * 0.15, b * 0.15);
-      s.pool.material.color.setRGB(r * 0.12, g * 0.12, b * 0.12);
+      if (!s.cone.visible) return;
+      s.cone.quaternion.setFromUnitVectors(DOWN, dir);
+      s.cone.scale.set(T.r, T.len, T.r);
+      s.pool.position.set(T.x, 0.013, T.z);
+      s.pool.rotation.z = -pan * Math.PI / 180;                           // the pool stretches along the throw
+      s.pool.scale.set(T.r, T.r * Math.min(4, 1 / Math.max(0.2, -T.dy)), 1);
+      s.cone.material.uniforms.color.value.setRGB(r * 0.15 * k, g * 0.15 * k, b * 0.15 * k);
+      s.pool.material.color.setRGB(r * 0.12 * k, g * 0.12 * k, b * 0.12 * k);
     });
     for (const s of sides) {
       const lvl = D[s.pos] * D[s.type];
