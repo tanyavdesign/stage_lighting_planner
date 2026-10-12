@@ -4460,6 +4460,8 @@ try { buildThree(); } catch (e) { /* no WebGL here: the rest of the app still wo
 applyPrefs();
 sizeFront(); sizeWave();
 window.addEventListener('resize', () => { sizeFront(); sizeWave(); });
+// the track bar can change width without the window changing (text beside it, panels): keep its drawing sharp
+if (window.ResizeObserver) new ResizeObserver(() => { if (wave.clientWidth && wave.clientWidth !== waveW) sizeWave(); }).observe(wave);
 
 // The app is exactly as tall as the window. Installed on Android, the browser can report
 // the wrong height when the app opens and only correct it later without saying so, which

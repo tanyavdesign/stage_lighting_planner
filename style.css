@@ -427,6 +427,10 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
 .t-group { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .t-left { order: 3; gap: 10px; }              /* desktop: buttons first, then the time */
 .time { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+/* "Next: Cue 2 in 165.0 s" counts down ten times a second: it gets a fixed width and even-width
+   digits, so it cannot nudge the waveform beside it on every tick */
+#next-text { flex: 0 0 190px; width: 190px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#next-text:empty { flex-basis: 0; width: 0; }
 #wave {
   display: block;
   flex: 1 1 320px;
