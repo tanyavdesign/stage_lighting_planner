@@ -253,6 +253,30 @@ function throwOf(light, pan, tilt, beam) {
 }
 // Light arrives weaker after a long throw, and a tight beam is brighter than a wide one.
 const punch = (len, beam) => Math.min(1.6, Math.pow(5 / Math.max(1, len), 1.2)) * Math.min(1.6, Math.sqrt(30 / Math.max(2, beam)));
+// DMX patch: where a light sits on the control cable (universe and start address) and how many
+// channels it takes. The starting counts are plain guesses for a generic fixture (1 for a
+// dimmer, 4 for colour, 16 for a moving head), not any real product's mode; type the real one.
+const channelsOf = (light, kinds) => {
+  if (light.ch) return light.ch;
+  const f = fixtureOf(kinds.find((k) => k.id === light.kind));
+  return f ? (f.moving ? 16 : f.control === 'rgb' ? 4 : 1) : 1;
+};
+// Every light and object in a layout as a spreadsheet (CSV): what it is, where it is in metres
+// from the stage centre, how high, where it points, what it hangs on, and its DMX patch.
+function fixtureList(layout, project) {
+  const kinds = kindsOf(layout), objects = objectsOf(layout), m = (v) => Math.round(v * 100) / 100;
+  const xy = (it) => [m((it.x - STAGE.cx) / UNIT), m((it.y - STAGE.cy) / UNIT)];
+  const rows = [['ID', 'Name', 'Type', 'X (m)', 'Y (m)', 'Height (m)', 'Pan', 'Tilt', 'Beam', 'Mounted On', 'Universe', 'Address', 'Channels']];
+  const plain = (list, type) => { for (const it of list) rows.push([it.id, '', type, ...xy(it), '', '', '', '', '', '', '', '']); };
+  plain(layout.leds, 'LED'); plain(layout.spots, 'Spotlight'); plain(sidesOf(layout), 'Side Light'); plain(facesOf(layout), 'Face Light');
+  for (const it of customsOf(layout)) {
+    const kind = kinds.find((k) => k.id === it.kind), f = fixtureOf(kind), on = it.on && objects.find((o) => o.id === it.on);
+    rows.push([it.id, it.name || '', kind ? kind.name + (f ? ' (Generic)' : '') : '', ...xy(it), m(heightOf(it)), it.pan || 0, it.tilt || 0, it.beam || (f ? f.beam : 30), on ? on.name : '', it.uni || '', it.addr || '', channelsOf(it, kinds)]);
+  }
+  for (const o of objects) rows.push([o.id, o.name, assetOf(o).name, ...xy(o), m(o.z || 0), o.rot || 0, '', '', '', '', '', '']);
+  const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  return `${project ? project.name : 'Layout'}\n` + rows.map((row) => row.map(cell).join(',')).join('\n') + '\n';
+}
 const assetOf = (o) => ASSETS.find((a) => a.type === o.type) || { type: o.type, name: 'Block', look: 'solid' };
 // Where an object's connecting points are on the plan, turned with it.
 function joinsOf(o) {
@@ -282,6 +306,7 @@ function inRows(items) {
   rows.forEach((row) => row.sort((a, b) => a.x - b.x));
   return rows;
 }
+const FRONT_OBJECTS = [];
 const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], CUSTOMS = [], KINDS = [], OBJECTS = [], PEOPLE = [], SIDE_LIGHTS = { L: [], R: [] };       // filled by useLayout once the project is known
 let ledRows = 0, spotRows = 0, FACE_Z = 0;
 function useLayout(layout) {
@@ -290,6 +315,14 @@ function useLayout(layout) {
   for (const [x, y] of PEOPLE_AT) { const [x3, z3] = to3(sx(x), sy(y)); PEOPLE.push({ x3, z3 }); }
   for (const o of objectsOf(layout)) { const [x3, z3] = to3(o.x, o.y); OBJECTS.push(Object.assign({}, o, { x3, z3 })); }
   growDrawing(OBJECTS);
+  // what the front view draws: objects on or over the stage, with how wide each looks from the front
+  FRONT_OBJECTS.length = 0;
+  for (const o of OBJECTS) {
+    if (Math.abs(o.z3) > (STAGE.y1 - STAGE.y0) / UNIT / 2 + 0.6 || (o.z || 0) < -0.01) continue;
+    const a = (o.rot || 0) * Math.PI / 180;
+    FRONT_OBJECTS.push(Object.assign({ look: assetOf(o).look, across: o.w * Math.abs(Math.cos(a)) + o.d * Math.abs(Math.sin(a)) }, o));
+  }
+  FRONT_OBJECTS.sort((a, b) => a.z3 - b.z3);
   LEDS.length = SPOTS.length = LED_ROW_Y.length = 0;
   const leds = inRows(layout.leds), spots = inRows(layout.spots);
   ledRows = leds.length; spotRows = spots.length;
@@ -361,7 +394,7 @@ const blankLook = () => ({
   cyclo: 'none', effect: 'none', bpm: 120,
   custom: {},            // custom lights: id -> colour, missing when off
   dim: {},               // custom lights: id -> brightness from 0 to 1, missing when full
-  point: {},             // moving heads: id -> { pan, tilt } in degrees, missing when left as the layout has them
+  point: {},             // moving heads: id -> { pan, tilt, beam } in degrees, missing when left as the layout has them
 });
 // Projects. Everything is kept on this device. The list of projects is one entry in
 // local storage; each project's lights and cues are stored under keys that carry its id.
@@ -451,7 +484,7 @@ function copyLayout(layout) {
     out.kinds = layout.kinds.map(({ id, name, shape, fixture }) => (fixture ? { id, name, shape, fixture } : { id, name, shape }));
     out.customs = (layout.customs || []).map((light) => {
       const one = { id: light.id, kind: light.kind, x: light.x, y: light.y };
-      for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'on']) if (light[key] != null && light[key] !== '') one[key] = light[key];     // only what was set
+      for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'on', 'uni', 'addr', 'ch']) if (light[key] != null && light[key] !== '') one[key] = light[key];     // only what was set
       return one;
     });
   }
@@ -703,7 +736,7 @@ function compute(look, t, out) {
     const value = look.custom && look.custom[light.id], rgb = value ? rgbOf(value) : ZERO;
     const dim = look.dim && look.dim[light.id] != null ? look.dim[light.id] : 1, to = light.moving && look.point && look.point[light.id];
     out[O_CUS + i * 3] = rgb[0] * dim; out[O_CUS + i * 3 + 1] = rgb[1] * dim; out[O_CUS + i * 3 + 2] = rgb[2] * dim;
-    out[O_MOV + i * 3] = to ? to.pan : light.pan; out[O_MOV + i * 3 + 1] = to ? to.tilt : light.tilt; out[O_MOV + i * 3 + 2] = light.beam;
+    out[O_MOV + i * 3] = to ? to.pan : light.pan; out[O_MOV + i * 3 + 1] = to ? to.tilt : light.tilt; out[O_MOV + i * 3 + 2] = (to && to.beam) || light.beam;
   });
 }
 
@@ -725,8 +758,11 @@ function timelineFrame(T, t, out) {
   if (a >= 1) return;
   compute(idx > 0 ? show.cues[idx - 1].look : BLANK, t, scratch);
   const s = a * a * (3 - 2 * a);
-  for (let i = 0; i < FRAME_N; i++) out[i] = scratch[i] + (out[i] - scratch[i]) * s;
+  for (let i = 0; i < FRAME_N; i++) out[i] = scratch[i] + (isPan(i) ? nearer(out[i] - scratch[i]) : out[i] - scratch[i]) * s;
 }
+// Pan is an angle: from 350 to 10 degrees is a turn of 20, not 340 the other way.
+const isPan = (i) => i >= O_MOV && (i - O_MOV) % 3 === 0;
+const nearer = (turn) => ((turn % 360) + 540) % 360 - 180;
 
 // Nothing switches truly instantly: every value eases to its target in about 2 ms
 // (so it lands on the next drawn frame), and beam aim takes a little longer, like a
@@ -735,7 +771,7 @@ function ease(dt) {
   const a = 1 - Math.exp(-dt / 0.002), b = 1 - Math.exp(-dt / 0.15), c = 1 - Math.exp(-dt / 0.3);
   for (let i = 0; i < FRAME_N; i++) {
     const isAim = i < O_SPOT && (i % L === 3 || i % L === 4);
-    shown[i] += (target[i] - shown[i]) * (i >= O_MOV ? c : isAim ? b : a);         // a moving head takes a moment to swing round
+    shown[i] += (isPan(i) ? nearer(target[i] - shown[i]) : target[i] - shown[i]) * (i >= O_MOV ? c : isAim ? b : a);         // a moving head takes a moment to swing round
   }
 }
 
@@ -1320,6 +1356,7 @@ function buildControls() {
       const set = (light, key, v) => { if (!state.point) state.point = {}; state.point[light.id] = Object.assign({}, at(light), { [key]: v }); };
       slider('Pan', 'pan', 0, 359, '°', (light) => Math.round(at(light).pan), (light, v) => set(light, 'pan', v));
       slider('Tilt', 'tilt', 0, 120, '°', (light) => Math.round(at(light).tilt), (light, v) => set(light, 'tilt', v));
+      slider('Zoom', 'beam', 2, 60, '°', (light) => Math.round(at(light).beam || light.beam), (light, v) => set(light, 'beam', v));
       // Point At: the next tap on the plan is where these lights aim
       const row = line('Aim'), go = button(row, 'Point at a Spot on the Plan', 'btn', () => {
         if (document.body.classList.toggle('pointing')) {
@@ -1335,7 +1372,7 @@ function buildControls() {
         if (!state.point) state.point = {};
         for (const light of chosen()) {
           const dx = (p.x - light.x) / UNIT, dy = (p.y - light.y) / UNIT;
-          state.point[light.id] = { pan: Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360), tilt: Math.round(Math.atan2(Math.hypot(dx, dy), Math.max(0.1, heightOf(light))) * 180 / Math.PI) };
+          state.point[light.id] = { beam: at(light).beam, pan: Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360), tilt: Math.round(Math.atan2(Math.hypot(dx, dy), Math.max(0.1, heightOf(light))) * 180 / Math.PI) };
         }
         commit();
       };
@@ -1400,6 +1437,22 @@ function buildControls() {
   };
   renderLibrary();
   $('layout-redo').addEventListener('click', layoutRedo);
+  for (const [id, name] of LAYERS) {
+    const b = button($('layout-layers'), name, 'btn active', () => { hiddenLayers.has(id) ? hiddenLayers.delete(id) : hiddenLayers.add(id); redrawLayout(); });
+    b.dataset.layer = id; b.title = `Show or Hide ${name} While Editing`;
+  }
+  $('layout-list').addEventListener('click', () => saveBlob(new Blob([fixtureList(work, currentProject())], { type: 'text/csv' }), `${currentProject().name} Fixture List.csv`));
+  $('layout-patch').addEventListener('click', () => {
+    layoutKeep();
+    let next = 1, universe = 1;
+    for (const light of [...work.customs].sort((a, b) => numberOf(a.id) - numberOf(b.id))) {
+      const ch = channelsOf(light, work.kinds);
+      if (next + ch - 1 > 512) { universe++; next = 1; }                 // a fixture never straddles two universes
+      light.uni = universe; light.addr = next; next += ch;
+    }
+    toast(`Patched ${work.customs.length} light${work.customs.length === 1 ? '' : 's'} from address 1.`, 2500);
+    redrawLayout();
+  });
   $('layout-snap').addEventListener('click', () => { snapOn = !snapOn; redrawLayout(); });
   // Typed numbers. A value that cannot be used puts the old one back.
   const typed = (id, low, high, apply) => $(id).addEventListener('change', () => {
@@ -1429,7 +1482,10 @@ function buildControls() {
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
   typed('fix-tilt', 0, 180, placed((item, v) => { item.tilt = v; }));
   typed('fix-beam', 1, 120, placed((item, v) => { item.beam = v; }));
-  typed('obj-rot', -360, 360, placed((item, v) => { item.rot = (v % 360 + 360) % 360; }));
+  typed('fix-uni', 1, 64, placed((item, v) => { item.uni = Math.round(v); }));
+  typed('fix-addr', 1, 512, placed((item, v) => { item.addr = Math.round(v); }));
+  typed('fix-ch', 1, 64, placed((item, v) => { item.ch = Math.round(v); }));
+  typed('obj-rot', -360, 360, placed((item, v) => { const to = (v % 360 + 360) % 360; swing(item, to - (item.rot || 0)); item.rot = to; }));
   $('obj-name').addEventListener('change', () => {
     const item = pickedItem(), name = $('obj-name').value.trim();
     if (item && (name || work.picked.kind === 'custom')) { layoutKeep(); item.name = name; }
@@ -1568,6 +1624,12 @@ function applyStage() {
   resetView();
   redrawLayout();
 }
+// Layers in the editor: a group that is hidden is not drawn and cannot be selected or moved
+// by accident. Nothing about the layout itself changes.
+const LAYERS = [['light', 'Lights'], ['stage', 'Stage'], ['truss', 'Truss'], ['gear', 'Gear']];
+const hiddenLayers = new Set();
+const layerOf = (kind, item) => (kind === 'object' ? (ASSETS.find((a) => a.type === item.type) || { group: 'stage' }).group : 'light');
+const seen = (kind) => work[kind + 's'].filter((item) => !hiddenLayers.has(layerOf(kind, item)));
 // With snapping on, lights and objects land on a 5 cm grid and turn in steps of 15 degrees.
 let snapOn = true;
 const snapTo = (v) => (snapOn ? Math.round(v / 5) * 5 : Math.round(v));
@@ -1596,7 +1658,9 @@ function enterLayout() {
   redrawLayout();
 }
 function redrawLayout() {
-  drawFixtures(work.leds, work.spots, work.sel, work.sides, work.faces, work.customs, work.kinds, work.objects);
+  work.sel = work.sel.filter((one) => { const item = itemOf(one); return item && !hiddenLayers.has(layerOf(one.kind, item)); });
+  drawFixtures(seen('led'), seen('spot'), work.sel, seen('side'), seen('face'), seen('custom'), work.kinds, seen('object'));
+  each('#layout-layers .btn', (b) => b.classList.toggle('active', !hiddenLayers.has(b.dataset.layer)));
   renderKinds();
   const item = pickedItem(), many = work.sel.length;
   $('layout-picked').hidden = !many;
@@ -1621,6 +1685,7 @@ function redrawLayout() {
     if (lit) {
       fill('obj-name', item.name || ''); fill('obj-z', metres(heightOf(item)));
       fill('fix-pan', item.pan || 0); fill('fix-tilt', item.tilt || 0); fill('fix-beam', item.beam || (fx ? fx.beam : 30));
+      fill('fix-uni', item.uni || ''); fill('fix-addr', item.addr || ''); fill('fix-ch', channelsOf(item, work.kinds));
       const on = item.on && work.objects.find((o) => o.id === item.on);
       $('fix-mount').textContent = on ? `Mounted on ${on.name}. Drag it off to free it.` : fx ? 'Drag it onto truss, a bar or a stand to mount it.' : '';
       $('fix-mount').hidden = !on && !fx;
@@ -1671,6 +1736,7 @@ function layoutDrag(e) {
     const rot = ((Math.round(to / step) * step) % 360 + 360) % 360;
     if (rot === (turning.item[turning.key] || 0)) return;
     if (!turning.kept) { turning.kept = true; layoutKeep(); }
+    if (turning.key === 'rot') swing(turning.item, rot - (turning.item.rot || 0));
     turning.item[turning.key] = rot;
     return redrawLayout();
   }
@@ -1678,7 +1744,7 @@ function layoutDrag(e) {
     const from = boxing.start, r = { x: Math.min(p.x, from.x), y: Math.min(p.y, from.y), w: Math.abs(p.x - from.x), h: Math.abs(p.y - from.y) };
     const inside = (it) => it.x >= r.x && it.x <= r.x + r.w && it.y >= r.y && it.y <= r.y + r.h;
     work.sel = [...boxing.had];
-    for (const kind of KINDS_OF_LIGHT) for (const it of work[kind + 's']) if (inside(it) && !isSelected(kind, it.id)) work.sel.push({ kind, id: it.id });
+    for (const kind of KINDS_OF_LIGHT) for (const it of seen(kind)) if (inside(it) && !isSelected(kind, it.id)) work.sel.push({ kind, id: it.id });
     redrawLayout();                                            // (this redraws the fixtures; the box is drawn after)
     boxing.rect = el('rect', { class: 'box', x: r.x, y: r.y, width: r.w, height: r.h }, null, planEls.fixtureLayer);
     return;
@@ -1696,6 +1762,15 @@ function layoutDrag(e) {
   }
   if (alone.length === 1 && alone[0].kind === 'custom') mountUp(alone[0].item);
   redrawLayout();
+}
+// A piece that turns takes the lights mounted on it round with it.
+function swing(piece, by) {
+  const a = by * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
+  for (const light of work.customs) if (light.on === piece.id) {
+    const dx = light.x - piece.x, dy = light.y - piece.y;
+    light.x = Math.round(piece.x + dx * cos - dy * sin); light.y = Math.round(piece.y + dx * sin + dy * cos);
+    light.pan = (((light.pan || 0) + by) % 360 + 360) % 360;
+  }
 }
 // A library light dragged over truss, a bar or a stand is mounted on it: it hangs just under a
 // horizontal piece, or sits on top of an upright one, and from then on moves when the piece
@@ -1745,7 +1820,7 @@ function layoutClip() {
 const clipOf = () => selected().map(({ kind, item }) => {
   const one = { kind, x: item.x, y: item.y, of: item.kind };
   if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h };
-  if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam']) if (item[key] != null) one.more[key] = item[key]; }
+  if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'ch']) if (item[key] != null) one.more[key] = item[key]; }
   return one;
 });
 function layoutCopy() {
@@ -1814,7 +1889,7 @@ function layoutKey(e) {
   else if (cmd && key === 'd') layoutDuplicate();
   else if (cmd && key === 'z') (e.shiftKey ? layoutRedo : layoutUndo)();
   else if (cmd && key === 'y') layoutRedo();
-  else if (cmd && key === 'a') { work.sel = KINDS_OF_LIGHT.flatMap((kind) => work[kind + 's'].map((it) => ({ kind, id: it.id }))); redrawLayout(); }
+  else if (cmd && key === 'a') { work.sel = KINDS_OF_LIGHT.flatMap((kind) => seen(kind).map((it) => ({ kind, id: it.id }))); redrawLayout(); }
   else return;
   e.preventDefault();
 }
@@ -2594,6 +2669,19 @@ function drawFront(D) {
     ctx.fillStyle = g; ctx.fillRect(0, 0, FW, HORIZON);
   }
   ctx.fillStyle = '#0b0b10'; ctx.fillRect(0, HORIZON, FW, FLOOR_Y - HORIZON);
+  // Stage objects that stand on the stage, as plain shapes seen from the front, furthest first
+  for (const o of FRONT_OBJECTS) {
+    const sc = depthScale(o.z3), x = frontX(o.x3, o.z3), half = o.across * 96 * FIT.x * sc / 2, base = floorY(o.z3) - (o.z || 0) * PX * sc, tall = Math.max(2, o.h * PX * sc);
+    if (o.look === 'truss' || o.look === 'tower' || o.look === 'stand' || o.look === 'pipe') {
+      ctx.strokeStyle = '#3a3a44'; ctx.lineWidth = 1;
+      ctx.strokeRect(x - Math.max(half, 1), base - tall, Math.max(half, 1) * 2, tall);
+      if (o.look === 'truss') { ctx.beginPath(); for (let k = -half; k < half; k += tall * 2) { ctx.moveTo(x + k, base); ctx.lineTo(Math.min(x + half, x + k + tall), base - tall); ctx.lineTo(Math.min(x + half, x + k + tall * 2), base); } ctx.stroke(); }
+    } else {
+      ctx.fillStyle = { screen: '#141c26', curtain: '#1c0e11', seats: '#15151b' }[o.look] || '#18181e';
+      ctx.fillRect(x - half, base - tall, half * 2, tall);
+      ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x - half, base - tall, half * 2, 1.5);        // a lit top edge
+    }
+  }
 
   hctx.setTransform(1 / SOFT, 0, 0, 1 / SOFT, 0, 0);
   hctx.globalCompositeOperation = 'source-over';

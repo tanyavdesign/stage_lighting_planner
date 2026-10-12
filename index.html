@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121756">
+<link rel="stylesheet" href="style.css?v=202610121833">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -309,6 +309,11 @@
               <label class="num" title="How Wide the Beam Is, in Degrees"><span>Beam</span><input id="fix-beam" type="number" min="1" max="120" step="1"></label>
             </div>
             <p class="hint note lit-only" id="fix-mount"></p>
+            <div class="line nums lit-only">
+              <label class="num" title="DMX Universe"><span>Universe</span><input id="fix-uni" type="number" min="1" max="64" step="1"></label>
+              <label class="num" title="DMX Start Address, 1 to 512"><span>Address</span><input id="fix-addr" type="number" min="1" max="512" step="1"></label>
+              <label class="num" title="How Many DMX Channels It Uses. Type the Real Fixture's Count"><span>Channels</span><input id="fix-ch" type="number" min="1" max="64" step="1"></label>
+            </div>
           </div>
           <div class="line">
             <button class="btn" id="layout-dup">Duplicate</button>
@@ -344,6 +349,7 @@
       </div>
       <div class="group">
         <div class="sec-head"><h3>Library</h3><span class="count">Generic, Not Real Models</span></div>
+        <div class="line"><span class="lbl">Show</span><div class="seg" id="layout-layers"></div></div>
         <div class="line"><div class="seg" id="lib-tabs"></div></div>
         <div id="lib-list"></div>
         <p class="hint note">Tap one to add it. Truss ends click together when dragged close, and lights mount on truss, bars and stands when dragged onto them.</p>
@@ -367,6 +373,10 @@
           <button class="btn primary" id="layout-done">Done</button>
           <button class="btn" id="layout-cancel">Cancel</button>
           <button class="btn" id="layout-template">Reset to Saved Layout</button>
+        </div>
+        <div class="line">
+          <button class="btn" id="layout-patch" title="Give Every Library Light a DMX Address, in Order">Patch All</button>
+          <button class="btn" id="layout-list" title="A Spreadsheet of Every Light and Object: Position, Height, Aim and Patch">Download Fixture List</button>
         </div>
       </div>
       <div class="group" id="layout-keep">
@@ -523,6 +533,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121756"></script>
+<script src="app.js?v=202610121833"></script>
 </body>
 </html>
