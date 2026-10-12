@@ -169,6 +169,17 @@ if (!projects.some((p) => p.id === currentId)) currentId = null;
 const currentProject = () => projects.find((p) => p.id === currentId);
 const saveProjects = () => raw.set(PROJECTS_KEY, projects);
 
+// Stage templates: where the LEDs and spotlights sit when a project starts. One is built
+// in; the rest are saved from the layout editor and kept on this device.
+const TEMPLATES_KEY = 'slp-templates-v1';
+const BUILTIN = { id: 'kdt-tb-ucc', name: TEMPLATE, builtin: true, get layout() { return templateLayout(); } };
+const SCRATCH = { id: 'blank', name: 'Blank stage', layout: { leds: [], spots: [] } };
+let templates = raw.get(TEMPLATES_KEY, []);
+const saveTemplates = () => raw.set(TEMPLATES_KEY, templates);
+const findTemplate = (id) => (id === SCRATCH.id ? SCRATCH : templates.find((t) => t.id === id) || BUILTIN);
+const copyLayout = (layout) => ({ leds: layout.leds.map(({ id, x, y }) => ({ id, x, y })), spots: layout.spots.map(({ id, x, y }) => ({ id, x, y })) });
+const templateName = () => (currentProject() && currentProject().template) || TEMPLATE;
+
 // The rest of the app reads and writes through `store`. Project data goes to the open
 // project (and nowhere when the project list is showing); anything else is app-wide.
 const store = {
@@ -227,8 +238,8 @@ const selection = new Set();
 // Line icons, drawn on a 16 x 16 grid with a thin stroke
 const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
-  // a small "back" arrow beside one spotlight beam: the way back to the project list
-  back: '<path d="M5 4.5 2 8l3 3.5M13.6 2.5h2.8l2.6 9.5a4 1.5 0 0 1-8 0zM11 12a4 1.5 0 0 1 8 0"/>',
+  back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
+  close: '<path d="M4 4l8 8M12 4l-8 8"/>',
   play: '<path d="M5 3.2v9.6L12.5 8z"/>',
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
   prev: '<path d="M4 3.5v9M12 3.5 6 8l6 4.5z"/>',
@@ -244,7 +255,7 @@ const ICONS = {
   panelLeft: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/>',
   panelRight: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M9.5 3v10"/>',
 };
-const svgIcon = (name) => `<svg viewBox="0 0 ${name === 'back' ? 22 : 16} 16">${ICONS[name]}</svg>`;      // `back` is wider
+const svgIcon = (name) => `<svg viewBox="0 0 16 16">${ICONS[name]}</svg>`;
 const BLANK = blankLook();
 
 // `follow` is true while the cue timeline drives the lights; a manual edit turns it
@@ -836,10 +847,19 @@ function buildControls() {
   $('layout-done').addEventListener('click', layoutDone);
   $('layout-cancel').addEventListener('click', () => location.reload());
   $('layout-template').addEventListener('click', () => {
-    const template = templateLayout(), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
+    const template = copyLayout(findTemplate(currentProject() && currentProject().templateId).layout), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
     const keep = (list) => list.map((it) => (had.has(it.id) ? Object.assign({ was: it.id }, it) : it));
     work = { leds: keep(template.leds), spots: keep(template.spots), picked: null };
     redrawLayout();
+  });
+  // Keep the layout being edited as a template for new projects.
+  $('layout-save-tpl').addEventListener('click', () => {
+    const field = $('layout-tpl-name'), name = field.value.trim();
+    if (!name) { field.focus(); return toast('Give the template a name first.', 2500); }
+    templates.unshift({ id: 't' + newId(), name, layout: copyLayout(work), created: Date.now() });
+    saveTemplates();
+    field.value = '';
+    toast(`Saved "${name}" to My templates.`, 3000);
   });
   $('undo').addEventListener('click', () => stepHistory(history.undo, history.redo));
   $('redo').addEventListener('click', () => stepHistory(history.redo, history.undo));
@@ -2063,7 +2083,7 @@ function fileStem() {
 }
 
 function exportShow() {
-  const blob = new Blob([JSON.stringify({ version: 1, projectName: show.projectName || '', template: TEMPLATE, layout, look: state, cues: show.cues, trackName: show.trackName }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ version: 1, projectName: show.projectName || '', template: templateName(), layout, look: state, cues: show.cues, trackName: show.trackName }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = fileStem() + ' - lighting show.json';
   a.click();
@@ -2387,7 +2407,7 @@ function drawOverview(c, rows, pageNo, pageCount) {
   c.fillStyle = '#202124'; c.textAlign = 'left'; pdfFont(c, 46, 600);
   c.fillText('Cue overview', EDGE, EDGE + 44);
   c.fillStyle = '#5f6368'; c.textAlign = 'right'; pdfFont(c, 23);
-  c.fillText((show.projectName ? show.projectName + '   |   ' : '') + TEMPLATE + `   |   overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
+  c.fillText((show.projectName ? show.projectName + '   |   ' : '') + templateName() + `   |   overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
   c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
 
   c.textAlign = 'left'; c.fillStyle = '#5f6368'; pdfFont(c, 19, 600);
@@ -2492,7 +2512,7 @@ async function exportPdf() {
         like: similar[i] && { index: similar[i].index, title: likeTitle(i), lines: similar[i].lines },
         title: show.cues.length ? cueLabel(cue) : cue.name,
         meta: (show.projectName ? show.projectName + '   |   ' : '') + (show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
-        metaLong: (show.projectName ? show.projectName + '   |   ' : '') + TEMPLATE + (show.cues.length ? `   |   ${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
+        metaLong: (show.projectName ? show.projectName + '   |   ' : '') + templateName() + (show.cues.length ? `   |   ${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
         map: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planSvgText(cue.look)),
         shot: front.toDataURL('image/jpeg', 0.92),
       };
@@ -2566,13 +2586,14 @@ function goHome() {
   try { sessionStorage.removeItem('slp-open'); } catch (e) { /* no session storage */ }
   location.reload();
 }
-function createProject(name, data) {      // data: an exported show to start from, or nothing
-  const id = newId();
+function createProject(name, data, template) {     // data: an exported show to start from; template: the stage to start on
+  const id = newId(), stage = template || BUILTIN;
   const cues = data && Array.isArray(data.cues) ? data.cues : [];
   raw.set(projectKey(LOOK_KEY, id), (data && data.look) || blankLook());
   raw.set(projectKey(SHOW_KEY, id), { cues, trackName: '' });
   if (data && data.layout && Array.isArray(data.layout.leds)) raw.set(projectKey(LAYOUT_KEY, id), data.layout);
-  projects.unshift({ id, name: name || 'Untitled project', template: TEMPLATE, created: Date.now(), updated: Date.now(), cues: cues.length });
+  else if (!stage.builtin) raw.set(projectKey(LAYOUT_KEY, id), copyLayout(stage.layout));
+  projects.unshift({ id, name: name || 'Untitled project', template: (data && data.template) || stage.name, templateId: stage.id, created: Date.now(), updated: Date.now(), cues: cues.length });
   saveProjects();
   return id;
 }
@@ -2657,14 +2678,104 @@ function renderHome() {
   }
 }
 
+// A small plan of a template's stage for its card.
+function templatePreview(layout) {
+  const leds = layout.leds.map((l) => `<rect class="tp-led" x="${l.x - 17}" y="${l.y - 9}" width="34" height="18" rx="9"/>`).join('');
+  const spots = layout.spots.map((sp) => `<circle class="tp-spot" cx="${sp.x}" cy="${sp.y}" r="11"/>`).join('');
+  return `<svg viewBox="425 150 1150 760"><rect class="tp-stage" x="${STAGE.x0}" y="${STAGE.y0}" width="${STAGE.x1 - STAGE.x0}" height="${STAGE.y1 - STAGE.y0}" rx="10"/>`
+    + `<rect class="tp-cyc" x="${ZONES.x}" y="${STAGE.y0 - 16}" width="${ZONES.w * 3}" height="12" rx="5"/>${leds}${spots}</svg>`;
+}
+const countText = (layout) => `${layout.leds.length} LED${layout.leds.length === 1 ? '' : 's'} · ${layout.spots.length} spotlight${layout.spots.length === 1 ? '' : 's'}`;
+
+// New project: pick the stage to start on. The same window is where saved templates are
+// renamed, copied and deleted.
+let tplTab = 'all', tplPicked = null;
+function renderTemplates() {
+  const grid = $('tpl-grid');
+  grid.textContent = '';
+  each('[data-tpl-tab]', (b) => b.classList.toggle('active', b.dataset.tplTab === tplTab));
+  const shown = [
+    ...(tplTab === 'all' ? [SCRATCH] : []),
+    ...(tplTab !== 'mine' ? [BUILTIN] : []),
+    ...(tplTab !== 'builtin' ? templates : []),
+  ];
+  if (tplPicked && !shown.includes(tplPicked)) tplPicked = null;
+  $('tpl-picked').textContent = tplPicked ? (tplPicked === SCRATCH ? 'Starting from scratch' : 'Template: ' + tplPicked.name) : 'Pick a stage to start on';
+  for (const tpl of shown) {
+    const card = document.createElement('div');
+    card.className = 'tpl-card' + (tpl === tplPicked ? ' picked' : '');
+    const pick = button(card, '', 'tpl-pick' + (tpl === SCRATCH ? ' scratch' : ''), () => { tplPicked = tpl; renderTemplates(); });
+    pick.innerHTML = tpl === SCRATCH ? svgIcon('plus') : templatePreview(tpl.layout);
+    pick.title = tpl === SCRATCH ? 'Start from scratch' : tpl.name;
+    pick.addEventListener('dblclick', () => { tplPicked = tpl; newFromTemplate(); });
+    const row = document.createElement('div');
+    row.className = 'tpl-row';
+    const info = document.createElement('div');
+    info.className = 'tpl-info';
+    const name = document.createElement('div');
+    name.className = 'tpl-name'; name.textContent = tpl === SCRATCH ? 'Start from scratch' : tpl.name;
+    const meta = document.createElement('div');
+    meta.className = 'hint';
+    meta.textContent = tpl === SCRATCH ? 'An empty stage' : (tpl.builtin ? 'Built-in · ' : '') + countText(tpl.layout);
+    info.appendChild(name); info.appendChild(meta); row.appendChild(info);
+    const act = (icon, label, onClick) => {
+      const b = button(row, '', 'btn icon', onClick);
+      b.innerHTML = svgIcon(icon); b.title = label; b.setAttribute('aria-label', label);
+      return b;
+    };
+    if (tpl !== SCRATCH && !tpl.builtin) {
+      act('pencil', 'Rename', () => {
+        const field = document.createElement('input');
+        field.type = 'text'; field.value = tpl.name; field.maxLength = 60; field.className = 'rename';
+        name.replaceWith(field);
+        field.focus(); field.select();
+        field.addEventListener('blur', () => { tpl.name = field.value.trim() || tpl.name; saveTemplates(); renderTemplates(); });
+        field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
+      });
+    }
+    if (tpl !== SCRATCH) {
+      act('copy', 'Duplicate', () => {
+        templates.unshift({ id: 't' + newId(), name: tpl.name + ' copy', layout: copyLayout(tpl.layout), created: Date.now() });
+        saveTemplates(); renderTemplates();
+      });
+    }
+    if (tpl !== SCRATCH && !tpl.builtin) {
+      // two taps, like deleting a project
+      const del = act('trash', 'Delete', () => {
+        if (del.classList.contains('armed')) {
+          templates = templates.filter((t) => t !== tpl);
+          saveTemplates();
+          return renderTemplates();
+        }
+        del.classList.add('armed'); del.textContent = 'Delete?';
+        setTimeout(() => { if (del.isConnected) renderTemplates(); }, 3500);
+      });
+    }
+    card.appendChild(row);
+    grid.appendChild(card);
+  }
+  if (tplTab === 'mine' && !templates.length) {
+    const none = document.createElement('p');
+    none.className = 'hint tpl-none';
+    none.textContent = 'No templates of your own yet. Open a project, choose Edit layout in the menu, arrange the lights, then press Save as template.';
+    grid.appendChild(none);
+  }
+}
+function newFromTemplate() {
+  if (!tplPicked) return toast('Pick a template, or Start from scratch.', 2500);
+  openProject(createProject($('new-name').value.trim(), null, tplPicked));
+}
+
 function buildHome() {
-  const form = $('new-form');
-  $('new-project').addEventListener('click', () => { form.hidden = false; $('new-name').focus(); });
-  $('new-cancel').addEventListener('click', () => { form.hidden = true; });
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    openProject(createProject($('new-name').value.trim()));
-  });
+  const dialog = $('tpl');
+  const close = () => { dialog.hidden = true; };
+  $('tpl-close').innerHTML = svgIcon('close');
+  $('new-project').addEventListener('click', () => { tplPicked = null; dialog.hidden = false; renderTemplates(); $('new-name').value = ''; });
+  $('tpl-close').addEventListener('click', close);
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !/^INPUT$/.test(e.target.tagName)) close(); });
+  each('[data-tpl-tab]', (b) => b.addEventListener('click', () => { tplTab = b.dataset.tplTab; renderTemplates(); }));
+  $('tpl-foot').addEventListener('submit', (e) => { e.preventDefault(); newFromTemplate(); });
   $('home-import').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';

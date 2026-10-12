@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121221">
+<link rel="stylesheet" href="style.css?v=202610121227">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -28,15 +28,28 @@
       <label class="btn">Import<input id="home-import" type="file" accept=".json,application/json" hidden></label>
       <button id="new-project" class="btn primary">New project</button>
     </div>
-    <form id="new-form" class="new-form" hidden>
-      <label>Name <input id="new-name" type="text" placeholder="Project name" maxlength="60" autocomplete="off"></label>
-      <label>Template <select id="new-template"><option>KDT TB UCC Layout</option></select></label>
-      <button class="btn primary" type="submit">Create</button>
-      <button class="btn" type="button" id="new-cancel">Cancel</button>
-    </form>
     <h2 class="home-title">Projects</h2>
     <div id="project-list" class="project-list"></div>
     <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
+  </div>
+  <div id="tpl" class="tpl-back" hidden>
+    <div class="tpl" role="dialog" aria-label="New project">
+      <div class="tpl-side">
+        <h2>Templates</h2>
+        <button class="tpl-tab" data-tpl-tab="all">All templates</button>
+        <button class="tpl-tab" data-tpl-tab="builtin">Built-in</button>
+        <button class="tpl-tab" data-tpl-tab="mine">My templates</button>
+      </div>
+      <div class="tpl-main">
+        <div class="tpl-head"><h2>New project</h2><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+        <div id="tpl-grid" class="tpl-grid"></div>
+        <form id="tpl-foot" class="tpl-foot">
+          <input id="new-name" type="text" placeholder="Project name" maxlength="60" autocomplete="off">
+          <span id="tpl-picked" class="hint"></span>
+          <button class="btn primary" type="submit">Create project</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -124,6 +137,14 @@
           <button class="btn primary" id="layout-done">Done</button>
           <button class="btn" id="layout-cancel">Cancel</button>
           <button class="btn" id="layout-template">Reset to template</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="sec-head"><h3>Save as template</h3></div>
+        <p class="hint note">Keep this layout to start new projects from.</p>
+        <div class="line">
+          <input id="layout-tpl-name" type="text" placeholder="Template name" maxlength="60" autocomplete="off">
+          <button class="btn" id="layout-save-tpl">Save</button>
         </div>
       </div>
     </div>
@@ -238,6 +259,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121221"></script>
+<script src="app.js?v=202610121227"></script>
 </body>
 </html>
