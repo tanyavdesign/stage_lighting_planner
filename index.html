@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121643">
+<link rel="stylesheet" href="style.css?v=202610121644">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -61,8 +61,8 @@
         <button id="import-btn" class="btn">Import<span id="import-arrow" class="btn-arrow"></span></button>
         <input id="home-import" type="file" multiple hidden>
         <div id="import-menu" class="menu" hidden>
-          <button data-import="item">Item</button>
-          <button data-import="project">Show</button>
+          <button data-import="item" data-icon="file">Item</button>
+          <button data-import="project" data-icon="folder">Show</button>
         </div>
       </div>
       <button id="draft-new" class="btn">New Item</button>
@@ -70,7 +70,7 @@
       <div id="new-item-wrap" class="split" hidden>
         <button id="new-item" class="btn primary">New Item</button>
         <button id="new-item-more" class="btn primary icon" aria-label="More ways to add items" title="More ways to add items"></button>
-        <div id="new-item-menu" class="menu" hidden><button id="new-item-many">Add Several Items…</button></div>
+        <div id="new-item-menu" class="menu" hidden><button id="new-item-many" data-icon="plus">Add Several Items…</button></div>
       </div>
     </div>
     <div id="drafts">
@@ -84,9 +84,9 @@
       <div id="home-settings" class="drop home-settings" hidden>
         <button id="home-settings-btn" class="btn">Settings<span id="home-settings-arrow" class="btn-arrow"></span></button>
         <div id="home-settings-menu" class="menu" hidden>
-          <button data-go="home-showset">Show Settings</button>
-          <button data-go="home-layout">Edit Stage Layout</button>
-          <button data-go="home-lights">Light Settings</button>
+          <button data-go="home-showset" data-icon="clock">Show Settings</button>
+          <button data-go="home-layout" data-icon="layout">Edit Stage Layout</button>
+          <button data-go="home-lights" data-icon="sliders">Light Settings</button>
         </div>
       </div>
       <button id="home-showset" class="btn" hidden>Show Settings</button>
@@ -219,13 +219,13 @@
           <button id="people" class="btn icon" data-icon="person" aria-label="Show or hide the people"></button>
           <button id="theme" class="btn icon" aria-label="Light or dark mode"></button>
         </div>
-        <button id="export-pdf">Export PDF</button>
-        <button id="export">Download Item</button>
-        <label>Replace From File<input id="import" type="file" hidden></label>
+        <button id="export-pdf" data-icon="file">Export PDF</button>
+        <button id="export" data-icon="download">Download Item</button>
+        <label data-icon="upload">Replace From File<input id="import" type="file" hidden></label>
         <hr>
-        <button id="reset">Clear Lights</button>
+        <button id="reset" data-icon="close">Clear Lights</button>
         <hr>
-        <button id="tour-editor">Show the Tour</button>
+        <button id="tour-editor" data-icon="help">Show the Tour</button>
       </div>
     </div>
     <span id="bar-name" class="bar-name"><span id="bar-project" class="bar-project"></span><span id="bar-item"></span></span>
@@ -459,6 +459,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121643"></script>
+<script src="app.js?v=202610121644"></script>
 </body>
 </html>

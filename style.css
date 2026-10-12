@@ -222,10 +222,12 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
   top: calc(100% + 4px);
   z-index: 20;
   min-width: 200px;
-  padding: 8px;
+  padding: 6px;
+  gap: 1px;
+  border: 1px solid var(--menu-line);
   background: var(--menu-bg);
   color: var(--menu-text);
-  border-radius: 13px;
+  border-radius: 10px;
   box-shadow: var(--float);
   display: flex;
   flex-direction: column;
@@ -243,8 +245,9 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
   font: inherit;
   cursor: pointer;
 }
+.menu > button, .menu > label { min-height: 32px; padding: 0 10px 0 8px; white-space: nowrap; }
 .menu > button:hover, .menu > label:hover { background: var(--accent); color: #fff; }
-.menu > button > svg { flex: 0 0 16px; width: 16px; height: 16px; margin-right: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.menu > button > svg, .menu > label > svg { flex: 0 0 16px; width: 16px; height: 16px; margin-right: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 /* view switches as a row of icons: watch mode, people, light or dark */
 .menu-icons { display: flex; gap: 4px; margin-bottom: 8px; }
 .menu-icons .btn.icon { flex: 1; height: 32px; color: inherit; background: var(--menu-soft); }
