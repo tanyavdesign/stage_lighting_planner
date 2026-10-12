@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610122355">
+<link rel="stylesheet" href="style.css?v=202610122358">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -348,7 +348,14 @@
         </div>
       </div>
       <div class="group">
-        <div class="sec-head"><h3>Library</h3><button class="btn icon" id="lib-eye" data-icon="eye" title="Show or Hide This Group on the Plan While Editing"></button></div>
+        <div class="sec-head">
+          <h3>Library</h3>
+          <div class="seg tools">
+            <button class="btn icon" id="lib-search" data-icon="search" title="Search the Library"></button>
+            <button class="btn icon" id="lib-eye" data-icon="eye" title="Show or Hide This Group on the Plan While Editing"></button>
+          </div>
+        </div>
+        <div class="line"><input id="lib-find" type="text" placeholder="Search" autocomplete="off" hidden></div>
         <div class="line"><div class="seg" id="lib-tabs"></div></div>
         <div id="lib-list"></div>
         <div id="lib-more" hidden>
@@ -534,6 +541,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610122355"></script>
+<script src="app.js?v=202610122358"></script>
 </body>
 </html>

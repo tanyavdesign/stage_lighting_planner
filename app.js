@@ -626,6 +626,7 @@ const ICONS = {
   paste: '<rect x="3.5" y="3.5" width="9" height="10.5" rx="1.5"/><path d="M6 3.5V2.2h4v1.3M6 7.5h4M6 10h4"/>',
   magnet: '<path d="M3.5 2.5h3v6a1.5 1.5 0 0 0 3 0v-6h3v6a4.5 4.5 0 0 1-9 0zM3.5 5.2h3M9.5 5.2h3"/>',
   dots: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2.2" stroke-linecap="round"/>',
+  search: '<circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 13.5 13.5"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -1447,31 +1448,53 @@ function buildControls() {
   $('layout-add-face').addEventListener('click', () => layoutAdd('face'));
   // The library: a tab for each group, and a button for each kind of object in it
   let libGroup = ASSET_GROUPS[0][0];
-  const renderLibrary = () => {
-    $('lib-tabs').textContent = ''; $('lib-list').textContent = '';
-    for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup ? ' active' : ''), () => { libGroup = id; renderLibrary(); if (layoutMode) redrawLayout(); }).dataset.group = id;
-    $('lib-more').hidden = libGroup !== 'light';          // lights of your own are listed under the library's lights
-    if (libGroup === 'light') for (const f of FIXTURES) {
-      const b = button($('lib-list'), '', 'btn lib', () => {
-        let kind = work.kinds.find((k) => k.fixture === f.type);            // every light of one fixture shares a kind, made the first time
-        if (!kind) work.kinds.push(kind = { id: 'k' + newId(), name: f.name, shape: f.shape, fixture: f.type });
-        layoutAdd('custom', kind.id);
-      });
-      b.innerHTML = `<b>${f.name}</b>`;
-      b.title = `${f.tip}. Lighting People Call It a ${f.was}`;
-    }
-    // the four kinds every layout began with sit in the same list: they have the effects and
-    // aiming zones, but hang at one height and cannot be tilted
-    if (libGroup === 'light') for (const [kind, name, tip] of [['led', 'LED', 'A color-changing light on the rig, with effects and aiming zones'], ['spot', 'Spotlight', 'A fixed spotlight on the rig, on or off'], ['side', 'Side Light', 'A light in the wings that shines across the stage'], ['face', 'Face Light', 'A light in front of the stage that lights faces']]) {
-      const b = button($('lib-list'), '', 'btn lib', () => layoutAdd(kind));
-      b.innerHTML = `<b>${name}</b>`; b.title = tip;
-    }
-    for (const a of ASSETS.filter((one) => one.group === libGroup)) {
-      const b = button($('lib-list'), '', 'btn lib', () => layoutAdd('object', a.type));
-      b.innerHTML = `<b>${a.name}</b><span>${a.note || (a.look === 'screen' ? `${a.w} m Wide, ${a.h} m Tall` : `${a.w} × ${a.d} m`)}</span>`;
-      b.title = `Add ${a.name}${a.note ? ' ' + a.note : ''}`;
-    }
+  // A row's icon is the symbol the light or object has on the plan, drawn small.
+  const symbol = (inner) => `<svg class="lib-icon" viewBox="-30 -30 60 60">${inner}</svg>`;
+  const lightIcon = (shape) => symbol(FIXTURE_PATHS[shape] ? `<path d="${FIXTURE_PATHS[shape]}" fill-rule="evenodd"/>` : '<circle r="17"/>');
+  const CLASSIC_ICONS = { led: '<rect x="-23" y="-13" width="46" height="26" rx="13"/>', spot: '<circle r="17"/>', side: '<polygon points="-22,0 20,-16 20,16"/>', face: '<rect x="-8" y="-19" width="16" height="38" rx="8"/>' };
+  const assetIcon = (a) => {
+    const tall = a.look === 'screen' || a.look === 'flat' || a.look === 'curtain' ? a.h : a.d, k = 44 / Math.max(a.w, tall), w = Math.max(6, a.w * k), h = Math.max(6, tall * k);
+    const lines = a.look === 'seats' ? `<path d="M${-w / 2},${-h / 6}h${w}M${-w / 2},${h / 6}h${w}"/>` : a.look === 'screen' ? `<path d="M${-w / 2},${h / 2}L${w / 2},${-h / 2}" opacity=".5"/>` : '';
+    return symbol(`<rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="3"/>${lines}`);
   };
+  // Everything the library offers, the most used first in each group.
+  const LIGHT_ORDER = ['led', 'spot', 'side', 'face', 'par', 'mhspot', 'mhwash', 'profile', 'fresnel', 'cyc', 'batten', 'mhbeam', 'follow', 'blinder', 'strobe'];
+  const STAGE_ORDER = ['platform', 'riser', 'curtain', 'backdrop', 'stairs', 'wing', 'backstage', 'wall', 'ceiling', 'seats'];
+  const CLASSIC = [['led', 'LED', 'A color-changing light on the rig, with effects and aiming zones'], ['spot', 'Spotlight', 'A fixed spotlight on the rig, on or off'], ['side', 'Side Light', 'A light in the wings that shines across the stage'], ['face', 'Face Light', 'A light in front of the stage that lights faces']];
+  const byOrder = (order) => (a, b) => (order.indexOf(a.key) + 99) % 99 - (order.indexOf(b.key) + 99) % 99;
+  const entries = [
+    // the four kinds every layout began with: they have the effects and aiming zones, but hang at one height and cannot be tilted
+    ...CLASSIC.map(([kind, name, tip]) => ({ key: kind, group: 'light', name, words: name, icon: symbol(CLASSIC_ICONS[kind]), tip, add: () => layoutAdd(kind) })),
+    ...FIXTURES.map((f) => ({ key: f.type, group: 'light', name: f.name, words: f.name + ' ' + f.was, icon: lightIcon(f.shape), tip: `${f.tip}. Lighting People Call It a ${f.was}`, add: () => {
+      let kind = work.kinds.find((k) => k.fixture === f.type);            // every light of one fixture shares a kind, made the first time
+      if (!kind) work.kinds.push(kind = { id: 'k' + newId(), name: f.name, shape: f.shape, fixture: f.type });
+      layoutAdd('custom', kind.id);
+    } })),
+    ...ASSETS.filter((a) => a.group !== 'old').map((a) => ({ key: a.type, group: a.group, name: a.name, words: a.name, icon: assetIcon(a), note: a.note || (a.look === 'screen' ? `${a.w} × ${a.h} m` : `${a.w} × ${a.d} m`), tip: `Add ${a.name}`, add: () => layoutAdd('object', a.type) })),
+  ].sort(byOrder([...LIGHT_ORDER, ...STAGE_ORDER]));
+  const renderLibrary = () => {
+    const find = $('lib-find').value.trim().toLowerCase();
+    $('lib-tabs').textContent = ''; $('lib-list').textContent = '';
+    for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup && !find ? ' active' : ''), () => { libGroup = id; $('lib-find').value = ''; renderLibrary(); if (layoutMode) redrawLayout(); }).dataset.group = id;
+    $('lib-more').hidden = libGroup !== 'light' || !!find;          // lights of your own are listed under the library's lights
+    // searching looks through every tab at once
+    const shown = entries.filter((one) => (find ? one.words.toLowerCase().includes(find) : one.group === libGroup));
+    for (const one of shown) {
+      const b = button($('lib-list'), '', 'btn lib', one.add);
+      b.innerHTML = `${one.icon}<b>${one.name}</b>${one.note ? `<span>${one.note}</span>` : ''}`;
+      b.title = one.tip;
+    }
+    if (!shown.length) $('lib-list').innerHTML = '<p class="lib-none">Nothing by That Name</p>';
+  };
+  $('lib-search').addEventListener('click', () => {
+    const open = $('lib-find').hidden;
+    $('lib-find').hidden = !open; $('lib-find').value = '';
+    $('lib-search').classList.toggle('active', open);
+    renderLibrary();
+    if (open) $('lib-find').focus();
+    if (layoutMode) redrawLayout();
+  });
+  $('lib-find').addEventListener('input', renderLibrary);
   renderLibrary();
   $('layout-redo').addEventListener('click', layoutRedo);
   $('media-pick').addEventListener('click', () => $('media-file').click());

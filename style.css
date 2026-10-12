@@ -648,10 +648,15 @@ body.layout-mode .history { display: none; }
 .plan .join.met { fill: var(--accent); stroke: var(--accent); }
 .media-name { flex: 1 1 100%; min-width: 0; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; order: 3; }
 /* the object library */
-#lib-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
-.btn.lib { height: auto; padding: 6px 8px; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; line-height: 1.25; white-space: normal; }
-.btn.lib b { font-weight: 500; }
-.btn.lib span { font-size: 11px; color: var(--muted); }
+#lib-list { display: flex; flex-direction: column; gap: 1px; margin-top: 8px; max-height: 264px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
+.btn.lib { flex: 0 0 auto; height: 32px; padding: 0 8px; gap: 10px; justify-content: flex-start; text-align: left; border-color: transparent; background: none; }
+.btn.lib:hover { background: var(--hover); }
+.btn.lib b { font-weight: 400; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn.lib span { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+.lib-none { margin: 8px; font-size: 12px; color: var(--muted); }
+#layout-panel #lib-search.active { background: var(--accent-bg); color: var(--accent-text); }
+.lib-icon { flex: 0 0 20px; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linejoin: round; color: var(--muted); }
+.btn.lib:hover .lib-icon { color: var(--text); }
 .plan .obj.picked, .plan .fx:hover > .obj.picked { stroke: var(--accent); stroke-width: 4; }
 .plan text.obj-name { font-size: 13px; fill: var(--muted); }
 .plan .throw { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 5; fill: none; opacity: .7; pointer-events: none; }
