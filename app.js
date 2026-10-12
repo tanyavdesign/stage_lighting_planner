@@ -157,7 +157,7 @@ function classicSides() {
 const SHAPES = [['circle', 'Circle'], ['square', 'Square'], ['bar', 'Bar'], ['triangle', 'Triangle']];
 // (A library light placed while the library still used trade names takes its plain name.)
 const kindsOf = (layout) => {
-  for (const kind of layout.kinds || []) { const f = kind.fixture && FIXTURES.find((one) => one.type === kind.fixture); if (f && kind.name === f.was) kind.name = f.name; }
+  for (const kind of layout.kinds || []) { const f = kind.fixture && FIXTURES.find((one) => one.type === kind.fixture); if (f && (kind.name === f.was || kind.name === f.before)) kind.name = f.name; }
   return layout.kinds || [];
 };
 const customsOf = (layout) => layout.customs || [];
@@ -212,16 +212,18 @@ const ASSETS = [
 // drawn on the plan (shape), how wide its beam starts out in degrees (beam), where it starts
 // (z: metres above the stage floor; tilt: degrees away from straight down; pan: degrees
 // clockwise from pointing upstage), and how it is controlled until Light Settings says
-// otherwise. `moving` marks moving heads. A light from the library is a custom light whose
+// otherwise. `moving` marks the ones that start out as moving heads; any library light can be
+// switched to move or to stay still (`light.moves`), so the library lists each light once
+// (`gone` marks the separate moving versions it used to list). A light from the library is a custom light whose
 // kind remembers which fixture it is (`kind.fixture`), so cues, colours and the PDF treat it
 // like any other light. Real models can be added here later, with a maker and a model name.
 const FIXTURES = [
-  { type: 'profile', name: 'Sharp Spotlight', was: 'Profile Spot', tip: 'A hard-edged circle of light for one person or one area', shape: 'profile', beam: 26, z: 5, tilt: 0, pan: 0, control: 'onoff' },
+  { type: 'profile', name: 'Sharp Spotlight', was: 'Profile Spot', tip: 'A hard-edged circle of light for one person or one area. Switch on Moves to let it swing in every cue', shape: 'profile', beam: 26, z: 5, tilt: 0, pan: 0, control: 'onoff' },
   { type: 'fresnel', name: 'Soft Spotlight', was: 'Fresnel', tip: 'A soft-edged pool of light that blends into the ones beside it', shape: 'fresnel', beam: 40, z: 5, tilt: 0, pan: 0, control: 'onoff' },
-  { type: 'par', name: 'Color Flood Light', was: 'PAR', tip: 'Floods an area with color; the everyday stage light', shape: 'circle', beam: 30, z: 5, tilt: 0, pan: 0, control: 'rgb' },
-  { type: 'mhspot', name: 'Moving Spotlight', was: 'Moving Head Spot', tip: 'A sharp spotlight that can swing to a new place in every cue', shape: 'mover', beam: 20, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
-  { type: 'mhwash', name: 'Moving Flood Light', was: 'Moving Head Wash', tip: 'A soft, wide color light that can swing to a new place in every cue', shape: 'mover', beam: 45, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
-  { type: 'mhbeam', name: 'Moving Thin Beam', was: 'Moving Head Beam', tip: 'A pencil-thin, very bright beam that can swing in every cue', shape: 'mover', beam: 4, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'par', name: 'Color Flood Light', was: 'PAR', tip: 'Floods an area with color; the everyday stage light. Switch on Moves to let it swing in every cue', shape: 'circle', beam: 30, z: 5, tilt: 0, pan: 0, control: 'rgb' },
+  { type: 'mhspot', gone: true, name: 'Moving Spotlight', was: 'Moving Head Spot', tip: 'A sharp spotlight that can swing to a new place in every cue', shape: 'mover', beam: 20, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'mhwash', gone: true, name: 'Moving Flood Light', was: 'Moving Head Wash', tip: 'A soft, wide color light that can swing to a new place in every cue', shape: 'mover', beam: 45, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'mhbeam', name: 'Thin Beam', was: 'Moving Head Beam', before: 'Moving Thin Beam', tip: 'A pencil-thin, very bright beam; it moves unless you switch Moves off', shape: 'mover', beam: 4, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
   { type: 'batten', name: 'LED Light Bar', was: 'LED Batten', tip: 'A long bar of LEDs that colors a wall or the edge of the stage', shape: 'batten', beam: 60, z: 5, tilt: 0, pan: 0, control: 'rgb' },
   { type: 'follow', name: 'Hand-Steered Spotlight', was: 'Followspot', tip: 'A tight, bright spotlight a person steers from the back of the room', shape: 'follow', beam: 8, z: 3, tilt: 70, pan: 0, control: 'onoff', off: 'front' },
   { type: 'blinder', name: 'Audience Flash Light', was: 'Blinder', tip: 'Very bright lamps aimed at the audience for a big moment', shape: 'blinder', beam: 80, z: 5, tilt: 75, pan: 180, control: 'onoff' },
@@ -359,7 +361,7 @@ function useLayout(layout) {
   KINDS.push(...kindsOf(layout));
   for (const it of customsOf(layout)) if (KINDS.some((k) => k.id === it.kind)) {
     const fx = fixtureOf(KINDS.find((k) => k.id === it.kind));
-    CUSTOMS.push(Object.assign(metres(it), { kind: it.kind, z: it.z, pan: it.pan || 0, tilt: it.tilt || 0, beam: it.beam || (fx ? fx.beam : 30), name: it.name, fx, moving: !!(fx && fx.moving) }));
+    CUSTOMS.push(Object.assign(metres(it), { kind: it.kind, z: it.z, pan: it.pan || 0, tilt: it.tilt || 0, beam: it.beam || (fx ? fx.beam : 30), name: it.name, fx, moving: it.moves != null ? !!it.moves : !!(fx && fx.moving) }));
   }
 }
 const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
@@ -496,7 +498,7 @@ function copyLayout(layout) {
     out.kinds = layout.kinds.map(({ id, name, shape, fixture }) => (fixture ? { id, name, shape, fixture } : { id, name, shape }));
     out.customs = (layout.customs || []).map((light) => {
       const one = { id: light.id, kind: light.kind, x: light.x, y: light.y };
-      for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'on', 'uni', 'addr', 'ch']) if (light[key] != null && light[key] !== '') one[key] = light[key];     // only what was set
+      for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'on', 'uni', 'addr', 'ch', 'moves']) if (light[key] != null && light[key] !== '') one[key] = light[key];     // only what was set
       return one;
     });
   }
@@ -1369,25 +1371,26 @@ function buildControls() {
     line('Color').appendChild(swatches);
     // the lights these controls act on: the selected ones of this kind, or all of them
     const chosen = () => { const picked = mine().filter((light) => selCustom.has(light.id)); return picked.length ? picked : mine(); };
-    const slider = (label, key, min, max, unit, read, write) => {
+    const movers = () => chosen().filter((light) => light.moving);
+    const slider = (label, key, min, max, unit, read, write, who = chosen) => {
       const row = line(label), slide = document.createElement('input'), value = document.createElement('span');
       slide.type = 'range'; slide.min = min; slide.max = max; slide.step = 1; slide.className = 'white-slide'; slide.dataset.slide = key;
       value.className = 'slide-value';
       row.appendChild(slide); row.appendChild(value);
-      slide.read = () => { const first = chosen()[0]; if (first && document.activeElement !== slide) slide.value = read(first); value.textContent = Math.round(slide.value) + unit; };
-      slide.addEventListener('input', () => { for (const light of chosen()) write(light, +slide.value); value.textContent = Math.round(slide.value) + unit; });    // the previews follow while it is dragged
+      slide.read = () => { const first = who()[0]; if (first && document.activeElement !== slide) slide.value = read(first); value.textContent = Math.round(slide.value) + unit; };
+      slide.addEventListener('input', () => { for (const light of who()) write(light, +slide.value); value.textContent = Math.round(slide.value) + unit; });    // the previews follow while it is dragged
       slide.addEventListener('change', () => { slide.blur(); commit(); });
       return row;
     };
     slider('Intensity', 'dim', 0, 100, '%',
       (light) => Math.round((state.dim && state.dim[light.id] != null ? state.dim[light.id] : 1) * 100),
       (light, v) => { if (!state.dim) state.dim = {}; if (v >= 100) delete state.dim[light.id]; else state.dim[light.id] = v / 100; });
-    if (fixtureOf(kind) && fixtureOf(kind).moving) {
+    if (mine().some((light) => light.moving)) {
       const at = (light) => (state.point && state.point[light.id]) || { pan: light.pan, tilt: light.tilt };
       const set = (light, key, v) => { if (!state.point) state.point = {}; state.point[light.id] = Object.assign({}, at(light), { [key]: v }); };
-      slider('Pan', 'pan', 0, 359, '°', (light) => Math.round(at(light).pan), (light, v) => set(light, 'pan', v));
-      slider('Tilt', 'tilt', 0, 120, '°', (light) => Math.round(at(light).tilt), (light, v) => set(light, 'tilt', v));
-      slider('Zoom', 'beam', 2, 60, '°', (light) => Math.round(at(light).beam || light.beam), (light, v) => set(light, 'beam', v));
+      slider('Pan', 'pan', 0, 359, '°', (light) => Math.round(at(light).pan), (light, v) => set(light, 'pan', v), movers);
+      slider('Tilt', 'tilt', 0, 120, '°', (light) => Math.round(at(light).tilt), (light, v) => set(light, 'tilt', v), movers);
+      slider('Zoom', 'beam', 2, 60, '°', (light) => Math.round(at(light).beam || light.beam), (light, v) => set(light, 'beam', v), movers);
       // Point At: the next tap on the plan is where these lights aim
       const row = line('Aim'), go = button(row, 'Point at a Spot on the Plan', 'btn', () => {
         if (document.body.classList.toggle('pointing')) {
@@ -1401,7 +1404,7 @@ function buildControls() {
         document.body.classList.remove('pointing');
         const p = svgPoint(e);
         if (!state.point) state.point = {};
-        for (const light of chosen()) {
+        for (const light of movers()) {
           const dx = (p.x - light.x) / UNIT, dy = (p.y - light.y) / UNIT;
           state.point[light.id] = { beam: at(light).beam, pan: Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360), tilt: Math.round(Math.atan2(Math.hypot(dx, dy), Math.max(0.1, heightOf(light))) * 180 / Math.PI) };
         }
@@ -1458,14 +1461,14 @@ function buildControls() {
     return symbol(`<rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="3"/>${lines}`);
   };
   // Everything the library offers, the most used first in each group.
-  const LIGHT_ORDER = ['led', 'spot', 'side', 'face', 'par', 'mhspot', 'mhwash', 'profile', 'fresnel', 'cyc', 'batten', 'mhbeam', 'follow', 'blinder', 'strobe'];
+  const LIGHT_ORDER = ['led', 'spot', 'side', 'face', 'par', 'profile', 'fresnel', 'cyc', 'batten', 'mhbeam', 'follow', 'blinder', 'strobe'];
   const STAGE_ORDER = ['platform', 'riser', 'curtain', 'backdrop', 'stairs', 'wing', 'backstage', 'wall', 'ceiling', 'seats'];
   const CLASSIC = [['led', 'LED', 'A color-changing light on the rig, with effects and aiming zones'], ['spot', 'Spotlight', 'A fixed spotlight on the rig, on or off'], ['side', 'Side Light', 'A light in the wings that shines across the stage'], ['face', 'Face Light', 'A light in front of the stage that lights faces']];
   const byOrder = (order) => (a, b) => (order.indexOf(a.key) + 99) % 99 - (order.indexOf(b.key) + 99) % 99;
   const entries = [
     // the four kinds every layout began with: they have the effects and aiming zones, but hang at one height and cannot be tilted
     ...CLASSIC.map(([kind, name, tip]) => ({ key: kind, group: 'light', name, words: name, icon: symbol(CLASSIC_ICONS[kind]), tip, add: () => layoutAdd(kind) })),
-    ...FIXTURES.map((f) => ({ key: f.type, group: 'light', name: f.name, words: f.name + ' ' + f.was, icon: lightIcon(f.shape), tip: `${f.tip}. Lighting People Call It a ${f.was}`, add: () => {
+    ...FIXTURES.filter((f) => !f.gone).map((f) => ({ key: f.type, group: 'light', name: f.name, words: f.name + ' ' + f.was + ' moving head', icon: lightIcon(f.shape), tip: `${f.tip}. Lighting People Call It a ${f.was}`, add: () => {
       let kind = work.kinds.find((k) => k.fixture === f.type);            // every light of one fixture shares a kind, made the first time
       if (!kind) work.kinds.push(kind = { id: 'k' + newId(), name: f.name, shape: f.shape, fixture: f.type });
       layoutAdd('custom', kind.id);
@@ -1569,6 +1572,13 @@ function buildControls() {
   typed('obj-w', 0.05, 40, placed((item, v) => { item.w = v; }));
   typed('obj-d', 0.05, 40, placed((item, v) => { item.d = v; }));
   typed('obj-h', 0.02, 20, carry((item, v) => { item.h = v; }));
+  $('fix-moves').addEventListener('click', () => {
+    const item = pickedItem(), fx = item && fixtureOf(work.kinds.find((k) => k.id === item.kind));
+    if (!fx) return;
+    layoutKeep();
+    item.moves = !(item.moves != null ? item.moves : fx.moving);
+    redrawLayout();
+  });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
   typed('fix-tilt', 0, 180, placed((item, v) => { item.tilt = v; }));
   typed('fix-beam', 1, 120, placed((item, v) => { item.beam = v; }));
@@ -1778,6 +1788,8 @@ function redrawLayout() {
     each('#layout-picked .high-only', (n) => { n.hidden = !object && !lit; });
     if (lit) {
       fill('obj-name', item.name || ''); fill('obj-z', metres(heightOf(item)));
+      $('fix-moves').hidden = !fx;
+      $('fix-moves').classList.toggle('active', item.moves != null ? !!item.moves : !!(fx && fx.moving));
       fill('fix-pan', item.pan || 0); fill('fix-tilt', item.tilt || 0); fill('fix-beam', item.beam || (fx ? fx.beam : 30));
       fill('fix-uni', item.uni || ''); fill('fix-addr', item.addr || ''); fill('fix-ch', channelsOf(item, work.kinds));
       const on = item.on && work.objects.find((o) => o.id === item.on);
@@ -1939,7 +1951,7 @@ function layoutClip() {
 const clipOf = () => selected().map(({ kind, item }) => {
   const one = { kind, x: item.x, y: item.y, of: item.kind };
   if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h, media: item.media };
-  if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'ch']) if (item[key] != null) one.more[key] = item[key]; }
+  if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'ch', 'moves']) if (item[key] != null) one.more[key] = item[key]; }
   return one;
 });
 function layoutCopy() {
