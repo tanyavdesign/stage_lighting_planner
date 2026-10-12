@@ -870,7 +870,9 @@ body.tpl-edit #layout-template, body.tpl-edit #layout-keep, body.tpl-edit #layou
 #home-play { gap: 6px; }
 #home-play svg { width: 14px; height: 14px; fill: currentColor; stroke: none; }
 #show-bar { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 24px); padding: 6px 6px 6px 14px; background: var(--panel); border-radius: 13px; box-shadow: var(--float); }
-#show-text { min-width: 0; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#show-text { min-width: 0; border-color: transparent; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; line-height: calc(var(--ctl) - 2px); }
+#show-bar { padding: 6px; gap: 4px; }
+#show-stop { margin-left: 4px; }
 #show-tap { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 31; height: 48px; padding: 0 24px; font-size: 15px; box-shadow: var(--float); }
 body.show-run .bar, body.show-run #wide + .seg.view-switch { }
 body.show-run .bar { display: none; }

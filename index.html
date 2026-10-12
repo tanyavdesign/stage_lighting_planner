@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121636">
+<link rel="stylesheet" href="style.css?v=202610121638">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -411,8 +411,9 @@
 <div id="toast" hidden></div>
 
 <div id="show-bar" hidden>
-  <span id="show-text"></span>
-  <button id="show-skip" class="btn">Next Item</button>
+  <button id="show-back" class="btn icon" data-icon="prev" aria-label="Previous Item" title="Previous Item"></button>
+  <button id="show-text" class="btn" title="Go to Another Item"></button>
+  <button id="show-skip" class="btn icon" data-icon="next" aria-label="Next Item" title="Next Item"></button>
   <button id="show-stop" class="btn">Stop Show</button>
 </div>
 <button id="show-tap" class="btn primary" hidden>Tap to Play</button>
@@ -443,6 +444,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121636"></script>
+<script src="app.js?v=202610121638"></script>
 </body>
 </html>

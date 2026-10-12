@@ -1415,8 +1415,19 @@ function buildShowRun() {
   setWatch(true);
   $('show-bar').hidden = false;
   $('show-text').textContent = `${at + 1} of ${items.length} · ${items[at].name}`;
-  $('show-skip').hidden = at + 1 >= items.length;
+  $('show-skip').disabled = at + 1 >= items.length;
   $('show-skip').addEventListener('click', showNext);
+  // back: to the start of this item if it has been playing a while, otherwise to the item before
+  $('show-back').addEventListener('click', () => {
+    if (at === 0 || currentTime() > 3) { seek(0); if (!player.playing) setPlaying(true); showStarted = true; return; }
+    showStarted = false;
+    showLeave(items[at - 1].id);
+  });
+  // the name in the middle lists every item, to jump anywhere in the running order
+  $('show-text').addEventListener('click', (e) => {
+    e.stopPropagation();
+    popMenu($('show-text'), items.map((it, i) => [`${i + 1}. ${it.name}`, () => { if (i !== at) { showStarted = false; showLeave(it.id); } }, i === at]));
+  });
   $('show-stop').addEventListener('click', () => showLeave(null));
   $('show-tap').addEventListener('click', () => { $('show-tap').hidden = true; setPlaying(true); showStarted = true; });
   // an item is over when its track ends; without a track, a few seconds after its last cue
