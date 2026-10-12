@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121356">
+<link rel="stylesheet" href="style.css?v=202610121357">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -51,6 +51,11 @@
       </div>
       <h1 id="home-title" hidden></h1>
       <div class="spacer"></div>
+      <div class="seg home-views">
+        <button class="btn icon" data-home-view="tile" aria-label="Large tiles" title="Large tiles"></button>
+        <button class="btn icon" data-home-view="small" aria-label="Small tiles" title="Small tiles"></button>
+        <button class="btn icon" data-home-view="list" aria-label="List" title="List"></button>
+      </div>
       <div class="drop">
         <button id="import-btn" class="btn">Import<span id="import-arrow" class="btn-arrow"></span></button>
         <input id="home-import" type="file" multiple hidden>
@@ -77,11 +82,6 @@
       <button id="home-layout" class="btn" hidden>Edit stage layout</button>
       <button id="pick-download" class="btn" hidden>Download</button>
       <button id="pick-all" class="btn" hidden>Select all</button>
-      <div class="seg home-views">
-        <button class="btn icon" data-home-view="tile" aria-label="Large tiles" title="Large tiles"></button>
-        <button class="btn icon" data-home-view="small" aria-label="Small tiles" title="Small tiles"></button>
-        <button class="btn icon" data-home-view="list" aria-label="List" title="List"></button>
-      </div>
     </div>
     <div id="project-list" class="project-list"></div>
     <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
@@ -355,6 +355,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121356"></script>
+<script src="app.js?v=202610121357"></script>
 </body>
 </html>
