@@ -156,7 +156,11 @@ function classicSides() {
 //   layout.customs = [{ id, kind, x, y }]         the lights of those kinds
 // How a kind is controlled is set with the other light settings, under its id.
 const SHAPES = [['circle', 'Circle'], ['square', 'Square'], ['bar', 'Bar'], ['triangle', 'Triangle']];
-const kindsOf = (layout) => layout.kinds || [];
+// (A library light placed while the library still used trade names takes its plain name.)
+const kindsOf = (layout) => {
+  for (const kind of layout.kinds || []) { const f = kind.fixture && FIXTURES.find((one) => one.type === kind.fixture); if (f && kind.name === f.was) kind.name = f.name; }
+  return layout.kinds || [];
+};
 const customsOf = (layout) => layout.customs || [];
 // Things that stand on or around the stage and give no light (a platform, a riser...):
 //   layout.objects = [{ id, type, name, x, y, z, rot, w, d, h }]
@@ -199,7 +203,8 @@ const ASSETS = [
   { type: 'curtain', group: 'old', name: 'Curtain', w: 3, d: 0.1, h: 5, z: 0, look: 'curtain' },
   { type: 'hazer', group: 'old', name: 'Haze Machine', w: 0.5, d: 0.3, h: 0.25, z: 0, look: 'solid' },
 ];
-// The lights in the library. Each is a generic fixture, not any maker's model: how it is
+// The lights in the library, under plain names (`was` is the trade name, shown in the hover
+// tip). Each is a generic fixture, not any maker's model: how it is
 // drawn on the plan (shape), how wide its beam starts out in degrees (beam), where it starts
 // (z: metres above the stage floor; tilt: degrees away from straight down; pan: degrees
 // clockwise from pointing upstage), and how it is controlled until Light Settings says
@@ -207,17 +212,17 @@ const ASSETS = [
 // kind remembers which fixture it is (`kind.fixture`), so cues, colours and the PDF treat it
 // like any other light. Real models can be added here later, with a maker and a model name.
 const FIXTURES = [
-  { type: 'profile', name: 'Profile Spot', shape: 'profile', beam: 26, z: 5, tilt: 0, pan: 0, control: 'onoff' },
-  { type: 'fresnel', name: 'Fresnel', shape: 'fresnel', beam: 40, z: 5, tilt: 0, pan: 0, control: 'onoff' },
-  { type: 'par', name: 'PAR', shape: 'circle', beam: 30, z: 5, tilt: 0, pan: 0, control: 'rgb' },
-  { type: 'mhspot', name: 'Moving Head Spot', shape: 'mover', beam: 20, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
-  { type: 'mhwash', name: 'Moving Head Wash', shape: 'mover', beam: 45, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
-  { type: 'mhbeam', name: 'Moving Head Beam', shape: 'mover', beam: 4, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
-  { type: 'batten', name: 'LED Batten', shape: 'batten', beam: 60, z: 5, tilt: 0, pan: 0, control: 'rgb' },
-  { type: 'follow', name: 'Followspot', shape: 'follow', beam: 8, z: 3, tilt: 70, pan: 0, control: 'onoff', off: 'front' },
-  { type: 'blinder', name: 'Blinder', shape: 'blinder', beam: 80, z: 5, tilt: 75, pan: 180, control: 'onoff' },
-  { type: 'strobe', name: 'Strobe', shape: 'strobe', beam: 100, z: 5, tilt: 45, pan: 180, control: 'onoff', on: '#ffffff' },
-  { type: 'cyc', name: 'Cyc Light', shape: 'cyc', beam: 90, z: 5, tilt: 35, pan: 0, control: 'rgb', off: 'back' },
+  { type: 'profile', name: 'Sharp Spotlight', was: 'Profile Spot', tip: 'A hard-edged circle of light for one person or one area', shape: 'profile', beam: 26, z: 5, tilt: 0, pan: 0, control: 'onoff' },
+  { type: 'fresnel', name: 'Soft Spotlight', was: 'Fresnel', tip: 'A soft-edged pool of light that blends into the ones beside it', shape: 'fresnel', beam: 40, z: 5, tilt: 0, pan: 0, control: 'onoff' },
+  { type: 'par', name: 'Color Flood Light', was: 'PAR', tip: 'Floods an area with color; the everyday stage light', shape: 'circle', beam: 30, z: 5, tilt: 0, pan: 0, control: 'rgb' },
+  { type: 'mhspot', name: 'Moving Spotlight', was: 'Moving Head Spot', tip: 'A sharp spotlight that can swing to a new place in every cue', shape: 'mover', beam: 20, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'mhwash', name: 'Moving Flood Light', was: 'Moving Head Wash', tip: 'A soft, wide color light that can swing to a new place in every cue', shape: 'mover', beam: 45, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'mhbeam', name: 'Moving Thin Beam', was: 'Moving Head Beam', tip: 'A pencil-thin, very bright beam that can swing in every cue', shape: 'mover', beam: 4, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'batten', name: 'LED Light Bar', was: 'LED Batten', tip: 'A long bar of LEDs that colors a wall or the edge of the stage', shape: 'batten', beam: 60, z: 5, tilt: 0, pan: 0, control: 'rgb' },
+  { type: 'follow', name: 'Hand-Steered Spotlight', was: 'Followspot', tip: 'A tight, bright spotlight a person steers from the back of the room', shape: 'follow', beam: 8, z: 3, tilt: 70, pan: 0, control: 'onoff', off: 'front' },
+  { type: 'blinder', name: 'Audience Flash Light', was: 'Blinder', tip: 'Very bright lamps aimed at the audience for a big moment', shape: 'blinder', beam: 80, z: 5, tilt: 75, pan: 180, control: 'onoff' },
+  { type: 'strobe', name: 'Flashing Light', was: 'Strobe', tip: 'Flashes rapidly, for a freeze-frame effect', shape: 'strobe', beam: 100, z: 5, tilt: 45, pan: 180, control: 'onoff', on: '#ffffff' },
+  { type: 'cyc', name: 'Back Wall Light', was: 'Cyc Light', tip: 'A wide light that colors the back wall from top to bottom', shape: 'cyc', beam: 90, z: 5, tilt: 35, pan: 0, control: 'rgb', off: 'back' },
 ];
 const fixtureOf = (kind) => (kind && kind.fixture ? FIXTURES.find((f) => f.type === kind.fixture) : null);
 // How each fixture is drawn on the plan, around its own centre and pointing upstage.
@@ -1447,7 +1452,7 @@ function buildControls() {
         layoutAdd('custom', kind.id);
       });
       b.innerHTML = `<b>${f.name}</b>`;
-      b.title = `Add a ${f.name}`;
+      b.title = `${f.tip}. Lighting People Call It a ${f.was}`;
     }
     for (const a of ASSETS.filter((one) => one.group === libGroup)) {
       const b = button($('lib-list'), '', 'btn lib', () => layoutAdd('object', a.type));
