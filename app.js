@@ -2007,14 +2007,17 @@ function renderCues() {
   iconButton('copy', 'Duplicate cue', () => duplicateCue(cue));
   iconButton('trash', 'Delete cue', () => deleteCue(cue));
   // Optional comment for this cue; it goes on the cue's page in the PDF.
-  const showNote = !!cue.note || noteOpen;
-  iconButton('comment', showNote ? 'Hide empty note' : 'Add note',
-    () => { noteOpen = !noteOpen; renderCues(); }, showNote ? 'active' : '');
-  if (showNote) {
+  // It opens and closes from the comment button, which carries a dot while the cue has one.
+  const noteButton = iconButton('comment', noteOpen ? 'Hide comment' : cue.note ? 'Show comment' : 'Add comment',
+    () => { noteOpen = !noteOpen; renderCues(); }, (noteOpen ? 'active' : '') + (cue.note ? ' has-note' : ''));
+  if (noteOpen) {
     const note = document.createElement('textarea');
     note.className = 'note'; note.rows = 3; note.value = cue.note || '';
     note.placeholder = 'Comments or remarks for this cue';
-    note.addEventListener('change', () => { cue.note = note.value.trim(); saveShow(); record(); });
+    note.addEventListener('change', () => {
+      cue.note = note.value.trim(); saveShow(); record();
+      noteButton.classList.toggle('has-note', !!cue.note);
+    });
     box.appendChild(note);
     if (noteOpen && !cue.note) note.focus();
   }
