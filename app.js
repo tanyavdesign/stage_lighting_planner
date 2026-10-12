@@ -3075,7 +3075,33 @@ function buildShow() {
   if (currentItemId) audioStore.get(currentItemId).then((file) => { if (file) loadTrack(file, true); });
   // The bar shows "project / item"; items are renamed from their card in the project.
   $('bar-project').textContent = show.projectName || '';
-  $('bar-item').textContent = currentItem() ? currentItem().name : '';
+  // Click the item's name to rename it in place.
+  const label = $('bar-item'), item = currentItem();
+  label.textContent = item ? item.name : '';
+  label.title = 'Rename this item';
+  label.addEventListener('click', () => {
+    if (!item) return;
+    const field = document.createElement('input');
+    field.type = 'text'; field.className = 'bar-rename'; field.value = item.name; field.maxLength = 60;
+    label.hidden = true;
+    label.after(field);
+    field.focus(); field.select();
+    let finished = false;
+    const done = (keep) => {
+      if (finished) return;
+      finished = true;
+      if (keep) item.name = field.value.trim() || item.name;
+      saveProjects();
+      label.textContent = item.name;
+      field.remove();
+      label.hidden = false;
+    };
+    field.addEventListener('blur', () => done(true));
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') done(true);
+      if (e.key === 'Escape') { e.stopPropagation(); done(false); }       // Escape leaves the name as it was
+    });
+  });
   renderCues();
 }
 

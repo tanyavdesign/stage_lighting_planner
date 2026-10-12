@@ -206,7 +206,7 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
 .menu-wrap { flex: 0 0 auto; }               /* the menu hangs from the bar's left edge */
 .menu {
   position: absolute;
-  left: 4px;
+  left: 8px;
   top: calc(100% + 4px);
   z-index: 20;
   min-width: 200px;
@@ -445,6 +445,7 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
     border-radius: 13px;
     box-shadow: var(--float);
   }
+  body.no-left .menu, body.watch .menu { left: 0; }
   body.no-left #deselect { top: 64px; }
   body.no-right #toggle-right { right: 12px; top: 12px; width: 40px; height: 40px; background: var(--panel); border-radius: 13px; box-shadow: var(--float); }
   body.no-right #plan-reset { right: 64px; top: 18px; }
@@ -480,7 +481,9 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
 @media (max-width: 899px) {
   body { font-size: 13px; }
   .view .panel-head, #next-text, .bar-project, #toggle-left, #toggle-right { display: none; }
-  .bar-name { flex: 0 1 auto; max-width: 40vw; padding: 0 4px; }     /* the item's name beside the menu button */
+  .bar-name { flex: 0 1 auto; max-width: 40vw; padding: 0 12px 0 4px; }
+  .menu { left: 0; }                           /* lines up with the floating bar */
+  .bar-name input.bar-rename { width: 34vw; height: 30px; }     /* the item's name beside the menu button */
   main { display: flex; flex-direction: column; gap: 0; padding: env(safe-area-inset-top) 0 0; }
 
   /* the menu button floats over the corner of the preview */
@@ -586,6 +589,9 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .project.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .bar-project { color: var(--muted); font-weight: 450; }
 .bar-project:not(:empty)::after { content: " / "; }
+#bar-item { cursor: text; }
+#bar-item:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
+.bar-name input.bar-rename { width: 150px; max-width: 100%; height: 26px; padding: 0 6px; font-weight: 550; vertical-align: middle; }
 .project-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
 .project { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; }
 .project-open { display: block; padding: 0; border: 0; background: #0b0b10; cursor: pointer; aspect-ratio: 320 / 188; }
