@@ -666,6 +666,13 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
   .view-list .pick { top: 26px; }
   .view-list .project-actions { flex-basis: 100%; padding: 0 8px 6px 36px; }
 }
+/* drafts: items waiting above the projects; they are not ticked for download, only moved or opened */
+.project { cursor: pointer; }
+#draft-list .pick { display: none; }
+#draft-list:empty { display: none; }
+.draft-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* a menu opened from a card, placed by the script */
+.menu.pop { position: fixed; z-index: 70; max-height: 60vh; overflow-y: auto; min-width: 180px; max-width: calc(100vw - 16px); }
 /* the picture, with arrows over it to flip through the item's cues */
 .shot { position: relative; }
 .skim { position: absolute; top: 50%; width: 28px; height: 28px; margin-top: -14px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; cursor: pointer; }

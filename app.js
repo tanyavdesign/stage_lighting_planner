@@ -176,6 +176,18 @@ if (!projects.some((p) => p.id === currentId)) currentId = null;
 const currentProject = () => projects.find((p) => p.id === currentId);
 if (!currentId || !currentProject().items.some((it) => it.id === currentItemId)) currentItemId = null;
 const currentItem = () => (currentItemId ? currentProject().items.find((it) => it.id === currentItemId) : null);
+// Drafts: items that are not in a project yet. They are kept as a project of their own that
+// never shows in the project list; its items show on the home screen and can be moved out.
+const realProjects = () => projects.filter((p) => !p.drafts);
+function draftsProject() {
+  let drafts = projects.find((p) => p.drafts);
+  if (!drafts) {
+    drafts = { id: 'drafts', drafts: true, name: 'Drafts', template: TEMPLATE, templateId: 'kdt-tb-ucc', created: Date.now(), updated: Date.now(), cues: 0, items: [] };
+    projects.push(drafts);
+  }
+  return drafts;
+}
+if (currentId && currentProject().drafts && !currentItemId) currentId = null;      // drafts have no page of their own
 const saveProjects = () => raw.set(PROJECTS_KEY, projects);
 
 // Stage templates: where the LEDs and spotlights sit when a project starts. One is built
@@ -261,6 +273,7 @@ const ICONS = {
   moveon: '<path d="M3 8h9.5M9 4.2 12.8 8 9 11.8"/>',
   grip: '<path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" stroke-width="2"/>',
   refresh: '<path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.8v2.6h-2.6"/>',
+  moveto: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5zM7 9h4M9.4 7.4 11 9l-1.6 1.6"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -2665,7 +2678,7 @@ function saveThumbnail() {
     saveProjects();
   } catch (e) { /* keep the old picture */ }
 }
-function goHome() { saveThumbnail(); setOpen(currentId, null); }           // back to this project's items
+function goHome() { saveThumbnail(); setOpen(currentProject().drafts ? null : currentId, null); }     // back to this project's items (a draft goes home)
 function goProjects() { saveThumbnail(); setOpen(null, null); }
 
 // stage: the template to start on. from: a file being imported, which brings its own layout.
@@ -2877,7 +2890,7 @@ async function readArchive(zip, out) {
 // Bring files in. On the project list each becomes a project; inside a project their items join it.
 async function importFiles(fileList) {
   const project = currentProject(), bad = [];
-  let made = 0;
+  let items = 0, made = 0;
   toast('Importing...');
   for (const file of fileList) {
     try {
@@ -2885,26 +2898,26 @@ async function importFiles(fileList) {
       for (const p of got.projects) {
         const into = project || createProject(p.name, null, p);
         for (const rec of p.items) await addItem(into, rec.data.name, rec);
-        made += project ? p.items.length : 1;
+        if (project) items += p.items.length; else made++;
       }
-      for (const rec of got.items) {
-        const into = project || createProject(rec.data.project || rec.data.name, null, rec.data);
-        await addItem(into, rec.data.name, rec);
-        made++;
+      for (const rec of got.items) {              // on the home screen a lone item lands in Drafts
+        await addItem(project || draftsProject(), rec.data.name, rec);
+        items++;
       }
     } catch (e) { bad.push(file.name); }
   }
   renderHome();
-  const what = project ? 'item' : 'project';
-  toast((made ? `Imported ${made} ${what}${made === 1 ? '' : 's'}.` : '') + (bad.length ? ` Could not read ${bad.join(', ')}.` : ''), 4500);
+  const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts = [made && count(made, 'project'), items && count(items, 'item') + (project ? '' : ' into Drafts')].filter(Boolean);
+  toast((parts.length ? `Imported ${parts.join(' and ')}.` : '') + (bad.length ? ` Could not read ${bad.join(', ')}.` : ''), 4500);
 }
 // Download projects (from the project list) or items (inside a project): one file, or a zip of them.
-async function downloadFiles(list) {
-  const project = currentProject();
+async function downloadFiles(list, owner) {       // owner: the project the items belong to; none when the list is projects
+  const project = owner || currentProject();
   toast('Preparing the download...');
   const files = [], used = new Set();
   for (const thing of list) {
-    let name = safeName(project ? `${project.name} - ${thing.name}` : thing.name);
+    let name = safeName(project && !project.drafts ? `${project.name} - ${thing.name}` : thing.name);
     for (let n = 2; used.has(name.toLowerCase()); n++) name = name.replace(/( \(\d+\))?$/, ` (${n})`);
     used.add(name.toLowerCase());
     files.push({ name: name + (project ? FILE_ITEM : FILE_PROJECT), blob: project ? await packItem(project, thing) : await packProject(thing) });
@@ -2939,11 +2952,25 @@ function lookPicture(look) {
   return small.toDataURL('image/jpeg', 0.7);
 }
 
+// A small menu that opens under a button and closes on the next click anywhere. entries: [label, action]
+function popMenu(anchor, entries) {
+  each('.menu.pop', (old) => old.remove());
+  const menu = document.createElement('div');
+  menu.className = 'menu pop';
+  for (const [label, action] of entries) button(menu, label, '', action);
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = r.left + 'px';
+  menu.style.top = Math.min(r.bottom + 6, innerHeight - 40 * entries.length - 24) + 'px';
+  document.body.appendChild(menu);
+  keepOnScreen(menu);
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
+}
+
 // The home screen shows the projects, or the items of the project that is open.
 const picked = new Set();          // ids ticked for downloading
 function renderHome() {
   const list = $('project-list'), project = currentProject();
-  const things = project ? project.items : [...projects].sort((a, b) => b.updated - a.updated);
+  const things = project ? project.items : realProjects().sort((a, b) => b.updated - a.updated);
   list.textContent = '';
   const view = prefs.homeView || 'tile';
   list.className = 'project-list view-' + view;
@@ -2962,7 +2989,7 @@ function renderHome() {
   $('pick-download').hidden = !picked.size;
   $('pick-download').textContent = `Download ${picked.size}`;
   const plural = (n, word) => `${n || 0} ${word}${n === 1 ? '' : 's'}`;
-  for (const thing of things) {
+  const addCard = (thing, project, things, list) => {       // project: set when the cards are items
     const card = document.createElement('div');
     card.className = 'project' + (picked.has(thing.id) ? ' picked' : '');
     const tick = document.createElement('label');
@@ -3090,7 +3117,23 @@ function renderHome() {
       });
     }
     act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
-    act('download', 'Download', () => downloadFiles([thing]));
+    if (project && project.drafts) {
+      // a draft can be filed into a project: pick which from a small menu
+      const file = act('moveto', 'Move to a project', (e) => {
+        e.stopPropagation();
+        const choices = realProjects();
+        if (!choices.length) return toast('Create a project first, then move the draft into it.', 3000);
+        popMenu(file, choices.map((p) => [p.name, () => {
+          project.items = project.items.filter((it) => it !== thing);
+          p.items.push(thing);
+          p.updated = Date.now();
+          countCues(p); countCues(project);
+          saveProjects(); renderHome();
+          toast(`Moved ${thing.name} to ${p.name}.`, 2500);
+        }]));
+      });
+    }
+    act('download', 'Download', () => downloadFiles([thing], project));
     // Deleting takes two taps: the first arms the button, the second within a few seconds deletes.
     const del = act('trash', 'Delete', () => {
       if (del.classList.contains('armed')) return project ? deleteItem(project, thing) : deleteProject(thing);
@@ -3098,8 +3141,17 @@ function renderHome() {
       setTimeout(() => { if (del.isConnected) renderHome(); }, 3500);
     });
     card.appendChild(actions);
+    // the empty parts of the card open it too; the name, tick box and buttons keep their own jobs
+    card.addEventListener('click', (e) => { if (!e.target.closest('button, input, label, .project-name')) open.click(); });
     list.appendChild(card);
-  }
+  };
+  for (const thing of things) addCard(thing, project, things, list);
+  // Drafts sit above the projects on the home screen
+  const drafts = projects.find((p) => p.drafts), draftList = $('draft-list');
+  $('drafts').hidden = !!project;
+  draftList.textContent = '';
+  draftList.className = 'project-list view-' + (view === 'list' ? 'list' : 'small');      // drafts stay compact so the projects are not pushed far down
+  if (!project && drafts) for (const item of drafts.items) addCard(item, drafts, drafts.items, draftList);
   // On the project list: the items worked on last, across all projects, to pick up where you left off.
   const recent = project ? [] : projects.flatMap((p) => p.items.map((item) => ({ p, item })))
     .sort((a, b) => (b.item.updated || 0) - (a.item.updated || 0)).slice(0, 4);
@@ -3238,7 +3290,10 @@ function buildHome() {
   document.addEventListener('click', () => { homeMenu.hidden = true; });
   $('home-theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; prefs.themeChosen = true; applyPrefs(); themeLabel(); });
   $('home-templates').addEventListener('click', () => openTemplates(true));
-  $('home-backup').addEventListener('click', () => (projects.length ? downloadFiles(projects) : toast('There are no projects to download yet.', 2500)));
+  $('home-backup').addEventListener('click', () => {
+    const all = projects.filter((p) => !p.drafts || p.items.length);       // drafts go along as a project called Drafts
+    if (all.length) downloadFiles(all); else toast('There is nothing to download yet.', 2500);
+  });
   $('home-reload').addEventListener('click', async () => {
     try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) { /* offline, or no saved copy */ }
     location.reload();
@@ -3328,13 +3383,24 @@ function buildHome() {
     try { sessionStorage.setItem('slp-layout', '1'); } catch (e) { /* no session storage */ }
     setOpen(project.id, project.items[0].id);
   });
+  // Drafts: make or import an item without choosing a project yet
+  $('draft-new').addEventListener('click', async () => {
+    const drafts = draftsProject(), item = await addItem(drafts, `Draft ${drafts.items.length + 1}`);
+    renderHome();
+    toast(`Added ${item.name} to Drafts.`, 2000);
+  });
+  $('draft-import').addEventListener('change', (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (files.length) importFiles(files);
+  });
   $('pick-all').addEventListener('click', () => {
-    const things = currentProject() ? currentProject().items : projects;
+    const things = currentProject() ? currentProject().items : realProjects();
     if (picked.size === things.length) picked.clear(); else things.forEach((t) => picked.add(t.id));
     renderHome();
   });
   $('pick-download').addEventListener('click', () => {
-    const things = currentProject() ? currentProject().items : projects;
+    const things = currentProject() ? currentProject().items : realProjects();
     downloadFiles(things.filter((t) => picked.has(t.id)));
   });
   renderHome();
