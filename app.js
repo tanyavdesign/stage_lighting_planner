@@ -249,18 +249,24 @@ if (!projects.some((p) => p.id === currentId)) currentId = null;
 const currentProject = () => projects.find((p) => p.id === currentId);
 if (!currentId || !currentProject().items.some((it) => it.id === currentItemId)) currentItemId = null;
 const currentItem = () => (currentItemId ? currentProject().items.find((it) => it.id === currentItemId) : null);
-// Drafts: items that are not in a project yet. They are kept as a project of their own that
-// never shows in the project list; its items show on the home screen and can be moved out.
-const realProjects = () => projects.filter((p) => !p.drafts && !p.scratch);
-function draftsProject() {
-  let drafts = projects.find((p) => p.drafts);
-  if (!drafts) {
-    drafts = { id: 'drafts', drafts: true, name: 'Drafts', template: TEMPLATE, templateId: 'kdt-tb-ucc', created: Date.now(), updated: Date.now(), cues: 0, items: [] };
-    projects.push(drafts);
+// Drafts: items that are not in a project yet. Each draft is kept as a project of its own
+// (`draft`) holding that one item, so it has its own stage layout. Drafts never show in the
+// project list; their items show on the home screen and can be moved into a project that
+// uses the same layout.
+const realProjects = () => projects.filter((p) => !p.draft && !p.scratch);
+const draftProjects = () => projects.filter((p) => p.draft && p.items.length);
+if (projects.some((p) => p.drafts)) {          // the earlier arrangement: one shared holder for every draft
+  const made = [];
+  for (const holder of projects.filter((p) => p.drafts)) {
+    for (const item of holder.items) {
+      made.push({ id: 'p' + item.id, draft: true, name: item.name, template: holder.template, templateId: holder.templateId, created: item.updated || Date.now(), updated: item.updated || Date.now(), cues: item.cues || 0, thumb: item.thumb, items: [item] });
+    }
   }
-  return drafts;
+  projects = [...made, ...projects.filter((p) => !p.drafts)];
+  raw.set(PROJECTS_KEY, projects);
+  if (currentId && !currentProject()) currentId = currentItemId = null;
 }
-if (currentId && currentProject().drafts && !currentItemId) currentId = null;      // drafts have no page of their own
+if (currentId && currentProject().draft && !currentItemId) currentId = null;      // a draft has no page of its own
 // A layout is edited inside a throwaway project (`scratch`). One left over from an editing
 // session that was abandoned is cleared away.
 if (projects.some((p) => p.scratch) && !(currentId && currentProject().scratch && currentItemId)) {
@@ -356,7 +362,7 @@ const prefs = Object.assign({ people: true, theme: 'dark' }, store.get('kdt-ligh
 if (!prefs.themeChosen) prefs.theme = 'dark';
 // The app no longer comes with a stage of its own. A device that already has projects keeps
 // the KDT layout as an ordinary template (same id, so those projects still point at it).
-if (!prefs.seededKdt && projects.some((p) => !p.drafts && p.templateId === BUILTIN.id) && !templates.some((t) => t.id === BUILTIN.id)) {
+if (!prefs.seededKdt && projects.some((p) => !p.draft && p.templateId === BUILTIN.id) && !templates.some((t) => t.id === BUILTIN.id)) {
   templates.unshift({ id: BUILTIN.id, name: TEMPLATE, layout: templateLayout(), created: Date.now() });
   saveTemplates();
   prefs.seededKdt = true;
@@ -1428,7 +1434,7 @@ const TOURS = {
   ],
   plotter: [
     ['#import-btn', 'Got a File?', 'If your lighting manager sent you an item file, import it here and choose Item.'],
-    ['#draft-new', 'Or Start Fresh', 'New item makes an empty item for you to plot. It appears under Drafts.'],
+    ['#draft-new', 'Or Start Fresh', 'New Item makes an empty item for you to plot. You pick the stage layout it uses, and it appears under Drafts.'],
     ['#drafts', 'Open It', 'Tap an item to open it and start plotting. Your work saves as you go.'],
   ],
   editor: [
@@ -3196,10 +3202,38 @@ function saveThumbnail() {
 }
 function goHome() {
   if (currentProject().scratch) return leaveLayout(false);            // leaving a layout being edited: nothing is kept
-  saveThumbnail(); setOpen(currentProject().drafts ? null : currentId, null);
+  saveThumbnail(); setOpen(currentProject().draft ? null : currentId, null);
 }     // back to this project's items (a draft goes home)
 function goProjects() { saveThumbnail(); setOpen(null, null); }
 
+// A draft is a one-item project that is not shown as a project.
+async function newDraft(name, stage, from, rec) {
+  const draft = createProject(name, stage, from);
+  draft.draft = true;
+  await addItem(draft, name || `Draft ${draftProjects().length + 1}`, rec);
+  draft.name = draft.items[0].name;
+  saveProjects();
+  return draft;
+}
+// Everything about a project's stage, in one comparable string: two projects with the same
+// string have the same lights in the same places, so an item fits either.
+function layoutPrint(project) {
+  const layout = projectLayout(project), byId = (a, b) => (a.id < b.id ? -1 : 1);
+  const list = (items) => [...items].sort(byId).map((it) => `${it.id}:${it.x}:${it.y}:${it.kind || ''}`).join(',');
+  return [list(layout.leds), list(layout.spots), list(facesOf(layout)), list(sidesOf(layout)), list(customsOf(layout))].join('|');
+}
+// File a draft into a project: its one item joins the project and the draft's holder goes.
+function moveDraft(draft, into) {
+  const item = draft.items[0];
+  into.items.push(item);
+  into.updated = Date.now();
+  countCues(into);
+  raw.del(projectKey(LAYOUT_KEY, draft.id));
+  projects = projects.filter((p) => p !== draft);
+  saveProjects();
+  renderHome();
+  toast(`Moved ${item.name} to ${into.name}.`, 2500);
+}
 // stage: the template to start on. from: a file being imported, which brings its own layout.
 function createProject(name, stage, from) {
   const id = newId(), tpl = stage || BUILTIN;
@@ -3252,7 +3286,8 @@ async function duplicateProject(project) {
   const custom = raw.get(projectKey(LAYOUT_KEY, project.id), null);
   const copy = createProject(project.name + ' copy', null, { layout: custom, template: project.template, templateId: project.templateId, lights: project.lights });
   copy.thumb = project.thumb;
-  for (const item of project.items) await copyItem(item, copy);
+  if (project.draft) copy.draft = true;
+  for (const item of project.items) await copyItem(item, copy, project.draft ? project.name + ' copy' : undefined);
   saveProjects();
   renderHome();
 }
@@ -3419,16 +3454,21 @@ async function importFiles(fileList, as) {
     try {
       const got = await readFile(file);
       for (const p of got.projects) {
-        const into = project || (as === 'item' ? draftsProject() : createProject(p.name, null, p));
+        if (!project && as === 'item') {          // each of the project's items becomes a draft, on that project's layout
+          for (const rec of p.items) await newDraft(rec.data.name, null, p, rec);
+          items += p.items.length;
+          continue;
+        }
+        const into = project || createProject(p.name, null, p);
         for (const rec of p.items) await addItem(into, rec.data.name, rec);
-        if (project || as === 'item') items += p.items.length; else made++;
+        if (project) items += p.items.length; else made++;
       }
       for (const rec of got.items) {
         if (!project && as === 'project') {       // a lone item asked for as a project gets one of its own
           await addItem(createProject(rec.data.project || rec.data.name, null, rec.data), rec.data.name, rec);
           made++;
         } else {
-          await addItem(project || draftsProject(), rec.data.name, rec);
+          if (project) await addItem(project, rec.data.name, rec); else await newDraft(rec.data.name, null, rec.data, rec);
           items++;
         }
       }
@@ -3445,7 +3485,7 @@ async function downloadFiles(list, owner) {       // owner: the project the item
   toast('Preparing the download...');
   const files = [], used = new Set();
   for (const thing of list) {
-    let name = safeName(project && !project.drafts ? `${project.name} - ${thing.name}` : thing.name);
+    let name = safeName(project && !project.draft ? `${project.name} - ${thing.name}` : thing.name);
     for (let n = 2; used.has(name.toLowerCase()); n++) name = name.replace(/( \(\d+\))?$/, ` (${n})`);
     used.add(name.toLowerCase());
     files.push({ name: name + (project ? FILE_ITEM : FILE_PROJECT), blob: project ? await packItem(project, thing) : await packProject(thing) });
@@ -3517,7 +3557,7 @@ function renderHome() {
   $('home-heading').textContent = project ? `Items · ${project.template}` : 'Projects';
   $('home-empty').hidden = true;                 // the dashed card below says it instead
   $('home-empty').textContent = project ? 'No items yet. Press New item to add one.' : 'No projects yet. Press New project to start one.';
-  const loose = !project && projects.find((p) => p.drafts) ? projects.find((p) => p.drafts).items : [];       // drafts can be ticked too
+  const loose = project ? [] : draftProjects().map((p) => p.items[0]);       // drafts can be ticked too
   for (const id of [...picked]) if (![...things, ...loose].some((t) => t.id === id)) picked.delete(id);
   $('pick-all').hidden = !things.length;
   $('pick-all').textContent = picked.size === things.length ? 'Select None' : 'Select All';
@@ -3533,7 +3573,7 @@ function renderHome() {
     box.type = 'checkbox'; box.checked = picked.has(thing.id);
     box.addEventListener('change', () => { if (box.checked) picked.add(thing.id); else picked.delete(thing.id); renderHome(); });
     tick.appendChild(box); card.appendChild(tick);
-    if (project) card.dataset.id = thing.id;
+    if (project) card.dataset.id = thing.id; else card.dataset.pid = thing.id;        // a project card can take a dropped draft
     const shot = document.createElement('div');
     shot.className = 'shot';
     const open = document.createElement('button');
@@ -3584,6 +3624,7 @@ function renderHome() {
         if (finished) return;
         finished = true;
         if (keep) thing.name = field.value.trim() || thing.name;
+        if (project && project.draft) project.name = thing.name;
         saveProjects(); renderHome();
       };
       field.addEventListener('blur', () => done(true));
@@ -3592,7 +3633,7 @@ function renderHome() {
     const meta = document.createElement('div');
     meta.className = 'hint';
     meta.textContent = project
-      ? `#${things.indexOf(thing) + 1} · ${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`
+      ? (project.draft ? project.template : `#${things.indexOf(thing) + 1}`) + ` · ${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`
       : `${plural(thing.items.length, 'item')} · ${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`;
     info.appendChild(name); info.appendChild(meta);
     card.appendChild(info);
@@ -3620,11 +3661,12 @@ function renderHome() {
         const follow = () => {
           card.style.transform = `translate(${last.clientX - from.x}px, ${last.clientY - from.y + page.scrollTop - from.scroll}px) scale(1.02)`;
           const under = document.elementFromPoint(last.clientX, last.clientY);        // the lifted card lets the pointer through
-          const over = under && under.closest('.project[data-id]');
+          // an item is dropped on another item of its project; a draft is dropped on a project
+          const over = under && under.closest(project.draft ? '.project[data-pid]' : '.project[data-id]');
           if (over === target) return;
-          if (target) target.classList.remove('drop-target');
-          target = over && over !== card ? over : null;
-          if (target) target.classList.add('drop-target');
+          if (target) target.classList.remove('drop-target', 'drop-no');
+          target = over && over !== card && (project.draft || list.contains(over)) ? over : null;
+          if (target) target.classList.add(project.draft && layoutPrint(projects.find((p) => p.id === target.dataset.pid)) !== layoutPrint(project) ? 'drop-no' : 'drop-target');
         };
         // near the top or bottom edge the page scrolls, so a long list can be crossed in one drag
         const edge = setInterval(() => {
@@ -3638,7 +3680,10 @@ function renderHome() {
           grip.removeEventListener('pointerup', end);
           grip.removeEventListener('pointercancel', end);
           document.body.classList.remove('reordering');
-          if (target && ev.type === 'pointerup') {
+          if (target && ev.type === 'pointerup' && project.draft) {
+            if (target.classList.contains('drop-no')) toast('That project uses a different stage layout, so this draft does not fit it.', 3500);
+            else return moveDraft(project, projects.find((p) => p.id === target.dataset.pid));
+          } else if (target && ev.type === 'pointerup') {
             const at = project.items.indexOf(thing), to = project.items.findIndex((it) => it.id === target.dataset.id);
             project.items.splice(at, 1);
             project.items.splice(to, 0, thing);
@@ -3651,42 +3696,36 @@ function renderHome() {
         grip.addEventListener('pointercancel', end);
       });
     }
-    act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
-    if (project && project.drafts) {
+    act('copy', 'Duplicate', () => (project && !project.draft ? duplicateItem(project, thing) : duplicateProject(project || thing)));
+    if (project && project.draft) {
       // a draft can be filed into a project: pick which from a small menu
       const file = act('moveto', 'Move to a Project', (e) => {
         e.stopPropagation();
-        const choices = realProjects();
-        if (!choices.length) return toast('Create a project first, then move the draft into it.', 3000);
-        popMenu(file, choices.map((p) => [p.name, () => {
-          project.items = project.items.filter((it) => it !== thing);
-          p.items.push(thing);
-          p.updated = Date.now();
-          countCues(p); countCues(project);
-          saveProjects(); renderHome();
-          toast(`Moved ${thing.name} to ${p.name}.`, 2500);
-        }]));
+        const print = layoutPrint(project), choices = realProjects().filter((p) => layoutPrint(p) === print);
+        if (!choices.length) return toast(realProjects().length ? 'No project uses the same stage layout as this draft.' : 'Create a project first, then move the draft into it.', 3500);
+        popMenu(file, choices.map((p) => [p.name, () => moveDraft(project, p)]));
       });
     }
     act('download', 'Download', () => downloadFiles([thing], project));
     // Deleting takes two taps: the first arms the button, the second within a few seconds deletes.
     const del = act('trash', 'Delete', () => {
-      if (del.classList.contains('armed')) return project ? deleteItem(project, thing) : deleteProject(thing);
+      if (del.classList.contains('armed')) return project && !project.draft ? deleteItem(project, thing) : deleteProject(project || thing);
       del.classList.add('armed'); del.textContent = 'Delete?';
       setTimeout(() => { if (del.isConnected) renderHome(); }, 3500);
     });
     card.appendChild(actions);
     // the empty parts of the card open it too; the name, tick box and buttons keep their own jobs
-    card.addEventListener('click', (e) => { if (!e.target.closest('button, input, label, .project-name')) open.click(); });
+    // (a button that redraws itself, like Delete turning into "Delete?", leaves its old icon detached: that click is not for the card)
+    card.addEventListener('click', (e) => { if (e.target.isConnected && !e.target.closest('button, input, label, .project-name')) open.click(); });
     list.appendChild(card);
   };
   for (const thing of things) addCard(thing, project, things, list);
   // Drafts sit above the projects on the home screen
-  const drafts = projects.find((p) => p.drafts), draftList = $('draft-list');
+  const draftList = $('draft-list');
   $('drafts').hidden = !!project;
   draftList.textContent = '';
   draftList.className = 'project-list view-' + view;
-  if (!project && drafts) for (const item of drafts.items) addCard(item, drafts, drafts.items, draftList);
+  if (!project) for (const draft of draftProjects()) addCard(draft.items[0], draft, draft.items, draftList);
   if (!project) {
     const addDraft = button(draftList, '', 'project new-card', () => $('draft-new').click());
     addDraft.innerHTML = svgIcon('plus') + '<span>New Item</span>';
@@ -3706,7 +3745,7 @@ function renderHome() {
     const title = document.createElement('span');
     title.className = 'project-name'; title.textContent = item.name;
     const sub = document.createElement('span');
-    sub.className = 'hint'; sub.textContent = `${p.name} · edited ${when(item.updated)}`;
+    sub.className = 'hint'; sub.textContent = `${p.draft ? 'Draft' : p.name} · edited ${when(item.updated)}`;
     text.appendChild(title); text.appendChild(sub);
     row.appendChild(shot); row.appendChild(text);
   }
@@ -4011,7 +4050,7 @@ const countText = (layout) => `${layout.leds.length} LED${layout.leds.length ===
 
 // New project: pick the stage to start on. The same window is where saved templates are
 // renamed, copied and deleted.
-let tplTab = 'all', tplPicked = null, tplManage = false;      // tplManage: opened from the app menu, only to look after templates
+let tplTab = 'all', tplPicked = null, tplManage = false, tplDraft = false;      // tplManage: only looking after layouts. tplDraft: choosing one for a new draft item
 function renderTemplates() {
   const grid = $('tpl-grid');
   grid.textContent = '';
@@ -4100,6 +4139,12 @@ function renderTemplates() {
 async function newFromTemplate() {
   if (tplManage) return;
   if (!tplPicked) return toast('Pick a layout, or Start from scratch.', 2500);
+  if (tplDraft) {
+    const draft = await newDraft($('new-name').value.trim(), tplPicked);
+    $('tpl').hidden = true;
+    renderHome();
+    return toast(`Added ${draft.name} to Drafts.`, 2500);
+  }
   const project = createProject($('new-name').value.trim(), tplPicked);
   const made = [];
   for (const field of [...$('items-names').children]) made.push(await addItem(project, field.value.trim()));
@@ -4111,10 +4156,14 @@ function buildHome() {
   const dialog = $('tpl');
   const close = () => { dialog.hidden = true; };
   $('tpl-close').innerHTML = svgIcon('close');
-  const openTemplates = (manage) => {
-    tplManage = manage; tplPicked = null;
+  const openTemplates = (manage, draft) => {
+    tplManage = manage; tplDraft = !!draft; tplPicked = null;
     dialog.querySelector('.tpl').classList.toggle('manage', manage);
-    $('tpl-title').textContent = manage ? 'Layouts' : 'New Project';
+    dialog.querySelector('.tpl').classList.toggle('draft', tplDraft);
+    $('tpl-title').textContent = manage ? 'Layouts' : draft ? 'New Item' : 'New Project';
+    $('tpl-create').textContent = draft ? 'Create Item' : 'Create Project';
+    $('new-name-lbl').textContent = draft ? 'Item Name' : 'Project Name';
+    $('new-name').placeholder = draft ? 'Untitled Item' : 'Untitled Project';
     dialog.hidden = false;
     renderTemplates();
     $('new-name').value = '';
@@ -4139,7 +4188,7 @@ function buildHome() {
   $('home-theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; prefs.themeChosen = true; applyPrefs(); themeLabel(); });
   $('home-templates').addEventListener('click', () => openTemplates(true));
   $('home-backup').addEventListener('click', () => {
-    const all = projects.filter((p) => !p.scratch && (!p.drafts || p.items.length));       // drafts go along as a project called Drafts
+    const all = projects.filter((p) => !p.scratch && p.items.length + (p.draft ? 0 : 1));       // drafts go along, each as a one-item project
     if (all.length) downloadFiles(all); else toast('There is nothing to download yet.', 2500);
   });
   $('home-reload').addEventListener('click', async () => {
@@ -4248,11 +4297,7 @@ function buildHome() {
     setOpen(project.id, project.items[0].id);
   });
   // Drafts: make or import an item without choosing a project yet
-  $('draft-new').addEventListener('click', async () => {
-    const drafts = draftsProject(), item = await addItem(drafts, `Draft ${drafts.items.length + 1}`);
-    renderHome();
-    toast(`Added ${item.name} to Drafts.`, 2000);
-  });
+  $('draft-new').addEventListener('click', () => openTemplates(false, true));        // a draft needs a stage layout: choose it first
   $('pick-all').addEventListener('click', () => {
     const things = currentProject() ? currentProject().items : realProjects();
     if (picked.size === things.length) picked.clear(); else things.forEach((t) => picked.add(t.id));
@@ -4261,10 +4306,8 @@ function buildHome() {
   $('pick-download').addEventListener('click', async () => {
     const things = currentProject() ? currentProject().items : realProjects();
     const chosen = things.filter((t) => picked.has(t.id));
-    const drafts = currentProject() ? null : projects.find((p) => p.drafts);
-    const loose = drafts ? drafts.items.filter((t) => picked.has(t.id)) : [];
     if (chosen.length) await downloadFiles(chosen);
-    if (loose.length) await downloadFiles(loose, drafts);
+    if (!currentProject()) for (const draft of draftProjects()) if (picked.has(draft.items[0].id)) await downloadFiles(draft.items, draft);
   });
   renderHome();
 }

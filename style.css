@@ -709,6 +709,9 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .project.dragging { z-index: 5; pointer-events: none; opacity: .92; box-shadow: var(--float); cursor: grabbing; }
 .project.drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .project.drop-target > * { opacity: .45; }
+.project.drop-no { border-color: #f24822; box-shadow: 0 0 0 2px #f24822; }       /* a draft held over a project with a different stage layout */
+/* choosing a layout for one new draft item: no item count, no list of item names */
+.tpl.draft .tpl-field-items, .tpl.draft .tpl-names, .tpl.draft .tpl-tip { display: none; }
 body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 /* recently edited items: small rows to jump straight back in */
 .recent-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }

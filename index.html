@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121515">
+<link rel="stylesheet" href="style.css?v=202610121541">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -127,10 +127,10 @@
         <div class="tpl-head"><h2 id="tpl-title">New Project</h2><button id="tpl-create" class="btn primary" type="button">Create Project</button><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
         <div class="tpl-scroll">
           <div class="tpl-details">
-            <label class="tpl-field tpl-field-name"><span>Project Name</span>
+            <label class="tpl-field tpl-field-name"><span id="new-name-lbl">Project Name</span>
               <input id="new-name" type="text" placeholder="Untitled Project" maxlength="60" autocomplete="off">
             </label>
-            <div class="tpl-field"><span>Items</span>
+            <div class="tpl-field tpl-field-items"><span>Items</span>
               <div class="tpl-count">
                 <button type="button" id="items-less" class="btn icon" aria-label="One Fewer"></button>
                 <input id="items-count" type="number" min="1" max="60" step="1" value="1" inputmode="numeric" aria-label="Number of items">
@@ -434,6 +434,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121515"></script>
+<script src="app.js?v=202610121541"></script>
 </body>
 </html>
