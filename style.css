@@ -666,6 +666,9 @@ body.layout-mode .history { display: none; }
 .plan .obj.picked, .plan .fx:hover > .obj.picked { stroke: var(--accent); stroke-width: 4; }
 .plan text.obj-name { font-size: 13px; fill: var(--muted); }
 .plan .throw { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 5; fill: none; opacity: .7; pointer-events: none; }
+.plan .row-box { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 6; opacity: .6; pointer-events: none; }
+.plan .row-box.picked { stroke: var(--accent); opacity: 1; }
+#layout-panel #row-gap, #layout-panel #row-count { width: 72px; }
 .plan .guide { stroke: #ff3b8d; stroke-width: 1.5; pointer-events: none; }
 .plan .rot-stem { stroke: var(--accent); stroke-width: 2; }
 .plan .rot-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; cursor: grab; }

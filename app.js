@@ -506,6 +506,7 @@ function copyLayout(layout) {
   }
   if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
   if (layout.cyclo != null) out.cyclo = !!layout.cyclo;
+  if (layout.rows && layout.rows.length) out.rows = layout.rows.map(({ axis, gap, x, y, members }) => ({ axis, gap, x, y, members: members.map(({ kind, id }) => ({ kind, id })) }));
   if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h, media }) => (media ? { id, type, name, x, y, z, rot, w, d, h, media: { id: media.id, name: media.name, type: media.type } } : { id, type, name, x, y, z, rot, w, d, h }));
   return out;
 }
@@ -1552,7 +1553,7 @@ function buildControls() {
   // Typed numbers. A value that cannot be used puts the old one back.
   const typed = (id, low, high, apply) => $(id).addEventListener('change', () => {
     const v = parseFloat($(id).value);
-    if (Number.isFinite(v) && v >= low && v <= high) { layoutKeep(); apply(metres(v)); }
+    if (Number.isFinite(v) && v >= low && v <= high) { layoutKeep(); apply(metres(v)); if (id.startsWith('pos-') && pickedItem()) settleRows([]); }
     else toast(`Use a number from ${low} to ${high}.`, 2500);
     $(id).blur();
     return work.stageDirty ? (delete work.stageDirty, applyStage()) : redrawLayout();
@@ -1585,6 +1586,12 @@ function buildControls() {
   // the words beside the sliders follow while they are dragged
   $('fix-soft').addEventListener('input', () => { $('fix-soft-v').textContent = softWord(+$('fix-soft').value); });
   $('fix-beam').addEventListener('input', () => { const item = pickedItem(); if (item) $('fix-beam-v').textContent = poolSize(item, +$('fix-beam').value); });
+  $('row-make').addEventListener('click', makeRow);
+  const lined = (set) => (v) => { const row = wholeRow(); if (row) { set(row, v); arrange(row); } };
+  typed('row-gap', 0.1, 20, lined((row, v) => { row.gap = v; }));
+  typed('row-count', 2, 60, lined((row, v) => countRow(row, Math.round(v))));
+  for (const [id, axis] of [['row-across', 'x'], ['row-down', 'y']]) $(id).addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); row.axis = axis; arrange(row); redrawLayout(); });
+  $('row-remove').addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); work.rows = work.rows.filter((r) => r !== row); redrawLayout(); });
   $('more-toggle').addEventListener('click', () => { $('more-fields').hidden = !$('more-fields').hidden; $('more-toggle').classList.toggle('open', !$('more-fields').hidden); });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
   typed('fix-tilt', 0, 180, placed((item, v) => { item.tilt = v; }));
@@ -1618,7 +1625,7 @@ function buildControls() {
     const template = copyLayout(findTemplate(currentProject() && currentProject().templateId).layout), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
     const keep = (list) => list.map((it) => (had.has(it.id) ? Object.assign({ was: it.id }, it) : it));
     layoutKeep();
-    Object.assign(work, { leds: keep(template.leds), spots: keep(template.spots), faces: facesOf(template), sides: sidesOf(template), customs: customsOf(template), kinds: kindsOf(template), objects: objectsOf(template), stage: template.stage || null, cyclo: template.cyclo, sel: [] });
+    Object.assign(work, { leds: keep(template.leds), spots: keep(template.spots), faces: facesOf(template), sides: sidesOf(template), customs: customsOf(template), kinds: kindsOf(template), objects: objectsOf(template), stage: template.stage || null, cyclo: template.cyclo, rows: clone(template.rows || []), sel: [] });
     $('layout-kinds').dataset.shown = '';
     applyStage();
   });
@@ -1711,7 +1718,7 @@ const boundsOf = (kind) => (kind === 'object' || kind === 'custom' ? { x0: STAGE
 const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
 // Undo and redo inside the editor: the layout as it was before each change, and after each undo.
 const layoutPast = [], layoutNext = [];
-const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage, cyclo: work.cyclo });
+const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage, cyclo: work.cyclo, rows: work.rows });
 function layoutKeep() { layoutPast.push(layoutNow()); if (layoutPast.length > 80) layoutPast.shift(); layoutNext.length = 0; }
 function layoutStep(from, to, none) {
   if (!from.length) return toast(none, 1500);
@@ -1741,6 +1748,55 @@ const seen = (kind) => work[kind + 's'].filter((item) => !hiddenLayers.has(layer
 // What the panel says beside its sliders: how wide the pool is on the floor, and how soft.
 const poolSize = (light, beam) => { const t = (light.tilt || 0) * Math.PI / 180, wide = 2 * heightOf(light) / Math.max(0.2, Math.cos(t)) * Math.tan(Math.min(60, beam / 2) * Math.PI / 180); return `${Math.round(wide * 10) / 10} m`; };
 const softWord = (v) => (v <= 15 ? 'Sharp' : v >= 85 ? 'Soft' : v + '%');
+// Auto layout: a line of lights or objects that keeps an even spacing. `layout.rows` is a list
+// of { axis: 'x' (across) or 'y' (down), gap: metres between neighbours, x, y: its middle,
+// members: [{ kind, id }] in order }. Whatever happens to a member, the line closes up again
+// around its middle: dragging one along the line changes the order, deleting one closes the
+// gap, and the count can be typed to add or take away copies.
+const ID_PREFIX = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C', object: 'O' };
+const rowOf = (one) => work.rows.find((row) => row.members.some((m) => m.kind === one.kind && m.id === one.id));
+const wholeRow = () => work.rows.find((row) => row.members.length === work.sel.length && row.members.every((m) => isSelected(m.kind, m.id)));
+function arrange(row) {
+  const its = row.members.map((m) => ({ m, item: itemOf(m) })).filter((one) => one.item), cross = row.axis === 'x' ? 'y' : 'x';
+  its.sort((a, b) => a.item[row.axis] - b.item[row.axis]);
+  row.members = its.map((one) => one.m);
+  its.forEach((one, i) => { one.item[row.axis] = Math.round(row[row.axis] + (i - (its.length - 1) / 2) * row.gap * UNIT); one.item[cross] = Math.round(row[cross]); });
+}
+// After lights moved: a line that moved as a whole keeps its new place, one whose member was pulled about closes up where it was.
+function settleRows(moved = []) {
+  work.rows = work.rows.filter((row) => { row.members = row.members.filter((m) => itemOf(m)); return row.members.length > 1; });
+  for (const row of work.rows) {
+    const items = row.members.map(itemOf);
+    if (items.every((it) => moved.includes(it))) { row.x = items.reduce((sum, it) => sum + it.x, 0) / items.length; row.y = items.reduce((sum, it) => sum + it.y, 0) / items.length; }
+    arrange(row);
+  }
+}
+function makeRow() {
+  const all = selected();
+  if (all.length < 2) return;
+  layoutKeep();
+  for (const row of work.rows) row.members = row.members.filter((m) => !isSelected(m.kind, m.id));      // a light is in one line at a time
+  const xs = all.map((one) => one.item.x), ys = all.map((one) => one.item.y), wide = Math.max(...xs) - Math.min(...xs), deep = Math.max(...ys) - Math.min(...ys);
+  const axis = wide >= deep ? 'x' : 'y', span = axis === 'x' ? wide : deep;
+  const gap = Math.max(0.3, Math.round(span / (all.length - 1) / UNIT * 20) / 20) || 1;
+  work.rows.push({ axis, gap, x: xs.reduce((a, b) => a + b, 0) / xs.length, y: ys.reduce((a, b) => a + b, 0) / ys.length, members: work.sel.map(({ kind, id }) => ({ kind, id })) });
+  settleRows();
+  redrawLayout();
+}
+// Change how many are in the line: more are copies of the last one, fewer drops from the end.
+function countRow(row, n) {
+  while (row.members.length < n) {
+    const last = row.members[row.members.length - 1], list = work[last.kind + 's'];
+    const copy = Object.assign({}, itemOf(last), { id: ID_PREFIX[last.kind] + (Math.max(0, ...list.map((it) => numberOf(it.id))) + 1) });
+    delete copy.was; delete copy.on;
+    copy[row.axis] += 1;                                       // just past the last one, so it sorts to the end
+    list.push(copy);
+    row.members.push({ kind: last.kind, id: copy.id });
+  }
+  while (row.members.length > n) { const gone = row.members.pop(); work[gone.kind + 's'] = work[gone.kind + 's'].filter((it) => it.id !== gone.id); }
+  arrange(row);
+  work.sel = row.members.map(({ kind, id }) => ({ kind, id }));
+}
 // With snapping on, lights and objects land on a 5 cm grid and turn in steps of 15 degrees.
 let snapOn = true;
 const snapTo = (v) => (snapOn ? Math.round(v / 5) * 5 : Math.round(v));
@@ -1753,7 +1809,7 @@ function enterLayout() {
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
   work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)),
-    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, cyclo: layout.cyclo, sel: [] };
+    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, cyclo: layout.cyclo, rows: clone(layout.rows || []), sel: [] };
   Object.defineProperty(work, 'picked', {
     get() { return this.sel.length === 1 ? this.sel[0] : null; },
     set(one) { this.sel = one ? [one] : []; },
@@ -1779,13 +1835,27 @@ function redrawLayout() {
   renderKinds();
   const item = pickedItem(), many = work.sel.length;
   $('layout-sel').hidden = !many;
+  const line = many > 1 && wholeRow();
+  $('layout-row').hidden = !line;
+  $('row-make').hidden = many < 2 || !!line;
+  if (line) {
+    for (const [id, value] of [['row-gap', line.gap], ['row-count', line.members.length]]) if (document.activeElement !== $(id)) $(id).value = value;
+    $('row-across').classList.toggle('active', line.axis === 'x'); $('row-down').classList.toggle('active', line.axis === 'y');
+  }
+  // an outline round each auto layout
+  for (const row of work.rows) {
+    const its = row.members.map(itemOf).filter(Boolean);
+    if (its.length < 2) continue;
+    const x0 = Math.min(...its.map((it) => it.x)) - 44, y0 = Math.min(...its.map((it) => it.y)) - 40, x1 = Math.max(...its.map((it) => it.x)) + 44, y1 = Math.max(...its.map((it) => it.y)) + 46;
+    el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, rx: 10, class: 'row-box' + (row === line ? ' picked' : '') }, null, planEls.fixtureLayer);
+  }
   $('layout-single').hidden = !item;
   $('layout-align').hidden = !many;
   $('layout-space').hidden = many < 3;
   each('[data-align]', (b) => { b.title = b.title.replace(/ on the Stage$/, '') + (many === 1 ? ' on the Stage' : ''); });
   each('[data-spread]', (b) => { b.disabled = many < 3; });
   $('layout-paste').disabled = !layoutClip();
-  if (many > 1) $('layout-kind').textContent = `${many} Selected`;
+  if (many > 1) $('layout-kind').textContent = line ? `Auto Layout · ${many}` : `${many} Selected`;
   if (item) {
     const numbered = work.picked.kind === 'led' || work.picked.kind === 'spot';       // only these carry a number people use
     const ofKind = work.picked.kind === 'custom' && work.kinds.find((k) => k.id === item.kind);
@@ -1852,8 +1922,11 @@ function layoutPress(e) {
     moving = null;
     return redrawLayout();
   }
-  if (!isSelected(one.kind, one.id)) work.sel = [one];        // pressing one of a selected group keeps the group
+  const row = rowOf(one), whole = row && wholeRow() === row, only = work.sel.length === 1 && isSelected(one.kind, one.id);
+  if (row && !whole && !only) work.sel = row.members.map(({ kind, id }) => ({ kind, id }));       // a light in an auto layout picks the whole line
+  else if (!isSelected(one.kind, one.id)) work.sel = [one];        // pressing one of a selected group keeps the group
   moving = { start: svgPoint(e), kept: false, items: selected().map(({ kind, item }) => ({ kind, item, x: item.x, y: item.y })) };
+  moving.drill = whole ? one : null;         // pressed again without dragging: just this one of the line
   moving.lead = moving.items.find((m) => m.kind === one.kind && m.item.id === one.id);       // the one under the finger: it is what lines up
   // lights mounted on a piece that is moving ride along with it
   const carried = new Set(moving.items.filter((m) => m.kind === 'object').map((m) => m.item.id));
@@ -1959,8 +2032,11 @@ function joinUp(item) {
 }
 function layoutRelease() {
   if ((moving || turning) && growDrawing(work.objects)) resetView();
+  const was = moving;
   moving = turning = null;
-  if (boxing || guides.length) { boxing = null; guides.length = 0; redrawLayout(); }
+  if (was && was.drill && !was.kept) work.sel = [was.drill];
+  if (was && was.kept) settleRows(was.items.map((m) => m.item));
+  if (boxing || guides.length || was) { boxing = null; guides.length = 0; redrawLayout(); }
 }
 // What was copied, kept for this browser tab so it can be pasted into another layout too.
 function layoutClip() {
@@ -1999,8 +2075,10 @@ function layoutPaste(clip = layoutClip()) {
   redrawLayout();
 }
 function layoutDuplicate() {
-  const lights = clipOf();
-  if (lights.length) layoutPaste({ lights, kinds: [] });
+  const lights = clipOf(), row = work.sel.length === 1 && rowOf(work.sel[0]);
+  if (!lights.length) return;
+  layoutPaste({ lights, kinds: [] });
+  if (row) { row.members.push(Object.assign({}, work.sel[0])); settleRows(); redrawLayout(); }       // a copy of a light in a line joins the line
 }
 // Line the selected lights up on one edge or through the middle, or space them evenly.
 function layoutAlign(how) {
@@ -2012,6 +2090,7 @@ function layoutAlign(how) {
   const to = { left: Math.min(...xs), right: Math.max(...xs), centre: (Math.min(...xs) + Math.max(...xs)) / 2, top: Math.min(...ys), bottom: Math.max(...ys), middle: (Math.min(...ys) + Math.max(...ys)) / 2 }[how];
   const across = how === 'left' || how === 'right' || how === 'centre';
   for (const { kind, item } of all) Object.assign(item, hold(kind, across ? Math.round(to) : item.x, across ? item.y : Math.round(to)));
+  settleRows(all.map((one) => one.item));
   redrawLayout();
 }
 function layoutSpread(axis) {
@@ -2027,6 +2106,7 @@ function layoutNudge(dx, dy) {
   if (!all.length) return;
   layoutKeep();
   for (const { kind, item } of all) Object.assign(item, hold(kind, item.x + dx, item.y + dy));
+  settleRows(all.map((one) => one.item));
   redrawLayout();
 }
 // Keyboard in the layout editor
@@ -2077,6 +2157,7 @@ function layoutDelete() {
   layoutKeep();
   for (const one of work.sel) work[one.kind + 's'] = work[one.kind + 's'].filter((it) => it.id !== one.id);
   for (const light of work.customs) if (light.on && !work.objects.some((o) => o.id === light.on)) delete light.on;       // what it hung on is gone
+  settleRows();
   work.sel = [];
   redrawLayout();
 }
@@ -2090,6 +2171,7 @@ function layoutRenumber() {
     return;
   }
   layoutKeep();
+  for (const row of work.rows) for (const m of row.members) if (m.kind === work.picked.kind && m.id === item.id) m.id = id;
   item.id = id; work.picked.id = id;
   redrawLayout();
 }
