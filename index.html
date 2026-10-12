@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121646">
+<link rel="stylesheet" href="style.css?v=202610121700">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -288,14 +288,42 @@
         <div id="layout-kinds"></div>
       </div>
       <div class="group">
-        <p class="hint" id="layout-none">Tap a light on the plan to select it. Drag a side light across the stage to put it in the other wing.</p>
+        <p class="hint" id="layout-none">Tap a light to select it, or drag a box over several. Shift-tap adds to the selection. Drag any selected light to move them all.</p>
         <div id="layout-picked" hidden>
           <div class="sec-head"><h3 id="layout-kind">LED</h3></div>
-          <div class="line">
+          <div class="line" id="layout-single">
             <span class="lbl" id="layout-number-lbl">Number</span>
             <input id="layout-number" type="number" min="1" step="1">
+          </div>
+          <div class="line">
+            <button class="btn" id="layout-dup">Duplicate</button>
+            <button class="btn" id="layout-copy">Copy</button>
             <button class="btn" id="layout-delete">Delete</button>
           </div>
+          <div id="layout-align">
+            <div class="line">
+              <span class="lbl">Align</span>
+              <div class="seg tools">
+                <button class="btn icon" data-align="left" data-icon="alignleft" title="Align Left Edges"></button>
+                <button class="btn icon" data-align="centre" data-icon="aligncentre" title="Align Centres Across"></button>
+                <button class="btn icon" data-align="right" data-icon="alignright" title="Align Right Edges"></button>
+                <button class="btn icon" data-align="top" data-icon="aligntop" title="Align Tops"></button>
+                <button class="btn icon" data-align="middle" data-icon="alignmiddle" title="Align Centres Down"></button>
+                <button class="btn icon" data-align="bottom" data-icon="alignbottom" title="Align Bottoms"></button>
+              </div>
+            </div>
+            <div class="line">
+              <span class="lbl">Space</span>
+              <div class="seg tools">
+                <button class="btn icon" data-spread="x" data-icon="spreadx" title="Space Evenly Across (3 or More)"></button>
+                <button class="btn icon" data-spread="y" data-icon="spready" title="Space Evenly Down (3 or More)"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="line">
+          <button class="btn" id="layout-paste">Paste</button>
+          <button class="btn" id="layout-undo">Undo</button>
         </div>
       </div>
       <div class="group">
@@ -459,6 +487,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121646"></script>
+<script src="app.js?v=202610121700"></script>
 </body>
 </html>

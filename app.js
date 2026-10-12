@@ -391,6 +391,14 @@ const ICONS = {
   clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/>',
   file: '<path d="M4.5 2.5H9l2.5 2.5v8.5h-7zM9 2.5V5h2.5"/>',
   upload: '<path d="M8 10.5v-8M4.8 5.5 8 2.3l3.2 3.2M3 13.5h10"/>',
+  alignleft: '<path d="M2.5 2.5v11M5 5h6.5v2.2H5zM5 9h4v2.2H5z"/>',
+  aligncentre: '<path d="M8 2.5v11M4.5 5h7v2.2h-7zM5.8 9h4.4v2.2H5.8z"/>',
+  alignright: '<path d="M13.5 2.5v11M4.5 5H11v2.2H4.5zM7 9h4v2.2H7z"/>',
+  aligntop: '<path d="M2.5 2.5h11M5 5v6.5h2.2V5zM9 5v4h2.2V5z"/>',
+  alignmiddle: '<path d="M2.5 8h11M5 4.5v7h2.2v-7zM9 5.8v4.4h2.2V5.8z"/>',
+  alignbottom: '<path d="M2.5 13.5h11M5 4.5V11h2.2V4.5zM9 7v4h2.2V7z"/>',
+  spreadx: '<path d="M2.5 2.5v11M13.5 2.5v11M6.9 5h2.2v6H6.9z"/>',
+  spready: '<path d="M2.5 2.5h11M2.5 13.5h11M5 6.9h6v2.2H5z"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -755,7 +763,7 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
   const text = (x, y, value) => el('text', { x, y, 'text-anchor': 'middle' }, value, layer);
   const tag = (shape, kind, id) => {             // lets the layout editor find what was pressed
     shape.parentNode.dataset.kind = kind; shape.parentNode.dataset.id = id;
-    if (editing && editing.kind === kind && editing.id === id) shape.classList.add('picked');
+    if (editing && editing.some((one) => one.kind === kind && one.id === id)) shape.classList.add('picked');
     return shape;
   };
   const aims = el('g', {}, null, layer);
@@ -901,7 +909,7 @@ svg.addEventListener('pointermove', (e) => {
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
-  if (layoutMode) { moving = null; return; }
+  if (layoutMode) return layoutRelease();
   if (!drag) return;
   const d = drag;
   drag = null;
@@ -1111,6 +1119,12 @@ function buildControls() {
   $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
   $('layout-add-side').addEventListener('click', () => layoutAdd('side'));
   $('layout-add-face').addEventListener('click', () => layoutAdd('face'));
+  $('layout-copy').addEventListener('click', layoutCopy);
+  $('layout-paste').addEventListener('click', () => layoutPaste());
+  $('layout-dup').addEventListener('click', layoutDuplicate);
+  $('layout-undo').addEventListener('click', layoutUndo);
+  each('[data-align]', (b) => b.addEventListener('click', () => layoutAlign(b.dataset.align)));
+  each('[data-spread]', (b) => b.addEventListener('click', () => layoutSpread(b.dataset.spread)));
   $('layout-new-kind').addEventListener('click', () => {
     const id = 'k' + newId();
     work.kinds.push({ id, name: `Custom Light ${work.kinds.length + 1}`, shape: 'circle' });
@@ -1123,7 +1137,9 @@ function buildControls() {
   $('layout-template').addEventListener('click', () => {
     const template = copyLayout(findTemplate(currentProject() && currentProject().templateId).layout), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
     const keep = (list) => list.map((it) => (had.has(it.id) ? Object.assign({ was: it.id }, it) : it));
-    work = { leds: keep(template.leds), spots: keep(template.spots), picked: null };
+    layoutKeep();
+    Object.assign(work, { leds: keep(template.leds), spots: keep(template.spots), faces: facesOf(template), sides: sidesOf(template), customs: customsOf(template), kinds: kindsOf(template), sel: [] });
+    $('layout-kinds').dataset.shown = '';
     redrawLayout();
   });
   // Keep the layout being edited as a template for new projects.
@@ -1167,10 +1183,10 @@ function buildControls() {
 
   document.addEventListener('keydown', (e) => {
     const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
-    if (layoutMode && e.key !== 'Escape') return;       // shortcuts are for lighting, not layout editing
+    if (layoutMode && e.key !== 'Escape') { if (!typing) layoutKey(e); return; }       // the layout editor has its own shortcuts
     if (e.key === 'Escape') {
       if (!$('menu').hidden) $('menu').hidden = true;
-      else if (layoutMode) { work.picked = null; redrawLayout(); }
+      else if (layoutMode) { work.sel = []; redrawLayout(); }
       else if (aiming) { aiming = false; syncUI(); }
       else if (document.body.classList.contains('watch')) setWatch(false);
       else { clearSelection(); syncUI(); }
@@ -1204,14 +1220,38 @@ const BOUNDS = { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: ST
 const numberOf = (id) => +String(id).replace(/^[A-Z]/, '');
 const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light', custom: 'Custom Light' };
 const PLAN_BOUNDS = { x0: 290, x1: 1710, y0: 150, y1: 1090 };      // face and side lights stand off the stage
-const pickedItem = () => work.picked && work[work.picked.kind + 's'].find((it) => it.id === work.picked.id);
+// What is selected in the layout editor: `work.sel`, a list of { kind, id }. `work.picked`
+// is the one selected light when exactly one is, for the settings that only make sense then.
+const KINDS_OF_LIGHT = ['led', 'spot', 'side', 'face', 'custom'];
+const itemOf = (one) => work[one.kind + 's'].find((it) => it.id === one.id);
+const pickedItem = () => work.picked && itemOf(work.picked);
+const selected = () => work.sel.map((one) => ({ kind: one.kind, item: itemOf(one) })).filter((one) => one.item);
+const isSelected = (kind, id) => work.sel.some((one) => one.kind === kind && one.id === id);
+const boundsOf = (kind) => (kind === 'side' || kind === 'face' ? PLAN_BOUNDS : BOUNDS);
+const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
+// Undo inside the editor: the layout as it was before each change.
+const layoutPast = [];
+const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds });
+function layoutKeep() { layoutPast.push(layoutNow()); if (layoutPast.length > 80) layoutPast.shift(); }
+function layoutUndo() {
+  if (!layoutPast.length) return toast('Nothing to undo.', 1500);
+  Object.assign(work, JSON.parse(layoutPast.pop()));
+  work.sel = work.sel.filter((one) => itemOf(one));
+  $('layout-kinds').dataset.shown = '';
+  redrawLayout();
+}
 
 function enterLayout() {
   layoutMode = true;
   clearSelection(); aiming = false;
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
-  work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)), picked: null };
+  work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)), sel: [] };
+  Object.defineProperty(work, 'picked', {
+    get() { return this.sel.length === 1 ? this.sel[0] : null; },
+    set(one) { this.sel = one ? [one] : []; },
+  });
+  layoutPast.length = 0;
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -1221,11 +1261,16 @@ function enterLayout() {
   redrawLayout();
 }
 function redrawLayout() {
-  drawFixtures(work.leds, work.spots, work.picked, work.sides, work.faces, work.customs, work.kinds);
+  drawFixtures(work.leds, work.spots, work.sel, work.sides, work.faces, work.customs, work.kinds);
   renderKinds();
-  const item = pickedItem();
-  $('layout-picked').hidden = !item;
-  $('layout-none').hidden = !!item;
+  const item = pickedItem(), many = work.sel.length;
+  $('layout-picked').hidden = !many;
+  $('layout-none').hidden = !!many;
+  $('layout-single').hidden = !item;
+  $('layout-align').hidden = many < 2;
+  each('[data-spread]', (b) => { b.disabled = many < 3; });
+  $('layout-paste').disabled = !layoutClip();
+  if (many > 1) $('layout-kind').textContent = `${many} Selected`;
   if (item) {
     const numbered = work.picked.kind === 'led' || work.picked.kind === 'spot';       // only these carry a number people use
     const ofKind = work.picked.kind === 'custom' && work.kinds.find((k) => k.id === item.kind);
@@ -1235,23 +1280,123 @@ function redrawLayout() {
   }
   $('layout-count').textContent = `${work.leds.length} LED · ${work.spots.length} spot · ${work.faces.length} face · ${work.sides.length} side` + (work.customs.length ? ` · ${work.customs.length} custom` : '');
 }
+let boxing = null;                     // a selection box being dragged out over empty plan
 function layoutPress(e) {
-  const g = e.target.closest('.fx[data-kind]');
-  work.picked = g ? { kind: g.dataset.kind, id: g.dataset.id } : null;
-  const item = pickedItem();
-  moving = item ? { item, start: svgPoint(e), x: item.x, y: item.y } : null;
+  const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+  if (!g) {                            // empty plan: drag out a box; what it touches is selected
+    if (!add) work.sel = [];
+    boxing = { start: svgPoint(e), had: [...work.sel], rect: null };
+    moving = null;
+    return redrawLayout();
+  }
+  const one = { kind: g.dataset.kind, id: g.dataset.id };
+  if (add) {                           // Shift or Cmd: add it to the selection, or take it out
+    work.sel = isSelected(one.kind, one.id) ? work.sel.filter((s) => !(s.kind === one.kind && s.id === one.id)) : [...work.sel, one];
+    moving = null;
+    return redrawLayout();
+  }
+  if (!isSelected(one.kind, one.id)) work.sel = [one];        // pressing one of a selected group keeps the group
+  moving = { start: svgPoint(e), kept: false, items: selected().map(({ kind, item }) => ({ kind, item, x: item.x, y: item.y })) };
   redrawLayout();
 }
 function layoutDrag(e) {
-  if (!moving) return;
   const p = svgPoint(e), snap = (v) => Math.round(v / 5) * 5;
-  const within = work.picked.kind === 'led' || work.picked.kind === 'spot' || work.picked.kind === 'custom' ? BOUNDS : PLAN_BOUNDS;
-  moving.item.x = Math.max(within.x0, Math.min(within.x1, snap(moving.x + p.x - moving.start.x)));
-  moving.item.y = Math.max(within.y0, Math.min(within.y1, snap(moving.y + p.y - moving.start.y)));
+  if (boxing) {
+    const from = boxing.start, r = { x: Math.min(p.x, from.x), y: Math.min(p.y, from.y), w: Math.abs(p.x - from.x), h: Math.abs(p.y - from.y) };
+    const inside = (it) => it.x >= r.x && it.x <= r.x + r.w && it.y >= r.y && it.y <= r.y + r.h;
+    work.sel = [...boxing.had];
+    for (const kind of KINDS_OF_LIGHT) for (const it of work[kind + 's']) if (inside(it) && !isSelected(kind, it.id)) work.sel.push({ kind, id: it.id });
+    redrawLayout();                                            // (this redraws the fixtures; the box is drawn after)
+    boxing.rect = el('rect', { class: 'box', x: r.x, y: r.y, width: r.w, height: r.h }, null, planEls.fixtureLayer);
+    return;
+  }
+  if (!moving) return;
+  const dx = snap(p.x - moving.start.x), dy = snap(p.y - moving.start.y);
+  if (!dx && !dy) return;
+  if (!moving.kept) { moving.kept = true; const now = moving.items.map((m) => [m.item, m.item.x, m.item.y]); for (const m of moving.items) { m.item.x = m.x; m.item.y = m.y; } layoutKeep(); for (const [it, x, y] of now) { it.x = x; it.y = y; } }
+  for (const m of moving.items) Object.assign(m.item, hold(m.kind, m.x + dx, m.y + dy));      // the whole group moves together
   redrawLayout();
 }
+function layoutRelease() {
+  moving = null;
+  if (boxing) { boxing = null; redrawLayout(); }
+}
+// What was copied, kept for this browser tab so it can be pasted into another layout too.
+function layoutClip() {
+  try { return JSON.parse(sessionStorage.getItem('slp-clip') || 'null'); } catch (e) { return null; }
+}
+function layoutCopy() {
+  const lights = selected().map(({ kind, item }) => ({ kind, x: item.x, y: item.y, of: item.kind }));
+  if (!lights.length) return;
+  const kinds = work.kinds.filter((k) => lights.some((light) => light.of === k.id));
+  try { sessionStorage.setItem('slp-clip', JSON.stringify({ lights, kinds })); } catch (e) { /* no session storage */ }
+  toast(`Copied ${lights.length} light${lights.length === 1 ? '' : 's'}.`, 1500);
+  redrawLayout();
+}
+// Paste what was copied, a little to the side of where it came from, and select the copies.
+function layoutPaste(clip = layoutClip()) {
+  if (!clip || !clip.lights.length) return;
+  layoutKeep();
+  for (const kind of clip.kinds || []) if (!work.kinds.some((k) => k.id === kind.id)) work.kinds.push(Object.assign({}, kind));
+  work.sel = [];
+  for (const light of clip.lights) {
+    const list = work[light.kind + 's'], n = Math.max(0, ...list.map((it) => numberOf(it.id))) + 1;
+    const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C' }[light.kind] + n;
+    const item = Object.assign({ id }, hold(light.kind, light.x + 30, light.y + 30));
+    if (light.kind === 'custom') item.kind = light.of;
+    list.push(item);
+    work.sel.push({ kind: light.kind, id });
+  }
+  $('layout-kinds').dataset.shown = '';
+  redrawLayout();
+}
+function layoutDuplicate() {
+  const lights = selected().map(({ kind, item }) => ({ kind, x: item.x, y: item.y, of: item.kind }));
+  if (lights.length) layoutPaste({ lights, kinds: [] });
+}
+// Line the selected lights up on one edge or through the middle, or space them evenly.
+function layoutAlign(how) {
+  const all = selected();
+  if (all.length < 2) return;
+  layoutKeep();
+  const xs = all.map((one) => one.item.x), ys = all.map((one) => one.item.y);
+  const to = { left: Math.min(...xs), right: Math.max(...xs), centre: (Math.min(...xs) + Math.max(...xs)) / 2, top: Math.min(...ys), bottom: Math.max(...ys), middle: (Math.min(...ys) + Math.max(...ys)) / 2 }[how];
+  const across = how === 'left' || how === 'right' || how === 'centre';
+  for (const { kind, item } of all) Object.assign(item, hold(kind, across ? Math.round(to) : item.x, across ? item.y : Math.round(to)));
+  redrawLayout();
+}
+function layoutSpread(axis) {
+  const all = selected().sort((a, b) => a.item[axis] - b.item[axis]);
+  if (all.length < 3) return;
+  layoutKeep();
+  const from = all[0].item[axis], step = (all[all.length - 1].item[axis] - from) / (all.length - 1);
+  all.forEach(({ kind, item }, i) => { const at = Math.round(from + step * i); Object.assign(item, hold(kind, axis === 'x' ? at : item.x, axis === 'y' ? at : item.y)); });
+  redrawLayout();
+}
+function layoutNudge(dx, dy) {
+  const all = selected();
+  if (!all.length) return;
+  layoutKeep();
+  for (const { kind, item } of all) Object.assign(item, hold(kind, item.x + dx, item.y + dy));
+  redrawLayout();
+}
+// Keyboard in the layout editor
+function layoutKey(e) {
+  const cmd = e.metaKey || e.ctrlKey, key = e.key.toLowerCase(), step = e.shiftKey ? 25 : 5;
+  const arrows = { arrowleft: [-step, 0], arrowright: [step, 0], arrowup: [0, -step], arrowdown: [0, step] };
+  if (arrows[key]) layoutNudge(...arrows[key]);
+  else if (key === 'delete' || key === 'backspace') layoutDelete();
+  else if (cmd && key === 'c') layoutCopy();
+  else if (cmd && key === 'v') layoutPaste();
+  else if (cmd && key === 'd') layoutDuplicate();
+  else if (cmd && key === 'z') layoutUndo();
+  else if (cmd && key === 'a') { work.sel = KINDS_OF_LIGHT.flatMap((kind) => work[kind + 's'].map((it) => ({ kind, id: it.id }))); redrawLayout(); }
+  else return;
+  e.preventDefault();
+}
 function layoutAdd(kind, ofKind) {
+  layoutKeep();
   const list = work[kind + 's'], n = Math.max(0, ...list.map((it) => numberOf(it.id))) + 1;
   const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C' }[kind] + n;
   // drop it somewhere sensible for its kind, nudged along so new ones do not stack up
@@ -1264,10 +1409,10 @@ function layoutAdd(kind, ofKind) {
   redrawLayout();
 }
 function layoutDelete() {
-  if (!work.picked) return;
-  const key = work.picked.kind + 's';
-  work[key] = work[key].filter((it) => it.id !== work.picked.id);
-  work.picked = null;
+  if (!work.sel.length) return;
+  layoutKeep();
+  for (const one of work.sel) work[one.kind + 's'] = work[one.kind + 's'].filter((it) => it.id !== one.id);
+  work.sel = [];
   redrawLayout();
 }
 function layoutRenumber() {
@@ -1279,6 +1424,7 @@ function layoutRenumber() {
     $('layout-number').value = numberOf(item.id);
     return;
   }
+  layoutKeep();
   item.id = id; work.picked.id = id;
   redrawLayout();
 }
@@ -1300,14 +1446,15 @@ function renderKinds() {
     name.addEventListener('blur', () => { kind.name = name.value.trim() || 'Custom Light'; redrawLayout(); });
     const shape = document.createElement('select');
     for (const [id, text] of SHAPES) shape.add(new Option(text, id, false, id === kind.shape));
-    shape.addEventListener('change', () => { kind.shape = shape.value; redrawLayout(); });
+    shape.addEventListener('change', () => { layoutKeep(); kind.shape = shape.value; redrawLayout(); });
     row.appendChild(name); row.appendChild(shape);
     const add = button(row, '', 'btn icon', () => layoutAdd('custom', kind.id));
     add.innerHTML = svgIcon('plus'); add.title = 'Add One to the Stage';
     const drop = button(row, '', 'btn icon', () => {
+      layoutKeep();
       work.kinds = work.kinds.filter((k) => k !== kind);
       work.customs = work.customs.filter((light) => light.kind !== kind.id);
-      work.picked = null;
+      work.sel = [];
       redrawLayout();
     });
     drop.innerHTML = svgIcon('trash'); drop.title = 'Remove This Kind and Its Lights';

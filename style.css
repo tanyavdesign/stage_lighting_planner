@@ -611,7 +611,8 @@ body.layout-mode #layout-panel { display: block; }
 body.layout-mode #mods > .group { display: none; }
 body.layout-mode .plan .fx[data-kind] { cursor: move; }
 body.layout-mode .history { display: none; }
-.plan .led.picked, .plan .spot.picked, .plan .side.picked, .plan .face.picked, .plan .custom.picked { stroke: var(--accent); stroke-width: 5; }
+.plan .led.picked, .plan .spot.picked, .plan .side.picked, .plan .face.picked, .plan .custom.picked,
+.plan .fx:hover > .picked { stroke: var(--accent); stroke-width: 5; }
 /* lights of a custom kind: an outlined shape that fills with its color when lit */
 .plan .custom { fill: var(--panel); stroke: var(--plan-label); stroke-width: 2; stroke-linejoin: round; }
 .plan .fx:hover > .custom { stroke: var(--muted); }
@@ -620,6 +621,10 @@ body.layout-mode .history { display: none; }
 .kind-row .select-btn { flex: 0 1 96px; }
 #layout-panel .sec-head .btn { height: 26px; padding: 0 8px; }
 #layout-panel .line { flex-wrap: wrap; }
+/* align and space buttons: a strip of small icon buttons */
+.seg.tools { flex: 0 1 auto; background: none; gap: 2px; }
+.seg.tools .btn.icon { flex: 0 0 var(--ctl); color: var(--text); }
+.seg.tools .btn.icon:hover { background: var(--hover); }
 #layout-panel input[type="number"] { width: 80px; }
 #layout-panel input[type="text"] { flex: 1; min-width: 0; }
 #layout-panel .hint.note { margin-top: 4px; }
