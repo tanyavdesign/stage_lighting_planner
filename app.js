@@ -1330,6 +1330,36 @@ function buildTours() {
   $('tour-editor').addEventListener('click', () => startTour('editor'));
 }
 
+// Name tags: hovering a button that has a title shows it at once in a small label, instead
+// of the browser's own tooltip that takes a second to appear. (Touch screens have no hover.)
+function buildTips() {
+  if (!matchMedia('(hover: hover)').matches) return;
+  const tip = document.createElement('div');
+  tip.id = 'tip'; tip.hidden = true;
+  document.body.appendChild(tip);
+  let shownFor = null;
+  const hide = () => { tip.hidden = true; shownFor = null; };
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest && e.target.closest('button, label.btn, canvas[title], [data-tip]');
+    if (!el) return hide();
+    if (el.title) {                               // take the text over from the browser's tooltip
+      el.dataset.tip = el.title;
+      if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', el.title);
+      el.removeAttribute('title');
+    }
+    if (!el.dataset.tip || el === shownFor) { if (!el.dataset.tip) hide(); return; }
+    shownFor = el;
+    tip.textContent = el.dataset.tip;
+    tip.hidden = false;
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    const top = r.bottom + 6 + h > innerHeight - 4 ? r.top - h - 6 : r.bottom + 6;
+    tip.style.left = Math.max(6, Math.min(innerWidth - w - 6, r.left + r.width / 2 - w / 2)) + 'px';
+    tip.style.top = top + 'px';
+  });
+  for (const type of ['mousedown', 'wheel', 'keydown']) document.addEventListener(type, hide, true);
+  document.addEventListener('mouseleave', hide);
+}
+
 // A menu that would run off the side of the screen is slid back in.
 function keepOnScreen(menu) {
   menu.style.transform = '';
@@ -4058,6 +4088,7 @@ requestAnimationFrame(frame);
 requestAnimationFrame(() => document.documentElement.classList.remove('booting'));
 // First visits: ask what the person is here for, then walk them through the screen they are on.
 buildTours();
+buildTips();
 setTimeout(() => {
   if (atHome && !currentId && !prefs.role) $('role').hidden = false;
   else if (atHome && !currentId && !prefs.tourHome && TOURS[prefs.role]) startTour(prefs.role);
