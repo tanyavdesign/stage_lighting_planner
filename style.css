@@ -486,6 +486,7 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
     border: 0;
     border-radius: 8px;
     box-shadow: var(--float);
+    gap: 0;
   }
 
   .view-col { flex: 0 0 min(var(--view-h, 24dvh), 50dvh); }

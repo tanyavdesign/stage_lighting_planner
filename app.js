@@ -227,6 +227,7 @@ const selection = new Set();
 // Line icons, drawn on a 16 x 16 grid with a thin stroke
 const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
+  back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
   play: '<path d="M5 3.2v9.6L12.5 8z"/>',
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
   prev: '<path d="M4 3.5v9M12 3.5 6 8l6 4.5z"/>',
@@ -2690,6 +2691,7 @@ function buildShow() {
   $('import').addEventListener('change', (e) => { if (e.target.files[0]) importShow(e.target.files[0]); e.target.value = ''; });
   if (show.trackName) $('load-track').title = `Track: ${show.trackName}`;
   $('go-home').addEventListener('click', goHome);
+  $('back').addEventListener('click', goHome);
   window.addEventListener('pagehide', saveThumbnail);
   if (currentId) audioStore.get(currentId).then((file) => { if (file) loadTrack(file, true); });
   // The project's name sits at the top of the menu and names the exported files.
