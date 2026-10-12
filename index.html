@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121458">
+<link rel="stylesheet" href="style.css?v=202610121502">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -173,6 +173,13 @@
         <div id="share-has">
           <div class="line"><code id="share-shown" class="share-shown"></code><button id="share-copy" class="btn" type="button">Copy</button></div>
           <p id="share-note" class="hint mini-note"></p>
+          <div id="share-change">
+            <p class="hint mini-note">Change the code:</p>
+            <div class="line">
+              <input id="share-recode" type="text" maxlength="60" placeholder="New Code" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="New code">
+              <button id="share-recode-go" class="btn" type="button">Change</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -420,6 +427,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121458"></script>
+<script src="app.js?v=202610121502"></script>
 </body>
 </html>

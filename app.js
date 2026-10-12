@@ -3531,7 +3531,36 @@ async function cloudGet(code) {
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('cloud ' + response.status);
   const fields = (await response.json()).fields, data = JSON.parse(fields.data.stringValue);
-  return { name: fields.name.stringValue, version: +fields.version.integerValue, layout: data.layout, lights: data.lights || undefined };
+  return { name: fields.name.stringValue, version: +fields.version.integerValue, layout: data.layout, lights: data.lights || undefined, movedTo: data.movedTo };
+}
+// One write to the database. `key` is the current one-time key ('' for a new code), `next` the key for the write after.
+// `movedTo`: the code this layout now lives under, left behind at its old code.
+async function cloudWrite(code, tpl, version, key, next, movedTo) {
+  const text = (stringValue) => ({ stringValue });
+  return fetch(`${CLOUD}${code}?currentDocument.exists=${version > 1}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: {
+      data: text(JSON.stringify({ layout: copyLayout(tpl.layout), lights: tpl.lights || null, movedTo })),
+      name: text(tpl.name.slice(0, 80)),
+      version: { integerValue: String(version) },
+      key: text(key),
+      keyHash: text(await sha256(next)),
+      updated: { timestampValue: new Date().toISOString() },
+    } }),
+  });
+}
+// Give a shared layout a different code. It is published afresh under the new one, and the
+// old code is left pointing at it, so people who imported the old code are carried over.
+// -> 'ok', 'taken' or 'denied'
+async function cloudRecode(tpl, code) {
+  const old = tpl.share;
+  tpl.share = null;
+  let result;
+  try { result = await cloudPut(tpl, code); } catch (e) { tpl.share = old; saveTemplates(); throw e; }
+  if (result !== 'ok') { tpl.share = old; saveTemplates(); return result; }
+  try { await cloudWrite(old.code, tpl, old.version + 1, old.key, newKey(), code); } catch (e) { /* the old code simply stops updating */ }
+  return 'ok';
 }
 // Publish a template under a code for the first time, or publish a change to one this device owns.
 // -> 'ok', 'taken' (someone has that code) or 'denied' (this device may not change it)
@@ -3545,19 +3574,7 @@ async function cloudPut(tpl, code) {
     saveTemplates();
   }
   const version = first ? 1 : tpl.share.version + 1;
-  const text = (stringValue) => ({ stringValue });
-  const response = await fetch(`${CLOUD}${code}?currentDocument.exists=${!first}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: {
-      data: text(JSON.stringify({ layout: copyLayout(tpl.layout), lights: tpl.lights || null })),
-      name: text(tpl.name.slice(0, 80)),
-      version: { integerValue: String(version) },
-      key: text(first ? '' : tpl.share.key),
-      keyHash: text(await sha256(next)),
-      updated: { timestampValue: new Date().toISOString() },
-    } }),
-  });
+  const response = await cloudWrite(code, tpl, version, first ? '' : tpl.share.key, next);
   if (response.ok) { tpl.share = { code, version, key: next }; saveTemplates(); return 'ok'; }
   if (response.status === 409 || response.status === 400) return first ? 'taken' : 'denied';
   if (response.status === 403) return first ? 'taken' : 'denied';
@@ -3574,13 +3591,14 @@ async function republish(tpl) {
 }
 // Get a layout by its code as a template that follows it.
 async function importCode(raw) {
-  const code = cleanCode(raw);
+  let code = cleanCode(raw);
   if (code.length < 4) return toast('Type the layout code first.', 2500);
   const had = templates.find((t) => t.share && t.share.code === code);
   if (had) return toast(`You already have ${had.name}.`, 2500);
   toast('Looking for that layout...');
   try {
-    const got = await cloudGet(code);
+    let got = await cloudGet(code);
+    if (got && got.movedTo) { code = got.movedTo; got = await cloudGet(code); }       // the layout was given a new code
     if (!got && code === KDT_CODE) {
       // Nobody has published the KDT stage yet: the first device to ask for it by its code gets
       // the original layout as its own template and becomes its publisher.
@@ -3604,7 +3622,11 @@ async function refreshShared() {
   for (const tpl of templates) {
     if (!tpl.share || tpl.share.key) continue;
     try {
-      const got = await cloudGet(tpl.share.code);
+      let got = await cloudGet(tpl.share.code);
+      if (got && got.movedTo) {                    // its publisher changed the code: follow it there
+        const moved = await cloudGet(got.movedTo);
+        if (moved) { tpl.share = { code: got.movedTo, version: 0 }; got = moved; }
+      }
       if (!got || got.version <= tpl.share.version) continue;
       Object.assign(tpl, { name: got.name, layout: got.layout, lights: got.lights });
       tpl.share.version = got.version;
@@ -3640,6 +3662,8 @@ function openShare(tpl) {
   $('share-has').hidden = !tpl.share;
   $('share-code').value = cleanCode(tpl.name);
   $('share-shown').textContent = tpl.share ? tpl.share.code : '';
+  $('share-change').hidden = !mine;
+  $('share-recode').value = '';
   $('share-note').textContent = !tpl.share ? ''
     : mine ? 'Anyone can import this layout with the code. Changes you make to it here are published to everyone who has it.'
     : 'You follow this layout: it updates when its publisher changes it. Duplicate it to make your own version.';
@@ -3662,6 +3686,20 @@ function buildShare() {
       renderTemplates();
       openShare(tpl);
     } catch (e) { toast('Could not publish. Check your connection.', 3500); }
+  });
+  $('share-recode').addEventListener('input', () => { const at = $('share-recode'); at.value = at.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'); });
+  $('share-recode-go').addEventListener('click', async () => {
+    const tpl = sharing, code = cleanCode($('share-recode').value);
+    if (code.length < 4) return toast('A code needs at least 4 letters or numbers.', 3000);
+    if (code === tpl.share.code) return toast('That is already its code.', 2500);
+    toast('Changing the code...');
+    try {
+      const result = await cloudRecode(tpl, code);
+      if (result !== 'ok') return toast(`The code ${code} is already taken. Try another.`, 3500);
+      toast(`The code is now ${code}. People who had the old code are moved over.`, 4500);
+      renderTemplates();
+      openShare(tpl);
+    } catch (e) { toast('Could not change the code. Check your connection.', 3500); }
   });
   $('share-copy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(sharing.share.code); toast('Code copied.', 2000); } catch (e) { toast('Select the code and copy it by hand.', 3000); }
@@ -3724,7 +3762,7 @@ function renderLights() {
       pick.addEventListener('input', () => { cfg.on = pick.value; });
       const text = document.createElement('span');
       text.className = 'lbl mini-lbl'; text.textContent = 'Color When On';
-      row.appendChild(text); row.appendChild(pick);
+      row.appendChild(pick); row.appendChild(text);        // the swatch sits at the left, in line with the color sets
       block.appendChild(row);
     } else {
       const note = document.createElement('p');
