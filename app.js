@@ -64,6 +64,20 @@ function setStage(stage) {
   Object.assign(FULL, { x: STAGE.x0 - 245, y: STAGE.y0 - 108, w: w + 490, h: d + 400 });       // the whole drawing, face lights included
   Object.assign(PHONE_VIEW, { x: STAGE.x0 - 123, y: STAGE.y0 - 68, w: w + 246, h: d + 120 });
   FIT.x = 1010 / w; FIT.z = 610 / d;
+  Object.assign(STAGE_VIEW, FULL);
+}
+// Objects can stand well away from the stage (seating, a back wall): the drawing grows to hold them.
+const STAGE_VIEW = {};
+function growDrawing(objects) {
+  let x0 = STAGE_VIEW.x, y0 = STAGE_VIEW.y, x1 = x0 + STAGE_VIEW.w, y1 = y0 + STAGE_VIEW.h;
+  for (const o of objects) {
+    const a = (o.rot || 0) * Math.PI / 180, cos = Math.abs(Math.cos(a)), sin = Math.abs(Math.sin(a));
+    const rx = (o.w * cos + o.d * sin) * UNIT / 2 + 60, ry = (o.w * sin + o.d * cos) * UNIT / 2 + 60;
+    x0 = Math.min(x0, o.x - rx); x1 = Math.max(x1, o.x + rx); y0 = Math.min(y0, o.y - ry); y1 = Math.max(y1, o.y + ry);
+  }
+  const grew = x0 !== FULL.x || y0 !== FULL.y || x1 - x0 !== FULL.w || y1 - y0 !== FULL.h;
+  Object.assign(FULL, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  return grew;
 }
 const ZONE_NAMES = ['Back L', 'Back C', 'Back R', 'Mid L', 'Mid C', 'Mid R', 'Front L', 'Front C', 'Front R', 'Cyclorama'];
 const CYCLO_ZONE = 10;       // aiming here points the beam at the cyclorama itself, not the floor
@@ -149,6 +163,48 @@ const customsOf = (layout) => layout.customs || [];
 // x and y are where its centre is on the plan; z is how far its underside is above the stage
 // floor, and w, d, h its width, depth and height, all in metres; rot turns it, in degrees.
 const objectsOf = (layout) => layout.objects || [];
+// The library an object is picked from. Each entry is one kind of object: its starting size
+// in metres, how far off the stage floor it starts (z), how it is drawn (look), and for
+// truss and bars where other pieces connect (joins: places on its outline, as fractions of
+// half its width and half its depth). `up` marks pieces that stand upright, which others
+// sit on top of. All are generic shapes, not any maker's product. To add a kind of object,
+// add a line here.
+const ASSET_GROUPS = [['stage', 'Stage'], ['truss', 'Truss'], ['gear', 'Equipment']];
+const ENDS = [[-1, 0], [1, 0]], SIDES4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+const ASSETS = [
+  { type: 'platform', group: 'stage', name: 'Platform', w: 2, d: 1, h: 0.3, z: 0, look: 'solid' },
+  { type: 'riser', group: 'stage', name: 'Riser', w: 2, d: 1, h: 0.6, z: 0, look: 'solid' },
+  { type: 'wing', group: 'stage', name: 'Stage Wing', w: 2, d: 6, h: 0.6, z: -0.6, look: 'solid', beside: 'left' },
+  { type: 'backstage', group: 'stage', name: 'Backstage Area', w: 10, d: 2, h: 0.6, z: -0.6, look: 'solid', beside: 'back' },
+  { type: 'backdrop', group: 'stage', name: 'Backdrop', w: 8, d: 0.1, h: 5, z: 0, look: 'flat', beside: 'back' },
+  { type: 'wall', group: 'stage', name: 'Wall', w: 10, d: 0.2, h: 6, z: -0.6, look: 'flat', beside: 'back' },
+  { type: 'ceiling', group: 'stage', name: 'Ceiling Panel', w: 6, d: 4, h: 0.1, z: 7, look: 'solid' },
+  { type: 'seats', group: 'stage', name: 'Audience Seating', w: 6, d: 2.4, h: 1, z: -0.6, look: 'seats', beside: 'front' },
+  { type: 'truss1', group: 'truss', name: 'Straight Truss', note: '1 m', w: 1, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
+  { type: 'truss2', group: 'truss', name: 'Straight Truss', note: '2 m', w: 2, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
+  { type: 'truss3', group: 'truss', name: 'Straight Truss', note: '3 m', w: 3, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
+  { type: 'corner', group: 'truss', name: 'Corner', note: '90°', w: 0.29, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: [[1, 0], [0, 1]] },
+  { type: 'tee', group: 'truss', name: 'T-Junction', w: 0.29, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: [[-1, 0], [1, 0], [0, 1]] },
+  { type: 'tower', group: 'truss', name: 'Truss Tower', note: '5 m', w: 0.29, d: 0.29, h: 5, z: 0, look: 'tower', joins: SIDES4, up: true },
+  { type: 'stand', group: 'truss', name: 'Floor Stand', note: '2.5 m', w: 1, d: 1, h: 2.5, z: 0, look: 'stand', joins: [[0, 0]], up: true },
+  { type: 'bar', group: 'truss', name: 'Lighting Bar', note: '3 m', w: 3, d: 0.05, h: 0.05, z: 5, look: 'pipe', joins: ENDS },
+  { type: 'boom', group: 'truss', name: 'Boom', note: '3 m', w: 0.05, d: 0.05, h: 3, z: 0, look: 'stand', joins: [[0, 0]], up: true },
+  { type: 'videowall', group: 'gear', name: 'LED Video Wall', w: 4, d: 0.15, h: 2.5, z: 0.5, look: 'screen' },
+  { type: 'screen', group: 'gear', name: 'Projection Screen', w: 4, d: 0.05, h: 2.25, z: 1, look: 'screen' },
+  { type: 'booth', group: 'gear', name: 'DJ Booth', w: 2, d: 0.8, h: 1, z: 0, look: 'solid' },
+  { type: 'speaker', group: 'gear', name: 'Speaker', w: 0.5, d: 0.5, h: 1.2, z: 0, look: 'solid' },
+  { type: 'curtain', group: 'gear', name: 'Curtain', w: 3, d: 0.1, h: 5, z: 0, look: 'curtain' },
+  { type: 'hazer', group: 'gear', name: 'Haze Machine', w: 0.5, d: 0.3, h: 0.25, z: 0, look: 'solid' },
+];
+const assetOf = (o) => ASSETS.find((a) => a.type === o.type) || { type: o.type, name: 'Block', look: 'solid' };
+// Where an object's connecting points are on the plan, turned with it.
+function joinsOf(o) {
+  const a = (o.rot || 0) * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
+  return (assetOf(o).joins || []).map(([fx, fy]) => {
+    const x = fx * o.w * UNIT / 2, y = fy * o.d * UNIT / 2;
+    return { x: o.x + x * cos - y * sin, y: o.y + x * sin + y * cos };
+  });
+}
 const facesOf = (layout) => layout.faces || classicFaces();
 const sidesOf = (layout) => layout.sides || classicSides();
 // side lights by the wing they stand in (left or right of centre), from the back of the stage to the front
@@ -176,6 +232,7 @@ function useLayout(layout) {
   PEOPLE.length = OBJECTS.length = 0;
   for (const [x, y] of PEOPLE_AT) { const [x3, z3] = to3(sx(x), sy(y)); PEOPLE.push({ x3, z3 }); }
   for (const o of objectsOf(layout)) { const [x3, z3] = to3(o.x, o.y); OBJECTS.push(Object.assign({}, o, { x3, z3 })); }
+  growDrawing(OBJECTS);
   LEDS.length = SPOTS.length = LED_ROW_Y.length = 0;
   const leds = inRows(layout.leds), spots = inRows(layout.spots);
   ledRows = leds.length; spotRows = spots.length;
@@ -802,11 +859,28 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
     if (editing && editing.some((one) => one.kind === kind && one.id === id)) shape.classList.add('picked');
     return shape;
   };
+  const others = editing ? objects.flatMap((o) => joinsOf(o).map((at) => ({ o, at }))) : [];
   for (const o of objects) {                     // stage objects lie under the lights
-    const w = o.w * UNIT, d = o.d * UNIT, g = el('g', { class: editing ? 'fx' : '', transform: `rotate(${o.rot || 0} ${o.x} ${o.y})` }, null, layer);
-    const shape = el('rect', { x: o.x - w / 2, y: o.y - d / 2, width: w, height: d, rx: 4, class: 'obj' }, null, g);
+    const look = assetOf(o).look, w = Math.max(o.w * UNIT, 8), d = Math.max(o.d * UNIT, 8), x = o.x - w / 2, y = o.y - d / 2;
+    const g = el('g', { class: editing ? 'fx' : '', transform: `rotate(${o.rot || 0} ${o.x} ${o.y})` }, null, layer);
+    const line = (x1, y1, x2, y2) => el('line', { x1, y1, x2, y2, class: 'obj-mark' }, null, g);
+    if (editing) el('rect', { x: o.x - Math.max(w, 30) / 2, y: o.y - Math.max(d, 30) / 2, width: Math.max(w, 30), height: Math.max(d, 30), class: 'obj-hit' }, null, g);     // thin things are still easy to press
+    const shape = el('rect', { x, y, width: w, height: d, rx: look === 'solid' ? 4 : 1, class: 'obj ' + look }, null, g);
+    if (look === 'truss') {                       // zigzag bracing between the two chords
+      const bays = Math.max(1, Math.round(w / d));
+      for (let i = 0; i < bays; i++) line(x + w * i / bays, i % 2 ? y : y + d, x + w * (i + 1) / bays, i % 2 ? y + d : y);
+    } else if (look === 'tower' || look === 'stand') {
+      line(x, y, x + w, y + d); line(x + w, y, x, y + d);
+    } else if (look === 'seats') {
+      for (let row = 1; row * 80 < d; row++) line(x, y + row * 80, x + w, y + row * 80);
+    }
     if (editing) tag(shape, 'object', o.id);
-    el('text', { x: o.x, y: o.y + 5, 'text-anchor': 'middle', class: 'obj-name' }, o.name, layer);
+    if (o.w * UNIT > 70 && look !== 'truss' && look !== 'pipe') el('text', { x: o.x, y: o.y + 5, 'text-anchor': 'middle', class: 'obj-name' }, o.name, layer);
+    // where truss connects: a dot at each end, filled where another piece meets it
+    if (editing) for (const at of joinsOf(o)) {
+      const met = others.some((p) => p.o !== o && Math.hypot(p.at.x - at.x, p.at.y - at.y) < 2);
+      el('circle', { cx: at.x, cy: at.y, r: 5, class: 'join' + (met ? ' met' : '') }, null, layer);
+    }
   }
   const aims = el('g', {}, null, layer);
   const firstRowY = Math.min(...leds.map((l) => l.y));
@@ -1179,7 +1253,18 @@ function buildControls() {
   $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
   $('layout-add-side').addEventListener('click', () => layoutAdd('side'));
   $('layout-add-face').addEventListener('click', () => layoutAdd('face'));
-  $('layout-add-object').addEventListener('click', () => layoutAdd('object'));
+  // The library: a tab for each group, and a button for each kind of object in it
+  let libGroup = ASSET_GROUPS[0][0];
+  const renderLibrary = () => {
+    $('lib-tabs').textContent = ''; $('lib-list').textContent = '';
+    for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup ? ' active' : ''), () => { libGroup = id; renderLibrary(); });
+    for (const a of ASSETS.filter((one) => one.group === libGroup)) {
+      const b = button($('lib-list'), '', 'btn lib', () => layoutAdd('object', a.type));
+      b.innerHTML = `<b>${a.name}</b><span>${a.note || `${a.w} × ${a.d} m`}</span>`;
+      b.title = `Add ${a.name}${a.note ? ' ' + a.note : ''}`;
+    }
+  };
+  renderLibrary();
   $('layout-redo').addEventListener('click', layoutRedo);
   $('layout-snap').addEventListener('click', () => { snapOn = !snapOn; redrawLayout(); });
   // Typed numbers. A value that cannot be used puts the old one back.
@@ -1312,7 +1397,8 @@ const itemOf = (one) => work[one.kind + 's'].find((it) => it.id === one.id);
 const pickedItem = () => work.picked && itemOf(work.picked);
 const selected = () => work.sel.map((one) => ({ kind: one.kind, item: itemOf(one) })).filter((one) => one.item);
 const isSelected = (kind, id) => work.sel.some((one) => one.kind === kind && one.id === id);
-const boundsOf = (kind) => (kind === 'side' || kind === 'face' || kind === 'object' ? PLAN_BOUNDS : BOUNDS);
+const ROOM = 1500;                       // objects can stand up to about 15 m off the stage
+const boundsOf = (kind) => (kind === 'object' ? { x0: STAGE.x0 - ROOM, x1: STAGE.x1 + ROOM, y0: STAGE.y0 - ROOM, y1: STAGE.y1 + ROOM } : kind === 'side' || kind === 'face' ? PLAN_BOUNDS : BOUNDS);
 const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
 // Undo and redo inside the editor: the layout as it was before each change, and after each undo.
 const layoutPast = [], layoutNext = [];
@@ -1332,6 +1418,7 @@ const layoutRedo = () => layoutStep(layoutNext, layoutPast, 'Nothing to redo.');
 // The stage changed size: move everything drawn around it, and show the whole drawing again.
 function applyStage() {
   setStage(work.stage);
+  growDrawing(work.objects);
   drawStage();
   resetView();
   redrawLayout();
@@ -1439,9 +1526,27 @@ function layoutDrag(e) {
   if (!dx && !dy) return;
   if (!moving.kept) { moving.kept = true; const now = moving.items.map((m) => [m.item, m.item.x, m.item.y]); for (const m of moving.items) { m.item.x = m.x; m.item.y = m.y; } layoutKeep(); for (const [it, x, y] of now) { it.x = x; it.y = y; } }
   for (const m of moving.items) Object.assign(m.item, hold(m.kind, m.x + dx, m.y + dy));      // the whole group moves together
+  if (snapOn && moving.items.length === 1 && moving.items[0].kind === 'object') joinUp(moving.items[0].item);
   redrawLayout();
 }
+// A piece of truss dragged close to another clicks onto its nearest connecting point, and
+// takes its height: level with a horizontal piece, or on top of a tower or stand.
+function joinUp(item) {
+  let best = null;
+  for (const mine of joinsOf(item)) for (const other of work.objects) {
+    if (other === item) continue;
+    for (const at of joinsOf(other)) {
+      const far = Math.hypot(at.x - mine.x, at.y - mine.y);
+      if (far < 36 && (!best || far < best.far)) best = { far, dx: at.x - mine.x, dy: at.y - mine.y, other };
+    }
+  }
+  if (!best) return;
+  item.x += best.dx; item.y += best.dy;
+  if (assetOf(item).up) return;
+  item.z = metres(assetOf(best.other).up ? (best.other.z || 0) + best.other.h - item.h : best.other.z || 0);
+}
 function layoutRelease() {
+  if ((moving || turning) && growDrawing(work.objects)) resetView();
   moving = turning = null;
   if (boxing) { boxing = null; redrawLayout(); }
 }
@@ -1530,7 +1635,16 @@ function layoutAdd(kind, ofKind) {
   const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C', object: 'O' }[kind] + n;
   // drop it somewhere sensible for its kind, nudged along so new ones do not stack up
   const spare = list.filter((it) => !it.was).length, nudge = (spare % 5) * 30;
-  if (kind === 'object') list.push({ id, type: 'block', name: 'Block ' + n, x: STAGE.cx + nudge, y: STAGE.cy + nudge, z: 0, rot: 0, w: 2, d: 1, h: 0.3 });
+  if (kind === 'object') {
+    const a = ASSETS.find((one) => one.type === ofKind), stage = stageOf(work), item = { id, type: a.type, name: a.name + (a.note ? ' ' + a.note : ''), x: STAGE.cx + nudge, y: STAGE.cy + nudge, z: a.z, rot: 0, w: a.w, d: a.d, h: a.h };
+    // pieces that belong beside the stage start there, sized to it
+    if (a.type === 'wing') Object.assign(item, { d: stage.d, h: Math.max(0.02, stage.h), z: -stage.h, x: STAGE.x0 - a.w * UNIT / 2 - nudge, y: STAGE.cy });
+    else if (a.type === 'backstage') Object.assign(item, { w: stage.w, h: Math.max(0.02, stage.h), z: -stage.h, x: STAGE.cx, y: STAGE.y0 - a.d * UNIT / 2 - nudge });
+    else if (a.beside === 'back') Object.assign(item, { x: STAGE.cx, y: STAGE.y0 - 40 - nudge, z: a.type === 'wall' ? -stage.h : a.z });
+    else if (a.beside === 'front') Object.assign(item, { x: STAGE.cx, y: STAGE.y1 + 320 + a.d * UNIT / 2 + nudge, z: -stage.h });
+    list.push(item);
+    growDrawing(work.objects) && resetView();
+  }
   else if (kind === 'side') list.push({ id, x: sx(SIDE_X.L), y: STAGE.cy - 60 + nudge });               // in the left wing; drag across for the right
   else if (kind === 'face') list.push({ id, x: STAGE.cx - 60 + nudge, y: sy(FACE_Y) });
   else if (kind === 'custom') list.push({ id, kind: ofKind, x: STAGE.cx - 60 + nudge, y: STAGE.cy });
@@ -2446,9 +2560,36 @@ function buildThree() {
   const cyclo = add(new THREE.Mesh(new THREE.PlaneGeometry(CYC.halfW * 2, CYC.top), solid(0x0c0c11)), 0, CYC.top / 2, CYC.z);
   for (const y of LED_ROW_Y) add(new THREE.Mesh(new THREE.BoxGeometry(6.6 / FIT.x, 0.06, 0.06), solid(0x222228)), 0, RIG_H + 0.1, to3(0, y)[1]);
   // stage objects: plain blocks of their own size, standing where the plan puts them
+  const shaded = (color) => [0.78, 0.78, 1.25, 0.6, 1, 0.9].map((k) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(k) }));    // each face its own shade, so shapes read without real light
+  const box = (w, h, d, color, x, y, z, parent) => add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), shaded(color)), x, y, z, parent);
+  const steel = solid(0x6c6c78), brace = solid(0x4c4c56);
+  // a length of box truss along x: four chords and zigzag bracing
+  function lattice(len, size, parent) {
+    const r = 0.022, half = size / 2 - r, bays = Math.max(1, Math.round(len / 0.5)), step = len / bays;
+    const slope = Math.hypot(step, half * 2), tilt = Math.atan2(half * 2, step);
+    for (const y of [-half, half]) for (const z of [-half, half]) add(new THREE.Mesh(new THREE.BoxGeometry(len, r * 2, r * 2), steel), 0, y, z, parent);
+    for (let i = 0; i < bays; i++) {
+      const x = -len / 2 + step * (i + 0.5), way = i % 2 ? 1 : -1;
+      for (const z of [-half, half]) add(new THREE.Mesh(new THREE.BoxGeometry(slope, r, r), brace), x, 0, z, parent).rotation.z = tilt * way;
+      for (const y of [-half, half]) add(new THREE.Mesh(new THREE.BoxGeometry(slope, r, r), brace), x, y, 0, parent).rotation.y = tilt * way;
+    }
+  }
   for (const o of OBJECTS) {
-    const block = add(new THREE.Mesh(new THREE.BoxGeometry(o.w, Math.max(0.02, o.h), o.d), solid(0x24242b)), o.x3, (o.z || 0) + Math.max(0.02, o.h) / 2, o.z3);
-    block.rotation.y = -(o.rot || 0) * Math.PI / 180;
+    const look = assetOf(o).look, h = Math.max(0.02, o.h);
+    const g = add(new THREE.Group(), o.x3, (o.z || 0) + h / 2, o.z3);      // the group's origin is the object's middle
+    g.rotation.y = -(o.rot || 0) * Math.PI / 180;
+    if (look === 'truss') lattice(o.w, Math.min(o.d, h), g);
+    else if (look === 'tower') { const up = add(new THREE.Group(), 0, 0, 0, g); up.rotation.z = Math.PI / 2; lattice(h, Math.min(o.w, o.d), up); }
+    else if (look === 'pipe') box(o.w, h, o.d, 0x6c6c78, 0, 0, 0, g);
+    else if (look === 'stand') {                  // a base, a pole, and a short bar across the top
+      const base = Math.min(Math.max(o.w, o.d), 1);
+      if (base > 0.2) box(base, 0.04, base, 0x33333b, 0, -h / 2 + 0.02, 0, g);
+      box(0.05, h, 0.05, 0x6c6c78, 0, 0, 0, g);
+      if (base > 0.2) box(base, 0.05, 0.05, 0x6c6c78, 0, h / 2 - 0.025, 0, g);
+    } else if (look === 'seats') {                // rows that rise towards the back of the house
+      const rows = Math.max(1, Math.round(o.d / 0.8)), deep = o.d / rows;
+      for (let row = 0; row < rows; row++) { const tall = h * (0.45 + 0.55 * row / Math.max(1, rows - 1)); box(o.w, tall, deep * 0.92, 0x23232b, 0, -h / 2 + tall / 2, -o.d / 2 + deep * (row + 0.5), g); }
+    } else box(o.w, h, o.d, { screen: 0x1a2430, curtain: 0x2a1418, flat: 0x1c1c22 }[look] || 0x24242b, 0, 0, 0, g);
   }
 
   const leds = LEDS.map((led) => {
