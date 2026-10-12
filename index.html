@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610130011">
+<link rel="stylesheet" href="style.css?v=202610130014">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -293,8 +293,9 @@
               <span class="lbl">Count</span>
               <input id="row-count" type="number" min="2" max="60" step="1">
             </div>
-            <div class="line">
-              <span class="lbl">Runs</span>
+            <div class="line" title="The Angle the Line Runs At. Drag the Round Handle on the Plan to Turn It">
+              <span class="lbl">Angle</span>
+              <input id="row-rot" type="number" step="15"><span class="slide-value">°</span>
               <div class="seg"><button class="btn" id="row-across">Across</button><button class="btn" id="row-down">Down</button></div>
             </div>
             <div class="line"><button class="btn" id="row-remove">Remove Auto Layout</button></div>
@@ -574,6 +575,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610130011"></script>
+<script src="app.js?v=202610130014"></script>
 </body>
 </html>

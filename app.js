@@ -506,7 +506,7 @@ function copyLayout(layout) {
   }
   if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
   if (layout.cyclo != null) out.cyclo = !!layout.cyclo;
-  if (layout.rows && layout.rows.length) out.rows = layout.rows.map(({ axis, gap, x, y, members }) => ({ axis, gap, x, y, members: members.map(({ kind, id }) => ({ kind, id })) }));
+  if (layout.rows && layout.rows.length) out.rows = layout.rows.map(({ axis, rot, gap, x, y, members }) => ({ axis, rot: rot != null ? rot : axis === 'y' ? 90 : 0, gap, x, y, members: members.map(({ kind, id }) => ({ kind, id })) }));
   if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h, media }) => (media ? { id, type, name, x, y, z, rot, w, d, h, media: { id: media.id, name: media.name, type: media.type } } : { id, type, name, x, y, z, rot, w, d, h }));
   return out;
 }
@@ -1590,7 +1590,8 @@ function buildControls() {
   const lined = (set) => (v) => { const row = wholeRow(); if (row) { set(row, v); arrange(row); } };
   typed('row-gap', 0.1, 20, lined((row, v) => { row.gap = v; }));
   typed('row-count', 2, 60, lined((row, v) => countRow(row, Math.round(v))));
-  for (const [id, axis] of [['row-across', 'x'], ['row-down', 'y']]) $(id).addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); row.axis = axis; arrange(row); redrawLayout(); });
+  for (const [id, to] of [['row-across', 0], ['row-down', 90]]) $(id).addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); turnRow(row, to); redrawLayout(); });
+  typed('row-rot', -360, 360, (v) => { const row = wholeRow(); if (row) turnRow(row, (v % 360 + 360) % 360); });
   $('row-remove').addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); work.rows = work.rows.filter((r) => r !== row); redrawLayout(); });
   $('more-toggle').addEventListener('click', () => { $('more-fields').hidden = !$('more-fields').hidden; $('more-toggle').classList.toggle('open', !$('more-fields').hidden); });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
@@ -1749,18 +1750,28 @@ const seen = (kind) => work[kind + 's'].filter((item) => !hiddenLayers.has(layer
 const poolSize = (light, beam) => { const t = (light.tilt || 0) * Math.PI / 180, wide = 2 * heightOf(light) / Math.max(0.2, Math.cos(t)) * Math.tan(Math.min(60, beam / 2) * Math.PI / 180); return `${Math.round(wide * 10) / 10} m`; };
 const softWord = (v) => (v <= 15 ? 'Sharp' : v >= 85 ? 'Soft' : v + '%');
 // Auto layout: a line of lights or objects that keeps an even spacing. `layout.rows` is a list
-// of { axis: 'x' (across) or 'y' (down), gap: metres between neighbours, x, y: its middle,
+// of { rot: the angle the line runs at, in degrees (0 across, 90 down), gap: metres between neighbours, x, y: its middle,
 // members: [{ kind, id }] in order }. Whatever happens to a member, the line closes up again
 // around its middle: dragging one along the line changes the order, deleting one closes the
 // gap, and the count can be typed to add or take away copies.
 const ID_PREFIX = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C', object: 'O' };
 const rowOf = (one) => work.rows.find((row) => row.members.some((m) => m.kind === one.kind && m.id === one.id));
 const wholeRow = () => work.rows.find((row) => row.members.length === work.sel.length && row.members.every((m) => isSelected(m.kind, m.id)));
+const angleOf = (row) => (row.rot != null ? row.rot : row.axis === 'y' ? 90 : 0);        // lines made before they could turn only say across or down
 function arrange(row) {
-  const its = row.members.map((m) => ({ m, item: itemOf(m) })).filter((one) => one.item), cross = row.axis === 'x' ? 'y' : 'x';
-  its.sort((a, b) => a.item[row.axis] - b.item[row.axis]);
+  const a = angleOf(row) * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a);
+  const its = row.members.map((m) => ({ m, item: itemOf(m) })).filter((one) => one.item);
+  const along = (it) => (it.x - row.x) * ux + (it.y - row.y) * uy;          // how far along the line it sits
+  its.sort((p, q) => along(p.item) - along(q.item));
   row.members = its.map((one) => one.m);
-  its.forEach((one, i) => { one.item[row.axis] = Math.round(row[row.axis] + (i - (its.length - 1) / 2) * row.gap * UNIT); one.item[cross] = Math.round(row[cross]); });
+  its.forEach((one, i) => { const off = (i - (its.length - 1) / 2) * row.gap * UNIT; one.item.x = Math.round(row.x + ux * off); one.item.y = Math.round(row.y + uy * off); });
+}
+// Turn a line: its lights and objects swing round its middle and turn with it.
+function turnRow(row, to) {
+  const by = to - angleOf(row);
+  row.rot = to;
+  for (const m of row.members) { const item = itemOf(m); if (!item) continue; if (m.kind === 'custom') item.pan = (((item.pan || 0) + by) % 360 + 360) % 360; if (m.kind === 'object') item.rot = (((item.rot || 0) + by) % 360 + 360) % 360; }
+  arrange(row);
 }
 // After lights moved: a line that moved as a whole keeps its new place, one whose member was pulled about closes up where it was.
 function settleRows(moved = []) {
@@ -1777,9 +1788,9 @@ function makeRow() {
   layoutKeep();
   for (const row of work.rows) row.members = row.members.filter((m) => !isSelected(m.kind, m.id));      // a light is in one line at a time
   const xs = all.map((one) => one.item.x), ys = all.map((one) => one.item.y), wide = Math.max(...xs) - Math.min(...xs), deep = Math.max(...ys) - Math.min(...ys);
-  const axis = wide >= deep ? 'x' : 'y', span = axis === 'x' ? wide : deep;
+  const rot = wide >= deep ? 0 : 90, span = Math.max(wide, deep);
   const gap = Math.max(0.3, Math.round(span / (all.length - 1) / UNIT * 20) / 20) || 1;
-  work.rows.push({ axis, gap, x: xs.reduce((a, b) => a + b, 0) / xs.length, y: ys.reduce((a, b) => a + b, 0) / ys.length, members: work.sel.map(({ kind, id }) => ({ kind, id })) });
+  work.rows.push({ rot, gap, x: xs.reduce((a, b) => a + b, 0) / xs.length, y: ys.reduce((a, b) => a + b, 0) / ys.length, members: work.sel.map(({ kind, id }) => ({ kind, id })) });
   settleRows();
   redrawLayout();
 }
@@ -1789,7 +1800,8 @@ function countRow(row, n) {
     const last = row.members[row.members.length - 1], list = work[last.kind + 's'];
     const copy = Object.assign({}, itemOf(last), { id: ID_PREFIX[last.kind] + (Math.max(0, ...list.map((it) => numberOf(it.id))) + 1) });
     delete copy.was; delete copy.on;
-    copy[row.axis] += 1;                                       // just past the last one, so it sorts to the end
+    const a = angleOf(row) * Math.PI / 180;
+    copy.x += Math.cos(a) * 2; copy.y += Math.sin(a) * 2;         // just past the last one, so it sorts to the end
     list.push(copy);
     row.members.push({ kind: last.kind, id: copy.id });
   }
@@ -1840,7 +1852,8 @@ function redrawLayout() {
   $('row-make').hidden = many < 2 || !!line;
   if (line) {
     for (const [id, value] of [['row-gap', line.gap], ['row-count', line.members.length]]) if (document.activeElement !== $(id)) $(id).value = value;
-    $('row-across').classList.toggle('active', line.axis === 'x'); $('row-down').classList.toggle('active', line.axis === 'y');
+    if (document.activeElement !== $('row-rot')) $('row-rot').value = angleOf(line);
+    $('row-across').classList.toggle('active', angleOf(line) % 180 === 0); $('row-down').classList.toggle('active', angleOf(line) % 180 === 90);
   }
   // an outline round each auto layout
   for (const row of work.rows) {
@@ -1848,6 +1861,11 @@ function redrawLayout() {
     if (its.length < 2) continue;
     const x0 = Math.min(...its.map((it) => it.x)) - 44, y0 = Math.min(...its.map((it) => it.y)) - 40, x1 = Math.max(...its.map((it) => it.x)) + 44, y1 = Math.max(...its.map((it) => it.y)) + 46;
     el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, rx: 10, class: 'row-box' + (row === line ? ' picked' : '') }, null, planEls.fixtureLayer);
+    if (row !== line) continue;
+    // the selected line's handle, to turn it by
+    const a = angleOf(row) * Math.PI / 180, far = 78;
+    el('line', { x1: row.x, y1: row.y, x2: row.x + Math.sin(a) * far, y2: row.y - Math.cos(a) * far, class: 'rot-stem' }, null, planEls.fixtureLayer);
+    el('circle', { cx: row.x + Math.sin(a) * far, cy: row.y - Math.cos(a) * far, r: 10, class: 'rot-handle', 'data-rot': 'row', 'data-of': 'row' }, null, planEls.fixtureLayer);
   }
   $('layout-single').hidden = !item;
   $('layout-align').hidden = !many;
@@ -1909,6 +1927,7 @@ function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   const handle = e.target.closest('[data-rot]');
+  if (handle && handle.dataset.of === 'row') { turning = { row: wholeRow(), kept: false }; moving = null; return; }
   if (handle) { const lit = handle.dataset.of === 'custom'; turning = { item: work[lit ? 'customs' : 'objects'].find((o) => o.id === handle.dataset.rot), key: lit ? 'pan' : 'rot', kept: false }; moving = null; return; }
   if (!g) {                            // empty plan: drag out a box; what it touches is selected
     if (!add) work.sel = [];
@@ -1935,6 +1954,14 @@ function layoutPress(e) {
 }
 function layoutDrag(e) {
   const p = svgPoint(e), snap = snapTo;
+  if (turning && turning.row) {          // an auto layout turned by its handle
+    const row = turning.row, to = Math.atan2(p.x - row.x, row.y - p.y) * 180 / Math.PI, step = snapOn ? 15 : 1;
+    const rot = ((Math.round(to / step) * step) % 360 + 360) % 360;
+    if (rot === angleOf(row)) return;
+    if (!turning.kept) { turning.kept = true; layoutKeep(); }
+    turnRow(row, rot);
+    return redrawLayout();
+  }
   if (turning && turning.item) {         // the handle points the way the object's back edge faces
     const to = Math.atan2(p.x - turning.item.x, turning.item.y - p.y) * 180 / Math.PI, step = snapOn ? 15 : 1;
     const rot = ((Math.round(to / step) * step) % 360 + 360) % 360;
