@@ -179,7 +179,7 @@ let CYCLO_ON = true;
 // add a line here.
 // Truss, rigging and other equipment are no longer offered (group 'old'): they stay listed so
 // layouts that already use them still draw.
-const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens'], ['more', 'More']];     // More: the classic kinds and lights of your own
+const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens']];
 const ENDS = [[-1, 0], [1, 0]], SIDES4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 const ASSETS = [
   { type: 'platform', group: 'stage', name: 'Platform', w: 2, d: 1, h: 0.3, z: 0, look: 'solid' },
@@ -1450,7 +1450,7 @@ function buildControls() {
   const renderLibrary = () => {
     $('lib-tabs').textContent = ''; $('lib-list').textContent = '';
     for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup ? ' active' : ''), () => { libGroup = id; renderLibrary(); if (layoutMode) redrawLayout(); }).dataset.group = id;
-    $('lib-list').hidden = libGroup === 'more'; $('lib-more').hidden = libGroup !== 'more';
+    $('lib-more').hidden = libGroup !== 'light';          // lights of your own are listed under the library's lights
     if (libGroup === 'light') for (const f of FIXTURES) {
       const b = button($('lib-list'), '', 'btn lib', () => {
         let kind = work.kinds.find((k) => k.fixture === f.type);            // every light of one fixture shares a kind, made the first time
