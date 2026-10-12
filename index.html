@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121724">
+<link rel="stylesheet" href="style.css?v=202610121738">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -291,11 +291,11 @@
               <span class="lbl" id="layout-number-lbl">Number</span>
               <input id="layout-number" type="number" min="1" step="1">
             </div>
-            <div class="line obj-only"><span class="lbl">Name</span><input id="obj-name" type="text" maxlength="40" autocomplete="off"></div>
+            <div class="line high-only"><span class="lbl">Name</span><input id="obj-name" type="text" maxlength="40" autocomplete="off" placeholder="Name"></div>
             <div class="line nums">
               <label class="num" title="Metres Right of the Stage Centre"><span>X</span><input id="pos-x" type="number" step="0.05"></label>
               <label class="num" title="Metres Forward of the Stage Centre"><span>Y</span><input id="pos-y" type="number" step="0.05"></label>
-              <label class="num obj-only" title="Metres Above the Stage Floor"><span>Z</span><input id="obj-z" type="number" step="0.05"></label>
+              <label class="num high-only" title="Metres Above the Stage Floor"><span>Z</span><input id="obj-z" type="number" step="0.05"></label>
             </div>
             <div class="line nums obj-only">
               <label class="num"><span>Width</span><input id="obj-w" type="number" step="0.05"></label>
@@ -303,6 +303,12 @@
               <label class="num"><span>Height</span><input id="obj-h" type="number" step="0.05"></label>
               <label class="num" title="Degrees, Clockwise Seen From Above"><span>Turn</span><input id="obj-rot" type="number" step="5"></label>
             </div>
+            <div class="line nums lit-only">
+              <label class="num" title="Which Way It Points: Degrees Clockwise From Upstage"><span>Pan</span><input id="fix-pan" type="number" step="5"></label>
+              <label class="num" title="Degrees Away From Straight Down (90 Is Level)"><span>Tilt</span><input id="fix-tilt" type="number" min="0" max="180" step="5"></label>
+              <label class="num" title="How Wide the Beam Is, in Degrees"><span>Beam</span><input id="fix-beam" type="number" min="1" max="120" step="1"></label>
+            </div>
+            <p class="hint note lit-only" id="fix-mount"></p>
           </div>
           <div class="line">
             <button class="btn" id="layout-dup">Duplicate</button>
@@ -337,10 +343,10 @@
         </div>
       </div>
       <div class="group">
-        <div class="sec-head"><h3>Library</h3><span class="count">Generic Shapes</span></div>
+        <div class="sec-head"><h3>Library</h3><span class="count">Generic, Not Real Models</span></div>
         <div class="line"><div class="seg" id="lib-tabs"></div></div>
         <div id="lib-list"></div>
-        <p class="hint note">Tap one to add it. Truss ends click together when dragged close, with Snap to Grid on.</p>
+        <p class="hint note">Tap one to add it. Truss ends click together when dragged close, and lights mount on truss, bars and stands when dragged onto them.</p>
       </div>
       <div class="group">
         <div class="sec-head"><h3>Stage</h3><span class="count">Metres</span></div>
@@ -517,6 +523,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121724"></script>
+<script src="app.js?v=202610121738"></script>
 </body>
 </html>

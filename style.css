@@ -357,7 +357,6 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
 .plan .stage { fill: var(--plan-stage); stroke: var(--line); stroke-width: 2; }
 .plan .grid { stroke: var(--plan-grid); stroke-width: 2; stroke-dasharray: 2 9; stroke-linecap: round; }
 .plan .curtain { stroke: var(--plan-curtain); stroke-width: 5; stroke-linecap: round; }
-.plan .stairs { fill: var(--panel); stroke: var(--plan-grid); stroke-width: 2; stroke-linejoin: round; }
 .plan .rail { stroke: var(--plan-grid); stroke-width: 3; stroke-linecap: round; }
 .plan .cyclo { stroke: rgba(0, 0, 0, .15); stroke-width: 1.5; }
 .plan .aim { stroke: var(--blue); stroke-width: 1.5; opacity: .45; pointer-events: none; }
@@ -641,6 +640,7 @@ body.layout-mode .history { display: none; }
 .btn.lib span { font-size: 11px; color: var(--muted); }
 .plan .obj.picked, .plan .fx:hover > .obj.picked { stroke: var(--accent); stroke-width: 4; }
 .plan text.obj-name { font-size: 13px; fill: var(--muted); }
+.plan .throw { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 5; fill: none; opacity: .7; pointer-events: none; }
 .plan .rot-stem { stroke: var(--accent); stroke-width: 2; }
 .plan .rot-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; cursor: grab; }
 .tp-obj { fill: currentColor; fill-opacity: .18; stroke: none; }

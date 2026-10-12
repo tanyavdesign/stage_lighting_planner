@@ -121,7 +121,7 @@ function lightsOf(owner, kinds = []) {
     led: own.led || { type: 'set', colors: named(Object.keys(COLORS)) },
     spot: switched('spot'), face: switched('face'), side: switched('side'),
     cyclo: own.cyclo || { type: 'set', colors: named(CYCLO.filter((name) => name !== 'none')) },
-    ...Object.fromEntries(kinds.map((kind) => [kind.id, own[kind.id] || { type: 'onoff', on: WARM_HEX }])),
+    ...Object.fromEntries(kinds.map((kind) => { const f = fixtureOf(kind); return [kind.id, own[kind.id] || (f && f.control === 'rgb' ? { type: 'rgb' } : { type: 'onoff', on: (f && f.on) || WARM_HEX })]; })),
   };
 }
 // What to call a colour on the PDF: its name in the set, or what the picker or slider made.
@@ -169,7 +169,7 @@ const objectsOf = (layout) => layout.objects || [];
 // half its width and half its depth). `up` marks pieces that stand upright, which others
 // sit on top of. All are generic shapes, not any maker's product. To add a kind of object,
 // add a line here.
-const ASSET_GROUPS = [['stage', 'Stage'], ['truss', 'Truss'], ['gear', 'Equipment']];
+const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['truss', 'Truss'], ['gear', 'Gear']];
 const ENDS = [[-1, 0], [1, 0]], SIDES4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 const ASSETS = [
   { type: 'platform', group: 'stage', name: 'Platform', w: 2, d: 1, h: 0.3, z: 0, look: 'solid' },
@@ -180,6 +180,7 @@ const ASSETS = [
   { type: 'wall', group: 'stage', name: 'Wall', w: 10, d: 0.2, h: 6, z: -0.6, look: 'flat', beside: 'back' },
   { type: 'ceiling', group: 'stage', name: 'Ceiling Panel', w: 6, d: 4, h: 0.1, z: 7, look: 'solid' },
   { type: 'seats', group: 'stage', name: 'Audience Seating', w: 6, d: 2.4, h: 1, z: -0.6, look: 'seats', beside: 'front' },
+  { type: 'stairs', group: 'stage', name: 'Stairs', w: 1.2, d: 1.4, h: 0.6, z: -0.6, look: 'solid', beside: 'front' },
   { type: 'truss1', group: 'truss', name: 'Straight Truss', note: '1 m', w: 1, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
   { type: 'truss2', group: 'truss', name: 'Straight Truss', note: '2 m', w: 2, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
   { type: 'truss3', group: 'truss', name: 'Straight Truss', note: '3 m', w: 3, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
@@ -196,6 +197,46 @@ const ASSETS = [
   { type: 'curtain', group: 'gear', name: 'Curtain', w: 3, d: 0.1, h: 5, z: 0, look: 'curtain' },
   { type: 'hazer', group: 'gear', name: 'Haze Machine', w: 0.5, d: 0.3, h: 0.25, z: 0, look: 'solid' },
 ];
+// The lights in the library. Each is a generic fixture, not any maker's model: how it is
+// drawn on the plan (shape), how wide its beam starts out in degrees (beam), where it starts
+// (z: metres above the stage floor; tilt: degrees away from straight down; pan: degrees
+// clockwise from pointing upstage), and how it is controlled until Light Settings says
+// otherwise. `moving` marks moving heads. A light from the library is a custom light whose
+// kind remembers which fixture it is (`kind.fixture`), so cues, colours and the PDF treat it
+// like any other light. Real models can be added here later, with a maker and a model name.
+const FIXTURES = [
+  { type: 'profile', name: 'Profile Spot', shape: 'profile', beam: 26, z: 5, tilt: 0, pan: 0, control: 'onoff' },
+  { type: 'fresnel', name: 'Fresnel', shape: 'fresnel', beam: 40, z: 5, tilt: 0, pan: 0, control: 'onoff' },
+  { type: 'par', name: 'PAR', shape: 'circle', beam: 30, z: 5, tilt: 0, pan: 0, control: 'rgb' },
+  { type: 'mhspot', name: 'Moving Head Spot', shape: 'mover', beam: 20, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'mhwash', name: 'Moving Head Wash', shape: 'mover', beam: 45, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'mhbeam', name: 'Moving Head Beam', shape: 'mover', beam: 4, z: 5, tilt: 0, pan: 0, control: 'rgb', moving: true },
+  { type: 'batten', name: 'LED Batten', shape: 'batten', beam: 60, z: 5, tilt: 0, pan: 0, control: 'rgb' },
+  { type: 'follow', name: 'Followspot', shape: 'follow', beam: 8, z: 3, tilt: 70, pan: 0, control: 'onoff', off: 'front' },
+  { type: 'blinder', name: 'Blinder', shape: 'blinder', beam: 80, z: 5, tilt: 75, pan: 180, control: 'onoff' },
+  { type: 'strobe', name: 'Strobe', shape: 'strobe', beam: 100, z: 5, tilt: 45, pan: 180, control: 'onoff', on: '#ffffff' },
+  { type: 'cyc', name: 'Cyc Light', shape: 'cyc', beam: 90, z: 5, tilt: 35, pan: 0, control: 'rgb', off: 'back' },
+];
+const fixtureOf = (kind) => (kind && kind.fixture ? FIXTURES.find((f) => f.type === kind.fixture) : null);
+// How each fixture is drawn on the plan, around its own centre and pointing upstage.
+const FIXTURE_PATHS = {
+  profile: 'M-9,20 h18 v-26 l7,-15 h-32 l7,15 z',
+  fresnel: 'M0,-17 a17,17 0 1,0 0.01,0 z M-10,-24 h20 v5 h-20 z',
+  mover: 'M-18,-18 h36 v36 h-36 z M0,-11 a11,11 0 1,0 0.01,0 z',
+  batten: 'M-36,-9 h72 v18 h-72 z',
+  follow: 'M-8,26 h16 v-40 l5,-12 h-26 l5,12 z',
+  blinder: 'M-21,-13 h42 v26 h-42 z M-10,-7 a7,7 0 1,0 0.01,0 z M10,-7 a7,7 0 1,0 0.01,0 z',
+  strobe: 'M-24,-10 h48 v20 h-48 z M-18,-2 h36 v4 h-36 z',
+  cyc: 'M-22,11 h44 l-8,-22 h-28 z',
+};
+// Where a light is and where it points. Lights made before these could be set hang at the
+// rig's height and point straight down.
+const heightOf = (light) => (light.z == null ? RIG_H : light.z);
+// How far from under the light its beam lands on the stage floor, in metres (null: it never does).
+function reachOf(light) {
+  const tilt = light.tilt || 0, h = heightOf(light);
+  return tilt < 85 && h > 0 ? h * Math.tan(tilt * Math.PI / 180) : tilt < 85 ? 0 : null;
+}
 const assetOf = (o) => ASSETS.find((a) => a.type === o.type) || { type: o.type, name: 'Block', look: 'solid' };
 // Where an object's connecting points are on the plan, turned with it.
 function joinsOf(o) {
@@ -255,7 +296,7 @@ function useLayout(layout) {
   for (const side of SIDES) SIDE_LIGHTS[side] = wings[side].map(metres);
   KINDS.length = CUSTOMS.length = 0;
   KINDS.push(...kindsOf(layout));
-  for (const it of customsOf(layout)) if (KINDS.some((k) => k.id === it.kind)) CUSTOMS.push(Object.assign(metres(it), { kind: it.kind }));
+  for (const it of customsOf(layout)) if (KINDS.some((k) => k.id === it.kind)) CUSTOMS.push(Object.assign(metres(it), { kind: it.kind, z: it.z, pan: it.pan, tilt: it.tilt, beam: it.beam, name: it.name }));
 }
 const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
 
@@ -386,8 +427,12 @@ function copyLayout(layout) {
   if (layout.faces) out.faces = plain(layout.faces);
   if (layout.sides) out.sides = plain(layout.sides);
   if (layout.kinds && layout.kinds.length) {
-    out.kinds = layout.kinds.map(({ id, name, shape }) => ({ id, name, shape }));
-    out.customs = (layout.customs || []).map(({ id, kind, x, y }) => ({ id, kind, x, y }));
+    out.kinds = layout.kinds.map(({ id, name, shape, fixture }) => (fixture ? { id, name, shape, fixture } : { id, name, shape }));
+    out.customs = (layout.customs || []).map((light) => {
+      const one = { id: light.id, kind: light.kind, x: light.x, y: light.y };
+      for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'on']) if (light[key] != null && light[key] !== '') one[key] = light[key];     // only what was set
+      return one;
+    });
   }
   if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
   if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h }) => ({ id, type, name, x, y, z, rot, w, d, h }));
@@ -923,23 +968,33 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
     const kind = kinds.find((k) => k.id === light.kind);
     if (!kind) continue;
     const { x, y } = light;
-    const shape = {
+    const path = FIXTURE_PATHS[kind.shape];
+    const shape = path ? ['path', { d: path, transform: `translate(${x} ${y}) rotate(${light.pan || 0})`, 'fill-rule': 'evenodd', class: 'custom' }] : {
       circle: ['circle', { cx: x, cy: y, r: 18, class: 'custom' }],
       square: ['rect', { x: x - 17, y: y - 17, width: 34, height: 34, rx: 5, class: 'custom' }],
       bar: ['rect', { x: x - 36, y: y - 11, width: 72, height: 22, rx: 5, class: 'custom' }],
       triangle: ['polygon', { points: `${x},${y - 20} ${x + 20},${y + 15} ${x - 20},${y + 15}`, class: 'custom' }],
     }[kind.shape] || ['circle', { cx: x, cy: y, r: 18, class: 'custom' }];
+    // in the layout editor a tilted light shows where its beam lands
+    const reach = editing ? reachOf(light) : 0;
+    if (reach !== 0) {
+      const a = (light.pan || 0) * Math.PI / 180, lands = reach != null && reach <= 12, far = lands ? reach * UNIT : 300, tx = x + Math.sin(a) * far, ty = y - Math.cos(a) * far;
+      el('line', { x1: x, y1: y, x2: tx, y2: ty, class: 'throw' }, null, layer);
+      if (lands) el('circle', { cx: tx, cy: ty, r: 7, class: 'throw' }, null, layer);        // further than 12 m away: only the direction is shown
+    }
     planEls.custom[light.id] = tag(fixture(
       ['rect', { x: x - 40, y: y - 26, width: 80, height: 52 }], shape,
       () => { toggleIn(selCustom, light.id); syncUI(); }, null, layer), 'custom', light.id);
     text(x, y + 38, light.id);
   }
-  // one object selected in the layout editor: a handle to turn it by
-  const turn = editing && editing.length === 1 && editing[0].kind === 'object' && objects.find((o) => o.id === editing[0].id);
+  // one object or library light selected in the layout editor: a handle to turn it by
+  const only = editing && editing.length === 1 && editing[0];
+  const turn = only && only.kind === 'object' ? objects.find((o) => o.id === only.id)
+    : only && only.kind === 'custom' ? customs.find((c) => c.id === only.id && fixtureOf(kinds.find((k) => k.id === c.kind))) : null;
   if (turn) {
-    const a = (turn.rot || 0) * Math.PI / 180, near = turn.d * UNIT / 2, far = near + 38;
+    const lit = only.kind === 'custom', a = ((lit ? turn.pan : turn.rot) || 0) * Math.PI / 180, near = lit ? 24 : turn.d * UNIT / 2, far = near + 38;
     el('line', { x1: turn.x + Math.sin(a) * near, y1: turn.y - Math.cos(a) * near, x2: turn.x + Math.sin(a) * far, y2: turn.y - Math.cos(a) * far, class: 'rot-stem' }, null, layer);
-    el('circle', { cx: turn.x + Math.sin(a) * far, cy: turn.y - Math.cos(a) * far, r: 10, class: 'rot-handle', 'data-rot': turn.id }, null, layer);
+    el('circle', { cx: turn.x + Math.sin(a) * far, cy: turn.y - Math.cos(a) * far, r: 10, class: 'rot-handle', 'data-rot': turn.id, 'data-of': only.kind }, null, layer);
   }
 }
 
@@ -950,7 +1005,6 @@ function drawStage() {
   layer.textContent = '';
   const put = (name, attrs, text) => el(name, attrs, text, layer);
   const area = (x, y, text) => put('text', { x, y, 'text-anchor': 'middle', class: 'area' }, text);
-  const at = (points) => points.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ');
   put('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
   for (const c of [0, 1, 2, 3]) put('line', { x1: ZONES.x + ZONES.w * c, y1: STAGE.y0 + 26, x2: ZONES.x + ZONES.w * c, y2: STAGE.y1 - 12, class: 'grid' });
   for (const r of [1, 2]) put('line', { x1: ZONES.x, y1: ZONES.y + ZONES.h * r, x2: ZONES.x + ZONES.w * 3, y2: ZONES.y + ZONES.h * r, class: 'grid' });
@@ -969,9 +1023,6 @@ function drawStage() {
   area(STAGE.cx, sy(866), 'STAGE FRONT');
   area(sx(318), STAGE.cy - 15, 'STAGE LEFT');
   area(sx(1684), STAGE.cy - 15, 'STAGE RIGHT');
-  put('polygon', { points: at([[581, 880], [693, 920], [638, 1052], [527, 1014]]), class: 'stairs' });
-  put('polygon', { points: at([[1307, 920], [1419, 880], [1473, 1014], [1362, 1052]]), class: 'stairs' });
-  area(sx(610), sy(972), 'STAIRS'); area(sx(1390), sy(972), 'STAIRS');
   put('line', { x1: sx(522), y1: sy(FACE_Y), x2: sx(1478), y2: sy(FACE_Y), class: 'rail' });
   area(STAGE.cx, sy(1110), 'AUDIENCE');
 }
@@ -1258,6 +1309,15 @@ function buildControls() {
   const renderLibrary = () => {
     $('lib-tabs').textContent = ''; $('lib-list').textContent = '';
     for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup ? ' active' : ''), () => { libGroup = id; renderLibrary(); });
+    if (libGroup === 'light') for (const f of FIXTURES) {
+      const b = button($('lib-list'), '', 'btn lib', () => {
+        let kind = work.kinds.find((k) => k.fixture === f.type);            // every light of one fixture shares a kind, made the first time
+        if (!kind) work.kinds.push(kind = { id: 'k' + newId(), name: f.name, shape: f.shape, fixture: f.type });
+        layoutAdd('custom', kind.id);
+      });
+      b.innerHTML = `<b>${f.name}</b><span>${f.beam}° Beam${f.moving ? ' · Moves' : ''}</span>`;
+      b.title = `Add a ${f.name}`;
+    }
     for (const a of ASSETS.filter((one) => one.group === libGroup)) {
       const b = button($('lib-list'), '', 'btn lib', () => layoutAdd('object', a.type));
       b.innerHTML = `<b>${a.name}</b><span>${a.note || `${a.w} × ${a.d} m`}</span>`;
@@ -1278,16 +1338,27 @@ function buildControls() {
   const sized = (key) => (v) => { work.stage = Object.assign(stageOf(work), { [key]: v }); work.stageDirty = true; };
   typed('stage-w', 2, 40, sized('w')); typed('stage-d', 2, 30, sized('d')); typed('stage-h', 0, 3, sized('h'));
   const placed = (set) => (v) => { const item = pickedItem(); if (item) set(item, v, work.picked.kind); };
-  typed('pos-x', -40, 40, placed((item, v, kind) => Object.assign(item, hold(kind, STAGE.cx + v * UNIT, item.y))));
-  typed('pos-y', -40, 40, placed((item, v, kind) => Object.assign(item, hold(kind, item.x, STAGE.cy + v * UNIT))));
-  typed('obj-z', -3, 20, placed((item, v) => { item.z = v; }));
+  // an object that is moved or resized by typing takes the lights mounted on it along
+  const carry = (set) => placed((item, v, kind) => {
+    const was = { x: item.x, y: item.y, top: (item.z || 0) + (assetOf(item).up ? item.h : 0) };
+    set(item, v, kind);
+    if (kind !== 'object') return;
+    const lift = (item.z || 0) + (assetOf(item).up ? item.h : 0) - was.top;
+    for (const light of work.customs) if (light.on === item.id) { light.x += item.x - was.x; light.y += item.y - was.y; light.z = metres(Math.max(0, heightOf(light) + lift)); }
+  });
+  typed('pos-x', -40, 40, carry((item, v, kind) => Object.assign(item, hold(kind, STAGE.cx + v * UNIT, item.y))));
+  typed('pos-y', -40, 40, carry((item, v, kind) => Object.assign(item, hold(kind, item.x, STAGE.cy + v * UNIT))));
+  typed('obj-z', -3, 20, carry((item, v) => { item.z = v; }));
   typed('obj-w', 0.05, 40, placed((item, v) => { item.w = v; }));
   typed('obj-d', 0.05, 40, placed((item, v) => { item.d = v; }));
-  typed('obj-h', 0.02, 20, placed((item, v) => { item.h = v; }));
+  typed('obj-h', 0.02, 20, carry((item, v) => { item.h = v; }));
+  typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
+  typed('fix-tilt', 0, 180, placed((item, v) => { item.tilt = v; }));
+  typed('fix-beam', 1, 120, placed((item, v) => { item.beam = v; }));
   typed('obj-rot', -360, 360, placed((item, v) => { item.rot = (v % 360 + 360) % 360; }));
   $('obj-name').addEventListener('change', () => {
     const item = pickedItem(), name = $('obj-name').value.trim();
-    if (item && name) { layoutKeep(); item.name = name; }
+    if (item && (name || work.picked.kind === 'custom')) { layoutKeep(); item.name = name; }
     $('obj-name').blur();
     redrawLayout();
   });
@@ -1398,7 +1469,7 @@ const pickedItem = () => work.picked && itemOf(work.picked);
 const selected = () => work.sel.map((one) => ({ kind: one.kind, item: itemOf(one) })).filter((one) => one.item);
 const isSelected = (kind, id) => work.sel.some((one) => one.kind === kind && one.id === id);
 const ROOM = 1500;                       // objects can stand up to about 15 m off the stage
-const boundsOf = (kind) => (kind === 'object' ? { x0: STAGE.x0 - ROOM, x1: STAGE.x1 + ROOM, y0: STAGE.y0 - ROOM, y1: STAGE.y1 + ROOM } : kind === 'side' || kind === 'face' ? PLAN_BOUNDS : BOUNDS);
+const boundsOf = (kind) => (kind === 'object' || kind === 'custom' ? { x0: STAGE.x0 - ROOM, x1: STAGE.x1 + ROOM, y0: STAGE.y0 - ROOM, y1: STAGE.y1 + ROOM } : kind === 'side' || kind === 'face' ? PLAN_BOUNDS : BOUNDS);
 const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
 // Undo and redo inside the editor: the layout as it was before each change, and after each undo.
 const layoutPast = [], layoutNext = [];
@@ -1468,7 +1539,17 @@ function redrawLayout() {
     // where it is, and for an object its name, size and turn; a field being typed in is left alone
     const fill = (id, value) => { if (document.activeElement !== $(id)) $(id).value = value; };
     fill('pos-x', metres((item.x - STAGE.cx) / UNIT)); fill('pos-y', metres((item.y - STAGE.cy) / UNIT));
+    const fx = fixtureOf(ofKind), lit = work.picked.kind === 'custom';
     each('#layout-picked .obj-only', (n) => { n.hidden = !object; });
+    each('#layout-picked .lit-only', (n) => { n.hidden = !lit; });
+    each('#layout-picked .high-only', (n) => { n.hidden = !object && !lit; });
+    if (lit) {
+      fill('obj-name', item.name || ''); fill('obj-z', metres(heightOf(item)));
+      fill('fix-pan', item.pan || 0); fill('fix-tilt', item.tilt || 0); fill('fix-beam', item.beam || (fx ? fx.beam : 30));
+      const on = item.on && work.objects.find((o) => o.id === item.on);
+      $('fix-mount').textContent = on ? `Mounted on ${on.name}. Drag it off to free it.` : fx ? 'Drag it onto truss, a bar or a stand to mount it.' : '';
+      $('fix-mount').hidden = !on && !fx;
+    }
     if (object) { fill('obj-name', item.name); for (const key of ['z', 'w', 'd', 'h', 'rot']) fill('obj-' + key, metres(item[key] || 0)); }
     $('layout-number').parentNode.hidden = !numbered;
     if (numbered && document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
@@ -1485,7 +1566,7 @@ function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   const handle = e.target.closest('[data-rot]');
-  if (handle) { turning = { item: work.objects.find((o) => o.id === handle.dataset.rot), kept: false }; moving = null; return; }
+  if (handle) { const lit = handle.dataset.of === 'custom'; turning = { item: work[lit ? 'customs' : 'objects'].find((o) => o.id === handle.dataset.rot), key: lit ? 'pan' : 'rot', kept: false }; moving = null; return; }
   if (!g) {                            // empty plan: drag out a box; what it touches is selected
     if (!add) work.sel = [];
     boxing = { start: svgPoint(e), had: [...work.sel], rect: null };
@@ -1500,6 +1581,9 @@ function layoutPress(e) {
   }
   if (!isSelected(one.kind, one.id)) work.sel = [one];        // pressing one of a selected group keeps the group
   moving = { start: svgPoint(e), kept: false, items: selected().map(({ kind, item }) => ({ kind, item, x: item.x, y: item.y })) };
+  // lights mounted on a piece that is moving ride along with it
+  const carried = new Set(moving.items.filter((m) => m.kind === 'object').map((m) => m.item.id));
+  for (const light of work.customs) if (carried.has(light.on) && !moving.items.some((m) => m.item === light)) moving.items.push({ kind: 'custom', item: light, x: light.x, y: light.y, rider: true });
   redrawLayout();
 }
 function layoutDrag(e) {
@@ -1507,9 +1591,9 @@ function layoutDrag(e) {
   if (turning && turning.item) {         // the handle points the way the object's back edge faces
     const to = Math.atan2(p.x - turning.item.x, turning.item.y - p.y) * 180 / Math.PI, step = snapOn ? 15 : 1;
     const rot = ((Math.round(to / step) * step) % 360 + 360) % 360;
-    if (rot === (turning.item.rot || 0)) return;
+    if (rot === (turning.item[turning.key] || 0)) return;
     if (!turning.kept) { turning.kept = true; layoutKeep(); }
-    turning.item.rot = rot;
+    turning.item[turning.key] = rot;
     return redrawLayout();
   }
   if (boxing) {
@@ -1526,8 +1610,34 @@ function layoutDrag(e) {
   if (!dx && !dy) return;
   if (!moving.kept) { moving.kept = true; const now = moving.items.map((m) => [m.item, m.item.x, m.item.y]); for (const m of moving.items) { m.item.x = m.x; m.item.y = m.y; } layoutKeep(); for (const [it, x, y] of now) { it.x = x; it.y = y; } }
   for (const m of moving.items) Object.assign(m.item, hold(m.kind, m.x + dx, m.y + dy));      // the whole group moves together
-  if (snapOn && moving.items.length === 1 && moving.items[0].kind === 'object') joinUp(moving.items[0].item);
+  const alone = moving.items.filter((m) => !m.rider);
+  if (snapOn && alone.length === 1 && alone[0].kind === 'object') {
+    const it = alone[0].item, was = { x: it.x, y: it.y, z: it.z || 0 };
+    joinUp(it);
+    for (const m of moving.items) if (m.rider) { m.item.x += it.x - was.x; m.item.y += it.y - was.y; if (m.item.z != null) m.item.z = metres(m.item.z + (it.z || 0) - was.z); }
+  }
+  if (alone.length === 1 && alone[0].kind === 'custom') mountUp(alone[0].item);
   redrawLayout();
+}
+// A library light dragged over truss, a bar or a stand is mounted on it: it hangs just under a
+// horizontal piece, or sits on top of an upright one, and from then on moves when the piece
+// does. Dragged off again, it is free. With snapping on it also lines up along the piece.
+function mountUp(light) {
+  if (!fixtureOf(work.kinds.find((k) => k.id === light.kind))) return;
+  const under = work.objects.find((o) => {
+    if (!assetOf(o).joins) return false;
+    const a = -(o.rot || 0) * Math.PI / 180, dx = light.x - o.x, dy = light.y - o.y;
+    const along = dx * Math.cos(a) - dy * Math.sin(a), across = dx * Math.sin(a) + dy * Math.cos(a);
+    return Math.abs(along) <= o.w * UNIT / 2 + 12 && Math.abs(across) <= Math.max(o.d * UNIT / 2, 14) + 12;
+  });
+  if (!under) { if (light.on) delete light.on; return; }
+  const up = assetOf(under).up;
+  light.on = under.id;
+  light.z = metres(up ? (under.z || 0) + under.h : Math.max(0, (under.z || 0) - 0.1));
+  if (!snapOn) return;
+  if (up) { light.x = under.x; light.y = under.y; return; }
+  const a = (under.rot || 0) * Math.PI / 180, along = (light.x - under.x) * Math.cos(a) + (light.y - under.y) * Math.sin(a);      // slide onto its centre line
+  light.x = under.x + along * Math.cos(a); light.y = under.y + along * Math.sin(a);
 }
 // A piece of truss dragged close to another clicks onto its nearest connecting point, and
 // takes its height: level with a horizontal piece, or on top of a tower or stand.
@@ -1557,6 +1667,7 @@ function layoutClip() {
 const clipOf = () => selected().map(({ kind, item }) => {
   const one = { kind, x: item.x, y: item.y, of: item.kind };
   if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h };
+  if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam']) if (item[key] != null) one.more[key] = item[key]; }
   return one;
 });
 function layoutCopy() {
@@ -1641,13 +1752,18 @@ function layoutAdd(kind, ofKind) {
     if (a.type === 'wing') Object.assign(item, { d: stage.d, h: Math.max(0.02, stage.h), z: -stage.h, x: STAGE.x0 - a.w * UNIT / 2 - nudge, y: STAGE.cy });
     else if (a.type === 'backstage') Object.assign(item, { w: stage.w, h: Math.max(0.02, stage.h), z: -stage.h, x: STAGE.cx, y: STAGE.y0 - a.d * UNIT / 2 - nudge });
     else if (a.beside === 'back') Object.assign(item, { x: STAGE.cx, y: STAGE.y0 - 40 - nudge, z: a.type === 'wall' ? -stage.h : a.z });
+    else if (a.type === 'stairs') Object.assign(item, { x: STAGE.cx + nudge * 3, y: STAGE.y1 + a.d * UNIT / 2, z: -stage.h, h: Math.max(0.02, stage.h) });
     else if (a.beside === 'front') Object.assign(item, { x: STAGE.cx, y: STAGE.y1 + 320 + a.d * UNIT / 2 + nudge, z: -stage.h });
     list.push(item);
     growDrawing(work.objects) && resetView();
   }
   else if (kind === 'side') list.push({ id, x: sx(SIDE_X.L), y: STAGE.cy - 60 + nudge });               // in the left wing; drag across for the right
   else if (kind === 'face') list.push({ id, x: STAGE.cx - 60 + nudge, y: sy(FACE_Y) });
-  else if (kind === 'custom') list.push({ id, kind: ofKind, x: STAGE.cx - 60 + nudge, y: STAGE.cy });
+  else if (kind === 'custom') {
+    const f = fixtureOf(work.kinds.find((k) => k.id === ofKind)), item = { id, kind: ofKind, x: STAGE.cx - 60 + nudge, y: STAGE.cy };
+    if (f) Object.assign(item, { z: f.z, pan: f.pan, tilt: f.tilt, beam: f.beam }, f.off === 'front' ? { y: STAGE.y1 + 200 } : f.off === 'back' ? { y: STAGE.y0 + 60 } : {});
+    list.push(item);
+  }
   else list.push({ id, x: STAGE.cx - 60 + nudge, y: STAGE.cy + (kind === 'led' ? -40 : 40) });
   work.picked = { kind, id };
   redrawLayout();
@@ -1656,6 +1772,7 @@ function layoutDelete() {
   if (!work.sel.length) return;
   layoutKeep();
   for (const one of work.sel) work[one.kind + 's'] = work[one.kind + 's'].filter((it) => it.id !== one.id);
+  for (const light of work.customs) if (light.on && !work.objects.some((o) => o.id === light.on)) delete light.on;       // what it hung on is gone
   work.sel = [];
   redrawLayout();
 }
@@ -1691,7 +1808,8 @@ function renderKinds() {
     const shape = document.createElement('select');
     for (const [id, text] of SHAPES) shape.add(new Option(text, id, false, id === kind.shape));
     shape.addEventListener('change', () => { layoutKeep(); kind.shape = shape.value; redrawLayout(); });
-    row.appendChild(name); row.appendChild(shape);
+    row.appendChild(name);
+    if (!kind.fixture) row.appendChild(shape);
     const add = button(row, '', 'btn icon', () => layoutAdd('custom', kind.id));
     add.innerHTML = svgIcon('plus'); add.title = 'Add One to the Stage';
     const drop = button(row, '', 'btn icon', () => {
@@ -2602,11 +2720,24 @@ function buildThree() {
     lens: lens(s.x3, RIG_H, s.z3),
     pool: add(pool(1.6), s.x3, 0.012, s.z3),
   }));
-  const customs = CUSTOMS.map((s) => ({
-    cone: add(beam(0.1, 1.3, RIG_H), s.x3, RIG_H, s.z3),
-    lens: lens(s.x3, RIG_H, s.z3),
-    pool: add(pool(1.8), s.x3, 0.013, s.z3),
-  }));
+  const customs = CUSTOMS.map((s) => {
+    const h = heightOf(s), tilt = (s.tilt || 0) * Math.PI / 180, pan = (s.pan || 0) * Math.PI / 180, kind = KINDS.find((k) => k.id === s.kind), fx = fixtureOf(kind);
+    const half = Math.min(60, (s.beam || (fx ? fx.beam : 30)) / 2) * Math.PI / 180;
+    const way = new THREE.Vector3(Math.sin(pan) * Math.sin(tilt), -Math.cos(tilt), -Math.cos(pan) * Math.sin(tilt));
+    const lands = way.y < -0.08 && h > 0.05 && h / -way.y <= 30;          // does the beam reach the stage floor
+    const length = lands ? h / -way.y : 10;
+    const cone = add(beam(0.06, Math.max(0.05, length * Math.tan(half)), length), s.x3, h, s.z3);
+    cone.quaternion.setFromUnitVectors(DOWN, way);
+    const spot = add(pool(Math.max(0.15, length * Math.tan(half))), s.x3 + way.x * length, 0.013, s.z3 + way.z * length);
+    spot.rotation.z = -pan;                                              // the pool stretches along the throw
+    spot.scale.y = Math.min(4, 1 / Math.max(0.2, Math.cos(tilt)));
+    if (fx) {                                                            // a body for the fixture, turned with it
+      const body = add(new THREE.Group(), s.x3, h, s.z3);
+      if (fx.shape === 'batten' || fx.shape === 'strobe') { box(1, 0.1, 0.12, 0x2a2a31, 0, 0.05, 0, body); body.rotation.y = -pan; }
+      else { body.quaternion.setFromUnitVectors(DOWN, way); add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.32, 14), solid(0x2a2a31)), 0, 0.16, 0, body); }
+    }
+    return { cone, lens: lens(s.x3, h, s.z3), pool: spot, lands };
+  });
 
   const sides = [];
   SIDES.forEach((side, sIdx) => {
@@ -2722,7 +2853,8 @@ function buildThree() {
     });
     customs.forEach((s, i) => {
       const r = D[O_CUS + i * 3], g = D[O_CUS + i * 3 + 1], b = D[O_CUS + i * 3 + 2];
-      s.cone.visible = s.pool.visible = r + g + b > 0.01;
+      s.cone.visible = r + g + b > 0.01;
+      s.pool.visible = s.cone.visible && s.lands;
       setLens(s.lens, r, g, b);
       s.cone.material.uniforms.color.value.setRGB(r * 0.15, g * 0.15, b * 0.15);
       s.pool.material.color.setRGB(r * 0.12, g * 0.12, b * 0.12);
