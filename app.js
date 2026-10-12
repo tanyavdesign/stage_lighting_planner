@@ -3079,7 +3079,7 @@ function buildHome() {
   dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !/^INPUT$/.test(e.target.tagName)) close(); });
   each('[data-tpl-tab]', (b) => b.addEventListener('click', () => { tplTab = b.dataset.tplTab; renderTemplates(); }));
-  $('tpl-foot').addEventListener('submit', (e) => { e.preventDefault(); newFromTemplate(); });
+  $('tpl-create').addEventListener('click', newFromTemplate);
   $('home-import').addEventListener('change', (e) => {
     const files = [...e.target.files];
     e.target.value = '';

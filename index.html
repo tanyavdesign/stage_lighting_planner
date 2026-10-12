@@ -29,14 +29,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121255">
+<link rel="stylesheet" href="style.css?v=202610121302">
 </head>
 <body data-view="front">
 <div id="home" hidden>
   <div class="home-inner">
     <div class="home-head">
       <button id="home-back" class="btn icon" aria-label="All projects" title="All projects" hidden></button>
-      <img id="home-logo" src="icons/icon.svg" width="44" height="44" alt="">
+      <img id="home-logo" src="icons/icon.svg" width="24" height="24" alt="">
       <h1 id="home-title">Stage Lighting Planner</h1>
       <div class="spacer"></div>
       <label class="btn">Import<input id="home-import" type="file" multiple hidden></label>
@@ -62,21 +62,34 @@
       </div>
       <div class="tpl-main">
         <div class="tpl-head"><h2>New project</h2><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
-        <div id="tpl-grid" class="tpl-grid"></div>
-        <div class="tpl-items">
-          <div class="line">
-            <span class="lbl tpl-items-lbl">Items in this project</span>
-            <button type="button" id="items-less" class="btn icon" aria-label="One fewer"></button>
-            <input id="items-count" type="number" min="1" max="30" step="1" value="1" inputmode="numeric">
-            <button type="button" id="items-more" class="btn icon" aria-label="One more"></button>
+        <div class="tpl-scroll">
+          <div class="tpl-details">
+            <label class="tpl-field tpl-field-name"><span>Project name</span>
+              <input id="new-name" type="text" placeholder="Untitled project" maxlength="60" autocomplete="off">
+            </label>
+            <div class="tpl-field"><span>Items</span>
+              <div class="tpl-count">
+                <button type="button" id="items-less" class="btn icon" aria-label="One fewer"></button>
+                <input id="items-count" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" aria-label="Number of items">
+                <button type="button" id="items-more" class="btn icon" aria-label="One more"></button>
+              </div>
+            </div>
+            <div id="items-names" class="tpl-names"></div>
           </div>
-          <div id="items-names" class="tpl-names"></div>
+          <div class="tpl-pickhead">
+            <h3>Stage template</h3>
+            <div class="seg tpl-tabs">
+              <button type="button" class="btn" data-tpl-tab="all">All</button>
+              <button type="button" class="btn" data-tpl-tab="builtin">Built-in</button>
+              <button type="button" class="btn" data-tpl-tab="mine">Mine</button>
+            </div>
+          </div>
+          <div id="tpl-grid" class="tpl-grid"></div>
         </div>
-        <form id="tpl-foot" class="tpl-foot">
-          <input id="new-name" type="text" placeholder="Project name" maxlength="60" autocomplete="off">
+        <div class="tpl-foot">
           <span id="tpl-picked" class="hint"></span>
-          <button class="btn primary" type="submit">Create project</button>
-        </form>
+          <button id="tpl-create" class="btn primary" type="button">Create project</button>
+        </div>
       </div>
     </div>
   </div>
@@ -289,6 +302,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121255"></script>
+<script src="app.js?v=202610121302"></script>
 </body>
 </html>
