@@ -1511,6 +1511,7 @@ function enterLayout() {
     get() { return this.sel.length === 1 ? this.sel[0] : null; },
     set(one) { this.sel = one ? [one] : []; },
   });
+  work.classic = work.leds.length + work.spots.length + work.faces.length + work.sides.length > 0;      // decided once, so the buttons do not vanish mid-edit
   layoutPast.length = layoutNext.length = 0;
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
@@ -1554,7 +1555,10 @@ function redrawLayout() {
     $('layout-number').parentNode.hidden = !numbered;
     if (numbered && document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
   }
-  $('layout-count').textContent = `${work.leds.length} LED · ${work.spots.length} spot · ${work.faces.length} face · ${work.sides.length} side` + (work.customs.length ? ` · ${work.customs.length} custom` : '') + (work.objects.length ? ` · ${work.objects.length} object${work.objects.length === 1 ? '' : 's'}` : '');
+  // only what the layout has is counted; the buttons for the four classic kinds show when it uses any of them
+  const counts = [[work.leds, 'LED'], [work.spots, 'spot'], [work.faces, 'face'], [work.sides, 'side'], [work.customs, 'light'], [work.objects, 'object']].filter(([list]) => list.length).map(([list, name]) => `${list.length} ${name}${name === 'LED' || list.length === 1 ? '' : 's'}`);
+  $('layout-count').textContent = counts.join(' · ') || 'Empty';
+  $('layout-classic').hidden = !work.classic;
   const stage = stageOf(work);
   for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
   $('layout-snap').classList.toggle('active', snapOn);
