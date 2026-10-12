@@ -169,7 +169,9 @@ const objectsOf = (layout) => layout.objects || [];
 // half its width and half its depth). `up` marks pieces that stand upright, which others
 // sit on top of. All are generic shapes, not any maker's product. To add a kind of object,
 // add a line here.
-const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['truss', 'Truss'], ['gear', 'Gear']];
+// Truss, rigging and other equipment are no longer offered (group 'old'): they stay listed so
+// layouts that already use them still draw.
+const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens']];
 const ENDS = [[-1, 0], [1, 0]], SIDES4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 const ASSETS = [
   { type: 'platform', group: 'stage', name: 'Platform', w: 2, d: 1, h: 0.3, z: 0, look: 'solid' },
@@ -181,21 +183,21 @@ const ASSETS = [
   { type: 'ceiling', group: 'stage', name: 'Ceiling Panel', w: 6, d: 4, h: 0.1, z: 7, look: 'solid' },
   { type: 'seats', group: 'stage', name: 'Audience Seating', w: 6, d: 2.4, h: 1, z: -0.6, look: 'seats', beside: 'front' },
   { type: 'stairs', group: 'stage', name: 'Stairs', w: 1.2, d: 1.4, h: 0.6, z: -0.6, look: 'solid', beside: 'front' },
-  { type: 'truss1', group: 'truss', name: 'Straight Truss', note: '1 m', w: 1, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
-  { type: 'truss2', group: 'truss', name: 'Straight Truss', note: '2 m', w: 2, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
-  { type: 'truss3', group: 'truss', name: 'Straight Truss', note: '3 m', w: 3, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
-  { type: 'corner', group: 'truss', name: 'Corner', note: '90°', w: 0.29, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: [[1, 0], [0, 1]] },
-  { type: 'tee', group: 'truss', name: 'T-Junction', w: 0.29, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: [[-1, 0], [1, 0], [0, 1]] },
-  { type: 'tower', group: 'truss', name: 'Truss Tower', note: '5 m', w: 0.29, d: 0.29, h: 5, z: 0, look: 'tower', joins: SIDES4, up: true },
-  { type: 'stand', group: 'truss', name: 'Floor Stand', note: '2.5 m', w: 1, d: 1, h: 2.5, z: 0, look: 'stand', joins: [[0, 0]], up: true },
-  { type: 'bar', group: 'truss', name: 'Lighting Bar', note: '3 m', w: 3, d: 0.05, h: 0.05, z: 5, look: 'pipe', joins: ENDS },
-  { type: 'boom', group: 'truss', name: 'Boom', note: '3 m', w: 0.05, d: 0.05, h: 3, z: 0, look: 'stand', joins: [[0, 0]], up: true },
-  { type: 'videowall', group: 'gear', name: 'LED Video Wall', w: 4, d: 0.15, h: 2.5, z: 0.5, look: 'screen' },
-  { type: 'screen', group: 'gear', name: 'Projection Screen', w: 4, d: 0.05, h: 2.25, z: 1, look: 'screen' },
-  { type: 'booth', group: 'gear', name: 'DJ Booth', w: 2, d: 0.8, h: 1, z: 0, look: 'solid' },
-  { type: 'speaker', group: 'gear', name: 'Speaker', w: 0.5, d: 0.5, h: 1.2, z: 0, look: 'solid' },
-  { type: 'curtain', group: 'gear', name: 'Curtain', w: 3, d: 0.1, h: 5, z: 0, look: 'curtain' },
-  { type: 'hazer', group: 'gear', name: 'Haze Machine', w: 0.5, d: 0.3, h: 0.25, z: 0, look: 'solid' },
+  { type: 'truss1', group: 'old', name: 'Straight Truss', note: '1 m', w: 1, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
+  { type: 'truss2', group: 'old', name: 'Straight Truss', note: '2 m', w: 2, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
+  { type: 'truss3', group: 'old', name: 'Straight Truss', note: '3 m', w: 3, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
+  { type: 'corner', group: 'old', name: 'Corner', note: '90°', w: 0.29, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: [[1, 0], [0, 1]] },
+  { type: 'tee', group: 'old', name: 'T-Junction', w: 0.29, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: [[-1, 0], [1, 0], [0, 1]] },
+  { type: 'tower', group: 'old', name: 'Truss Tower', note: '5 m', w: 0.29, d: 0.29, h: 5, z: 0, look: 'tower', joins: SIDES4, up: true },
+  { type: 'stand', group: 'old', name: 'Floor Stand', note: '2.5 m', w: 1, d: 1, h: 2.5, z: 0, look: 'stand', joins: [[0, 0]], up: true },
+  { type: 'bar', group: 'old', name: 'Lighting Bar', note: '3 m', w: 3, d: 0.05, h: 0.05, z: 5, look: 'pipe', joins: ENDS },
+  { type: 'boom', group: 'old', name: 'Boom', note: '3 m', w: 0.05, d: 0.05, h: 3, z: 0, look: 'stand', joins: [[0, 0]], up: true },
+  { type: 'videowall', group: 'screen', name: 'LED Video Wall', w: 4, d: 0.15, h: 2.5, z: 0.5, look: 'screen' },
+  { type: 'screen', group: 'screen', name: 'Projection Screen', w: 4, d: 0.05, h: 2.25, z: 1, look: 'screen' },
+  { type: 'booth', group: 'old', name: 'DJ Booth', w: 2, d: 0.8, h: 1, z: 0, look: 'solid' },
+  { type: 'speaker', group: 'old', name: 'Speaker', w: 0.5, d: 0.5, h: 1.2, z: 0, look: 'solid' },
+  { type: 'curtain', group: 'old', name: 'Curtain', w: 3, d: 0.1, h: 5, z: 0, look: 'curtain' },
+  { type: 'hazer', group: 'old', name: 'Haze Machine', w: 0.5, d: 0.3, h: 0.25, z: 0, look: 'solid' },
 ];
 // The lights in the library. Each is a generic fixture, not any maker's model: how it is
 // drawn on the plan (shape), how wide its beam starts out in degrees (beam), where it starts
@@ -1449,7 +1451,7 @@ function buildControls() {
     }
     for (const a of ASSETS.filter((one) => one.group === libGroup)) {
       const b = button($('lib-list'), '', 'btn lib', () => layoutAdd('object', a.type));
-      b.innerHTML = `<b>${a.name}</b><span>${a.note || `${a.w} × ${a.d} m`}</span>`;
+      b.innerHTML = `<b>${a.name}</b><span>${a.note || (a.look === 'screen' ? `${a.w} m Wide, ${a.h} m Tall` : `${a.w} × ${a.d} m`)}</span>`;
       b.title = `Add ${a.name}${a.note ? ' ' + a.note : ''}`;
     }
   };
@@ -1658,9 +1660,9 @@ function applyStage() {
 }
 // Layers in the editor: a group that is hidden is not drawn and cannot be selected or moved
 // by accident. Nothing about the layout itself changes.
-const LAYERS = [['light', 'Lights'], ['stage', 'Stage'], ['truss', 'Truss'], ['gear', 'Gear']];
+const LAYERS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens']];
 const hiddenLayers = new Set();
-const layerOf = (kind, item) => (kind === 'object' ? (ASSETS.find((a) => a.type === item.type) || { group: 'stage' }).group : 'light');
+const layerOf = (kind, item) => (kind !== 'object' ? 'light' : assetOf(item).group === 'screen' ? 'screen' : 'stage');
 const seen = (kind) => work[kind + 's'].filter((item) => !hiddenLayers.has(layerOf(kind, item)));
 // With snapping on, lights and objects land on a 5 cm grid and turn in steps of 15 degrees.
 let snapOn = true;
@@ -1719,8 +1721,9 @@ function redrawLayout() {
       fill('fix-pan', item.pan || 0); fill('fix-tilt', item.tilt || 0); fill('fix-beam', item.beam || (fx ? fx.beam : 30));
       fill('fix-uni', item.uni || ''); fill('fix-addr', item.addr || ''); fill('fix-ch', channelsOf(item, work.kinds));
       const on = item.on && work.objects.find((o) => o.id === item.on);
-      $('fix-mount').textContent = on ? `Mounted on ${on.name}. Drag it off to free it.` : fx ? 'Drag it onto truss, a bar or a stand to mount it.' : '';
-      $('fix-mount').hidden = !on && !fx;
+      const rig = fx && work.objects.some((o) => assetOf(o).joins);          // only layouts that still have truss or stands can mount
+      $('fix-mount').textContent = on ? `Mounted on ${on.name}. Drag it off to free it.` : rig ? 'Drag it onto truss, a bar or a stand to mount it.' : '';
+      $('fix-mount').hidden = !on && !rig;
     }
     $('obj-media').hidden = !object || assetOf(item).look !== 'screen';
     if (object) $('media-name').textContent = item.media ? item.media.name : 'Nothing Showing';
