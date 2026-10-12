@@ -120,6 +120,8 @@ main {
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
+#back { width: auto; padding: 0 5px; }
+#back svg { width: 22px; }
 .bar-name { flex: 1; min-width: 0; padding: 0 4px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #toggle-right { position: absolute; right: 8px; top: 6px; z-index: 5; }
 
@@ -462,6 +464,8 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
   .btn.small { height: 32px; }
   .btn.icon { padding: 0; }
   .btn.icon svg { width: 18px; height: 18px; }
+  #back { padding: 0 8px; }
+  #back svg { width: 25px; }
   .cue-edit .btn.icon { width: 34px; }
   .cue-edit .btn.bare { width: 26px; }
   .swatch { width: 34px; height: 34px; }

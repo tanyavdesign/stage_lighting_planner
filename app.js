@@ -227,7 +227,8 @@ const selection = new Set();
 // Line icons, drawn on a 16 x 16 grid with a thin stroke
 const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
-  back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
+  // a small "back" arrow beside one spotlight beam: the way back to the project list
+  back: '<path d="M5 4.5 2 8l3 3.5M13.6 2.5h2.8l2.6 9.5a4 1.5 0 0 1-8 0zM11 12a4 1.5 0 0 1 8 0"/>',
   play: '<path d="M5 3.2v9.6L12.5 8z"/>',
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
   prev: '<path d="M4 3.5v9M12 3.5 6 8l6 4.5z"/>',
@@ -243,7 +244,7 @@ const ICONS = {
   panelLeft: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/>',
   panelRight: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M9.5 3v10"/>',
 };
-const svgIcon = (name) => `<svg viewBox="0 0 16 16">${ICONS[name]}</svg>`;
+const svgIcon = (name) => `<svg viewBox="0 0 ${name === 'back' ? 22 : 16} 16">${ICONS[name]}</svg>`;      // `back` is wider
 const BLANK = blankLook();
 
 // `follow` is true while the cue timeline drives the lights; a manual edit turns it
