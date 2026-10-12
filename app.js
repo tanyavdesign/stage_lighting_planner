@@ -3897,6 +3897,20 @@ function applyLayoutNews(project) {
   saveProjects();
   location.reload();              // the open page was drawn with the old layout
 }
+// Put text on the clipboard. Browsers that refuse the modern way (some in-app browsers and
+// embedded pages do) get the older one: a hidden text box, selected and copied.
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* try the older way */ }
+  const box = document.createElement('textarea');
+  box.value = text; box.setAttribute('readonly', '');
+  box.style.cssText = 'position:fixed;left:0;top:0;opacity:0;';
+  document.body.appendChild(box);
+  box.select(); box.setSelectionRange(0, text.length);
+  let done = false;
+  try { done = document.execCommand('copy'); } catch (e) { /* not allowed either */ }
+  box.remove();
+  return done;
+}
 // The window for sharing one template: choose a code, or see the one it has.
 let sharing = null;
 function openShare(tpl) {
@@ -3947,7 +3961,15 @@ function buildShare() {
     } catch (e) { toast('Could not change the code. Check your connection.', 3500); }
   });
   $('share-copy').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(sharing.share.code); toast('Code copied.', 2000); } catch (e) { toast('Select the code and copy it by hand.', 3000); }
+    const done = await copyText(sharing.share.code);
+    $('share-copy').textContent = done ? 'Copied' : 'Copy';
+    if (done) setTimeout(() => { $('share-copy').textContent = 'Copy'; }, 1500);
+    else {                                         // last resort: leave the code selected, ready for Cmd + C
+      const range = document.createRange();
+      range.selectNodeContents($('share-shown'));
+      getSelection().removeAllRanges(); getSelection().addRange(range);
+      toast('This browser would not copy it. The code is selected: press Cmd + C.', 4500);
+    }
   });
   $('tpl-code-go').addEventListener('click', () => { importCode($('tpl-code').value); $('tpl-code').value = ''; });
   $('tpl-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('tpl-code-go').click(); });
