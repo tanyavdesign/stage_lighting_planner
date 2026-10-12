@@ -1460,6 +1460,12 @@ function buildControls() {
       b.innerHTML = `<b>${f.name}</b>`;
       b.title = `${f.tip}. Lighting People Call It a ${f.was}`;
     }
+    // the four kinds every layout began with sit in the same list: they have the effects and
+    // aiming zones, but hang at one height and cannot be tilted
+    if (libGroup === 'light') for (const [kind, name, tip] of [['led', 'LED', 'A color-changing light on the rig, with effects and aiming zones'], ['spot', 'Spotlight', 'A fixed spotlight on the rig, on or off'], ['side', 'Side Light', 'A light in the wings that shines across the stage'], ['face', 'Face Light', 'A light in front of the stage that lights faces']]) {
+      const b = button($('lib-list'), '', 'btn lib', () => layoutAdd(kind));
+      b.innerHTML = `<b>${name}</b>`; b.title = tip;
+    }
     for (const a of ASSETS.filter((one) => one.group === libGroup)) {
       const b = button($('lib-list'), '', 'btn lib', () => layoutAdd('object', a.type));
       b.innerHTML = `<b>${a.name}</b><span>${a.note || (a.look === 'screen' ? `${a.w} m Wide, ${a.h} m Tall` : `${a.w} × ${a.d} m`)}</span>`;
@@ -1766,7 +1772,7 @@ function redrawLayout() {
   // only what the layout has is counted; the buttons for the four classic kinds show when it uses any of them
   const counts = [[work.leds, 'LED'], [work.spots, 'spot'], [work.faces, 'face'], [work.sides, 'side'], [work.customs, 'light'], [work.objects, 'object']].filter(([list]) => list.length).map(([list, name]) => `${list.length} ${name}${name === 'LED' || list.length === 1 ? '' : 's'}`);
   $('layout-count').textContent = counts.join(' · ') || 'Empty';
-  $('layout-classic').hidden = !work.classic;
+  $('layout-classic').hidden = true;           // these four are in the library's Lights tab now
   const stage = stageOf(work);
   $('stage-sum').textContent = `${stage.w} × ${stage.d} m`;
   for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
