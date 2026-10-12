@@ -4,3 +4,7 @@
 *.mp3
 *.wav
 *.m4a
+
+# Firebase working files
+.firebase/
+firebase-debug.log
