@@ -296,6 +296,16 @@ const prefs = Object.assign({ people: true, theme: 'dark' }, store.get('kdt-ligh
 // Dark is the app's theme unless light was picked by hand (`themeChosen`); a theme saved
 // before that was recorded only followed the device's setting, so it does not count.
 if (!prefs.themeChosen) prefs.theme = 'dark';
+// The app no longer comes with a stage of its own. A device that already has projects keeps
+// the KDT layout as an ordinary template (same id, so those projects still point at it).
+if (!prefs.seededKdt) {
+  if (projects.some((p) => !p.drafts) && !templates.some((t) => t.id === BUILTIN.id)) {
+    templates.unshift({ id: BUILTIN.id, name: TEMPLATE, layout: templateLayout(), created: Date.now() });
+    saveTemplates();
+  }
+  prefs.seededKdt = true;
+  store.set('kdt-lighting-prefs-v1', prefs);
+}
 const selection = new Set();
 
 // Line icons, drawn on a 16 x 16 grid with a thin stroke
@@ -313,6 +323,7 @@ const ICONS = {
   moveto: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5zM7 9h4M9.4 7.4 11 9l-1.6 1.6"/>',
   help: '<circle cx="8" cy="8" r="5.5"/><path d="M6.4 6.5a1.7 1.7 0 1 1 2.5 1.5c-.6.3-.9.7-.9 1.2M8 11.2h.01"/>',
   sliders: '<path d="M2.5 5h3.5M9.5 5h4M2.5 11h5M11 11h2.5"/><circle cx="7.7" cy="5" r="1.7"/><circle cx="9.3" cy="11" r="1.7"/>',
+  share: '<circle cx="4" cy="8" r="1.7"/><circle cx="11.5" cy="4" r="1.7"/><circle cx="11.5" cy="12" r="1.7"/><path d="M5.5 7.2 10 4.8M5.5 8.8 10 11.2"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -982,6 +993,17 @@ function buildControls() {
     field.value = '';
     toast(`Saved "${name}" to My templates.`, 3000);
   });
+  // Put this layout back into the template the project was made from (and publish it, if it is shared from here).
+  const ownTemplate = () => templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
+  $('layout-update-tpl').addEventListener('click', async () => {
+    const tpl = ownTemplate();
+    if (!tpl) return;
+    tpl.layout = copyLayout(work);
+    if (currentProject().lights) tpl.lights = clone(currentProject().lights);
+    saveTemplates();
+    toast(`Updated the template ${tpl.name}.`, 2500);
+    await republish(tpl);
+  });
   $('undo').addEventListener('click', () => stepHistory(history.undo, history.redo));
   $('redo').addEventListener('click', () => stepHistory(history.redo, history.undo));
   mqPhone.addEventListener('change', resetView);
@@ -1045,6 +1067,9 @@ function enterLayout() {
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   work = { leds: layout.leds.map((it) => Object.assign({ was: it.id }, it)), spots: layout.spots.map((it) => Object.assign({ was: it.id }, it)), picked: null };
   document.body.classList.add('layout-mode');
+  const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
+  $('layout-update-tpl').hidden = !own;
+  if (own) $('layout-update-tpl').textContent = `Update “${own.name}”` + (own.share ? ' and publish' : '');
   $('deselect').hidden = true;
   redrawLayout();
 }
@@ -3152,6 +3177,7 @@ function renderHome() {
   list.className = 'project-list view-' + view;
   each('[data-home-view]', (b) => b.classList.toggle('active', b.dataset.homeView === view));
   $('home-layout').hidden = $('home-lights').hidden = !project;
+  $('layout-news').hidden = !(project && project.layoutNews);
   $('home-back').hidden = $('new-item-wrap').hidden = !project;
   $('home-logo').hidden = $('new-project').hidden = $('draft-new').hidden = !!project;
   $('import-arrow').hidden = !!project;
@@ -3358,6 +3384,158 @@ function renderHome() {
   add.innerHTML = svgIcon('plus') + `<span>${project ? 'New item' : 'New project'}</span>`;
 }
 
+// ---------------------------------------------------------------------------
+// Layouts shared with a code. A template can be published under a code anyone can type in
+// to get it; they keep following it, so a change the publisher makes reaches them the next
+// time they open the app online. The layouts live in a small online database; everything
+// else stays on the device. There is no sign-in: the device that publishes a layout holds
+// a one-time key for its next change, so only that device can change it.
+//   template.share = { code, version, key? }     key: only on the publisher's device
+// ---------------------------------------------------------------------------
+const CLOUD = 'https://firestore.googleapis.com/v1/projects/cueo-lab/databases/(default)/documents/layouts/';
+const cleanCode = (text) => String(text).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+async function sha256(text) {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+const newKey = () => [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, '0')).join('');
+// -> { name, version, layout, lights }, or null when no layout has that code
+async function cloudGet(code) {
+  const response = await fetch(CLOUD + code, { cache: 'no-store' });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('cloud ' + response.status);
+  const fields = (await response.json()).fields, data = JSON.parse(fields.data.stringValue);
+  return { name: fields.name.stringValue, version: +fields.version.integerValue, layout: data.layout, lights: data.lights || undefined };
+}
+// Publish a template under a code for the first time, or publish a change to one this device owns.
+// -> 'ok', 'taken' (someone has that code) or 'denied' (this device may not change it)
+async function cloudPut(tpl, code) {
+  const first = !tpl.share, next = newKey();
+  if (!first) {
+    // a change that reached the database but whose answer was lost: its key is the current one
+    const now = await cloudGet(code);
+    if (now && now.version > tpl.share.version && tpl.share.pending) Object.assign(tpl.share, { key: tpl.share.pending, version: now.version });
+    tpl.share.pending = next;
+    saveTemplates();
+  }
+  const version = first ? 1 : tpl.share.version + 1;
+  const text = (stringValue) => ({ stringValue });
+  const response = await fetch(`${CLOUD}${code}?currentDocument.exists=${!first}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: {
+      data: text(JSON.stringify({ layout: copyLayout(tpl.layout), lights: tpl.lights || null })),
+      name: text(tpl.name.slice(0, 80)),
+      version: { integerValue: String(version) },
+      key: text(first ? '' : tpl.share.key),
+      keyHash: text(await sha256(next)),
+      updated: { timestampValue: new Date().toISOString() },
+    } }),
+  });
+  if (response.ok) { tpl.share = { code, version, key: next }; saveTemplates(); return 'ok'; }
+  if (response.status === 409 || response.status === 400) return first ? 'taken' : 'denied';
+  if (response.status === 403) return first ? 'taken' : 'denied';
+  throw new Error('cloud ' + response.status);
+}
+// After a change to a template this device shares: send it on. Quiet unless it fails.
+async function republish(tpl) {
+  if (!tpl.share || !tpl.share.key) return;
+  try {
+    const result = await cloudPut(tpl, tpl.share.code);
+    toast(result === 'ok' ? `Published to ${tpl.share.code}.` : `Could not publish to ${tpl.share.code}: this device no longer holds its key.`, 3500);
+  } catch (e) { toast(`Not published to ${tpl.share.code}: no connection. It is saved here; publish again when online.`, 4500); }
+  if (!$('tpl').hidden) renderTemplates();
+}
+// Get a layout by its code as a template that follows it.
+async function importCode(raw) {
+  const code = cleanCode(raw);
+  if (code.length < 4) return toast('Type the layout code first.', 2500);
+  const had = templates.find((t) => t.share && t.share.code === code);
+  if (had) return toast(`You already have ${had.name}.`, 2500);
+  toast('Looking for that layout...');
+  try {
+    const got = await cloudGet(code);
+    if (!got) return toast(`No layout has the code ${code}.`, 3500);
+    templates.unshift({ id: 't' + newId(), name: got.name, layout: got.layout, lights: got.lights, share: { code, version: got.version }, created: Date.now() });
+    saveTemplates();
+    renderTemplates();
+    toast(`Imported ${got.name}.`, 3000);
+  } catch (e) { toast('Could not reach the layout library. Check your connection.', 3500); }
+}
+// On opening the app: bring followed layouts up to date, and note which projects were built on them.
+async function refreshShared() {
+  let changed = false;
+  for (const tpl of templates) {
+    if (!tpl.share || tpl.share.key) continue;
+    try {
+      const got = await cloudGet(tpl.share.code);
+      if (!got || got.version <= tpl.share.version) continue;
+      Object.assign(tpl, { name: got.name, layout: got.layout, lights: got.lights });
+      tpl.share.version = got.version;
+      for (const project of projects) if (project.templateId === tpl.id) project.layoutNews = got.version;
+      changed = true;
+      toast(`${tpl.name} was updated by its publisher.`, 3500);
+    } catch (e) { /* offline: try again next time */ }
+  }
+  if (!changed) return;
+  saveTemplates(); saveProjects();
+  renderHome();
+  if (!$('tpl').hidden) renderTemplates();
+}
+// A project built on a layout that has since changed can take the new one.
+function applyLayoutNews(project) {
+  const tpl = templates.find((t) => t.id === project.templateId);
+  if (tpl) {
+    raw.set(projectKey(LAYOUT_KEY, project.id), copyLayout(tpl.layout));
+    if (tpl.lights) project.lights = clone(tpl.lights); else delete project.lights;
+    project.template = tpl.name;
+  }
+  delete project.layoutNews;
+  saveProjects();
+  location.reload();              // the open page was drawn with the old layout
+}
+// The window for sharing one template: choose a code, or see the one it has.
+let sharing = null;
+function openShare(tpl) {
+  sharing = tpl;
+  const mine = tpl.share && tpl.share.key;
+  $('share-title').textContent = 'Share · ' + tpl.name;
+  $('share-new').hidden = !!tpl.share;
+  $('share-has').hidden = !tpl.share;
+  $('share-code').value = cleanCode(tpl.name);
+  $('share-shown').textContent = tpl.share ? tpl.share.code : '';
+  $('share-note').textContent = !tpl.share ? ''
+    : mine ? 'Anyone can import this layout with the code. Changes you make to it here are published to everyone who has it.'
+    : 'You follow this layout: it updates when its publisher changes it. Duplicate it to make your own version.';
+  $('share').hidden = false;
+}
+function buildShare() {
+  const close = () => { $('share').hidden = true; sharing = null; };
+  $('share-close').innerHTML = svgIcon('close');
+  $('share-close').addEventListener('click', close);
+  $('share').addEventListener('click', (e) => { if (e.target === $('share')) close(); });
+  $('share-code').addEventListener('input', () => { const at = $('share-code'); at.value = at.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'); });
+  $('share-go').addEventListener('click', async () => {
+    const tpl = sharing, code = cleanCode($('share-code').value);
+    if (code.length < 4) return toast('A code needs at least 4 letters or numbers.', 3000);
+    toast('Publishing...');
+    try {
+      const result = await cloudPut(tpl, code);
+      if (result !== 'ok') return toast(`The code ${code} is already taken. Try another.`, 3500);
+      toast(`Published. The code is ${code}.`, 4000);
+      renderTemplates();
+      openShare(tpl);
+    } catch (e) { toast('Could not publish. Check your connection.', 3500); }
+  });
+  $('share-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(sharing.share.code); toast('Code copied.', 2000); } catch (e) { toast('Select the code and copy it by hand.', 3000); }
+  });
+  $('tpl-code-go').addEventListener('click', () => { importCode($('tpl-code').value); $('tpl-code').value = ''; });
+  $('tpl-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('tpl-code-go').click(); });
+  $('news-apply').addEventListener('click', () => applyLayoutNews(currentProject()));
+  $('news-later').addEventListener('click', () => { delete currentProject().layoutNews; saveProjects(); renderHome(); });
+}
+
 // Light settings: how the LEDs and the cyclorama are controlled. Edited for a template (new
 // projects made from it get them) or for one project. `owner` is the template or project.
 let lightsDraft = null, lightsDone = null;
@@ -3366,7 +3544,7 @@ function editLights(title, owner, save) {
   // work on a copy with every colour as a hex value, so each row has a colour to show
   lightsDraft = {};
   for (const [kind] of LIGHT_KINDS) lightsDraft[kind] = { type: now[kind].type, colors: (now[kind].colors || []).map((c) => ({ name: c.name, value: hexOf(c.value).toLowerCase() })) };
-  lightsDone = () => { owner.lights = lightsDraft; save(); };
+  lightsDone = () => { owner.lights = lightsDraft; save(); if (templates.includes(owner)) republish(owner); };
   $('lights-title').textContent = 'Light settings · ' + title;
   $('lights').hidden = false;
   renderLights();
@@ -3450,8 +3628,7 @@ function renderTemplates() {
   each('[data-tpl-tab]', (b) => b.classList.toggle('active', b.dataset.tplTab === tplTab));
   const shown = [
     ...(tplTab === 'all' && !tplManage ? [SCRATCH] : []),
-    ...(tplTab !== 'mine' ? [BUILTIN] : []),
-    ...(tplTab !== 'builtin' ? templates : []),
+    ...templates.filter((t) => tplTab === 'all' || (tplTab === 'shared') === !!t.share),
   ];
   if (tplPicked && !shown.includes(tplPicked)) tplPicked = null;
   for (const tpl of shown) {
@@ -3469,33 +3646,39 @@ function renderTemplates() {
     name.className = 'tpl-name'; name.textContent = tpl === SCRATCH ? 'Start from scratch' : tpl.name;
     const meta = document.createElement('div');
     meta.className = 'hint';
-    meta.textContent = tpl === SCRATCH ? 'An empty stage' : (tpl.builtin ? 'Built-in · ' : '') + countText(tpl.layout);
+    meta.textContent = tpl === SCRATCH ? 'An empty stage' : countText(tpl.layout) + (tpl.share ? ` · code ${tpl.share.code}` : '');
+    const follows = tpl.share && !tpl.share.key;         // someone else's layout: it changes only when they change it
     info.appendChild(name); info.appendChild(meta); row.appendChild(info);
     const act = (icon, label, onClick) => {
       const b = button(row, '', 'btn icon', onClick);
       b.innerHTML = svgIcon(icon); b.title = label; b.setAttribute('aria-label', label);
       return b;
     };
-    if (tpl !== SCRATCH && !tpl.builtin) {
+    if (tpl !== SCRATCH && !follows) {
       act('pencil', 'Rename', () => {
         const field = document.createElement('input');
         field.type = 'text'; field.value = tpl.name; field.maxLength = 60; field.className = 'rename';
         name.replaceWith(field);
         field.focus(); field.select();
-        field.addEventListener('blur', () => { tpl.name = field.value.trim() || tpl.name; saveTemplates(); renderTemplates(); });
+        field.addEventListener('blur', () => {
+          const was = tpl.name;
+          tpl.name = field.value.trim() || tpl.name; saveTemplates(); renderTemplates();
+          if (tpl.name !== was) republish(tpl);
+        });
         field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
       });
     }
-    if (tpl !== SCRATCH && !tpl.builtin) {
+    if (tpl !== SCRATCH && !follows) {
       act('sliders', 'Light settings', () => editLights(tpl.name, tpl, saveTemplates));
     }
+    if (tpl !== SCRATCH) act('share', tpl.share ? 'Shared with a code' : 'Share with a code', () => openShare(tpl));
     if (tpl !== SCRATCH) {
       act('copy', 'Duplicate', () => {
         templates.unshift({ id: 't' + newId(), name: tpl.name + ' copy', layout: copyLayout(tpl.layout), lights: tpl.lights && clone(tpl.lights), created: Date.now() });
         saveTemplates(); renderTemplates();
       });
     }
-    if (tpl !== SCRATCH && !tpl.builtin) {
+    if (tpl !== SCRATCH) {
       // two taps, like deleting a project
       const del = act('trash', 'Delete', () => {
         if (del.classList.contains('armed')) {
@@ -3510,10 +3693,16 @@ function renderTemplates() {
     card.appendChild(row);
     grid.appendChild(card);
   }
-  if (tplTab === 'mine' && !templates.length) {
+  if (tplTab === 'shared' && !templates.some((t) => t.share)) {
     const none = document.createElement('p');
     none.className = 'hint tpl-none';
-    none.textContent = 'No templates of your own yet. Open a project, choose Edit layout in the menu, arrange the lights, then press Save as template.';
+    none.textContent = 'No shared layouts yet. Type a layout code above to import one, or share one of your own with the share button on its card.';
+    grid.appendChild(none);
+  }
+  if (tplTab === 'mine' && !templates.some((t) => !t.share)) {
+    const none = document.createElement('p');
+    none.className = 'hint tpl-none';
+    none.textContent = 'No templates of your own yet. Open a project, press Edit stage layout, arrange the lights, then press Save as template.';
     grid.appendChild(none);
   }
 }
@@ -3649,6 +3838,8 @@ function buildHome() {
     b.addEventListener('click', () => { prefs.homeView = b.dataset.homeView; store.set('kdt-lighting-prefs-v1', prefs); renderHome(); });
   });
   buildLights();
+  buildShare();
+  refreshShared();
   $('home-lights').addEventListener('click', () => editLights(currentProject().name, currentProject(), saveProjects));
   $('home-layout').addEventListener('click', () => {
     const project = currentProject();

@@ -11,10 +11,23 @@
       "**/*.wav",
       "**/*.m4a",
       "**/*.pdf",
-      "**/*.json"
+      "**/*.json",
+      "firestore.rules",
+      "**/*.rules"
     ],
     "headers": [
-      { "source": "**/*.@(js|css|html|webmanifest)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+      {
+        "source": "**/*.@(js|css|html|webmanifest)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

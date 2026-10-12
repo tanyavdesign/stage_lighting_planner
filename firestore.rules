@@ -1,0 +1,26 @@
+rules_version = '2';
+// Shared stage layouts, one document per share code. Anyone may read a layout by its
+// code and anyone may claim an unused code. Changing a layout needs the one-time key the
+// publisher's device holds: each update shows the current key and sets the hash of the next.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function valid(code) {
+      let d = request.resource.data;
+      return code.matches('^[a-z0-9][a-z0-9-]{3,59}$')
+        && d.keys().hasOnly(['data', 'name', 'version', 'key', 'keyHash', 'updated'])
+        && d.data is string && d.data.size() < 300000
+        && d.name is string && d.name.size() <= 80
+        && d.version is int
+        && d.key is string && d.key.size() <= 80
+        && d.keyHash is string && d.keyHash.size() == 64;
+    }
+    match /layouts/{code} {
+      allow get: if true;
+      allow list, delete: if false;
+      allow create: if valid(code) && request.resource.data.version == 1;
+      allow update: if valid(code)
+        && request.resource.data.version == resource.data.version + 1
+        && hashing.sha256(request.resource.data.key).toHexString().lower() == resource.data.keyHash.lower();
+    }
+  }
+}

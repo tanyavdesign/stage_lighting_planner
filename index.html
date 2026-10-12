@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121426">
+<link rel="stylesheet" href="style.css?v=202610121444">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -85,6 +85,11 @@
       <button id="pick-download" class="btn" hidden>Download</button>
       <button id="pick-all" class="btn" hidden>Select all</button>
     </div>
+    <div id="layout-news" class="news" hidden>
+      <span>The stage layout this project uses was updated by its publisher.</span>
+      <button id="news-apply" class="btn primary">Use the new layout</button>
+      <button id="news-later" class="btn">Not now</button>
+    </div>
     <div id="project-list" class="project-list"></div>
     <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
     <div id="recent" hidden>
@@ -115,7 +120,7 @@
       <div class="tpl-side">
         <h2>Templates</h2>
         <button class="tpl-tab" data-tpl-tab="all">All templates</button>
-        <button class="tpl-tab" data-tpl-tab="builtin">Built-in</button>
+        <button class="tpl-tab" data-tpl-tab="shared">Shared by code</button>
         <button class="tpl-tab" data-tpl-tab="mine">My templates</button>
       </div>
       <div class="tpl-main">
@@ -135,15 +140,38 @@
             <div id="items-names" class="tpl-names"></div>
             <p class="hint tpl-tip">Paste a list (one name per line) into any item field to fill them all.</p>
           </div>
+          <div class="tpl-codeline">
+            <input id="tpl-code" type="text" placeholder="Layout code, for example kdt-ucc-theatre-lighting-plot" autocomplete="off" autocapitalize="none" spellcheck="false">
+            <button id="tpl-code-go" class="btn" type="button">Import layout</button>
+          </div>
           <div class="tpl-pickhead">
             <h3>Stage template</h3>
             <div class="seg tpl-tabs">
               <button type="button" class="btn" data-tpl-tab="all">All</button>
-              <button type="button" class="btn" data-tpl-tab="builtin">Built-in</button>
+              <button type="button" class="btn" data-tpl-tab="shared">Shared</button>
               <button type="button" class="btn" data-tpl-tab="mine">Mine</button>
             </div>
           </div>
           <div id="tpl-grid" class="tpl-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="share" class="tpl-back" hidden>
+    <div class="mini" role="dialog" aria-label="Share a layout">
+      <div class="tpl-head"><h2 id="share-title">Share</h2><button id="share-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+      <div class="mini-body">
+        <div id="share-new">
+          <p class="hint mini-note">Choose a code. Anyone who types it gets this layout, and keeps getting your changes to it.</p>
+          <div class="line">
+            <input id="share-code" type="text" maxlength="60" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Layout code">
+            <button id="share-go" class="btn primary" type="button">Publish</button>
+          </div>
+          <p class="hint mini-note">Lowercase letters, numbers and dashes. Only this device will be able to change the layout afterwards.</p>
+        </div>
+        <div id="share-has">
+          <div class="line"><code id="share-shown" class="share-shown"></code><button id="share-copy" class="btn" type="button">Copy</button></div>
+          <p id="share-note" class="hint mini-note"></p>
         </div>
       </div>
     </div>
@@ -252,6 +280,7 @@
           <input id="layout-tpl-name" type="text" placeholder="Template name" maxlength="60" autocomplete="off">
           <button class="btn" id="layout-save-tpl">Save</button>
         </div>
+        <div class="line"><button class="btn" id="layout-update-tpl" hidden>Update template</button></div>
       </div>
     </div>
     <div class="group" id="sec-cue" hidden>
@@ -390,6 +419,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121426"></script>
+<script src="app.js?v=202610121444"></script>
 </body>
 </html>

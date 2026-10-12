@@ -4,7 +4,7 @@
 // soon as there is a connection; the saved copy is only used when there is none. Files
 // from elsewhere (the 3D library, the font) rarely change, so their saved copy is used
 // straight away and refreshed in the background.
-const CACHE = 'stage-lighting-v47';
+const CACHE = 'stage-lighting-v48';
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon.svg',
@@ -35,6 +35,7 @@ const save = (request, response) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
+  if (new URL(request.url).hostname === 'firestore.googleapis.com') return;      // shared layouts: always asked for fresh, never saved here
   const own = new URL(request.url).origin === self.location.origin;
   if (own) {
     // The app's files carry a ?v= number; offline, any saved copy of the same file will do.
