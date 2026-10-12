@@ -258,6 +258,8 @@ const ICONS = {
   person: '<circle cx="8" cy="5" r="2.4"/><path d="M3.5 13.5c.4-2.7 2.2-4.1 4.5-4.1s4.1 1.4 4.5 4.1"/>',
   sun: '<circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.7M8 12.8v1.7M1.5 8h1.7M12.8 8h1.7M3.4 3.4l1.2 1.2M11.4 11.4l1.2 1.2M12.6 3.4l-1.2 1.2M4.6 11.4l-1.2 1.2"/>',
   moon: '<path d="M13.2 9.6A5.6 5.6 0 1 1 6.4 2.8a4.4 4.4 0 0 0 6.8 6.8z"/>',
+  expand: '<path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3"/>',
+  collapse: '<path d="M6 3v3H3M13 6h-3V3M10 13v-3h3M3 10h3v3"/>',
   download: '<path d="M8 2.5v8M4.8 7.5 8 10.7l3.2-3.2M3 13.5h10"/>',
   play: '<path d="M5 3.2v9.6L12.5 8z"/>',
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
@@ -857,6 +859,8 @@ function buildControls() {
   $('people').addEventListener('click', () => { prefs.people = !prefs.people; applyPrefs(); });
   $('theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); });
   $('watch').addEventListener('click', () => setWatch(!document.body.classList.contains('watch')));
+  $('wide').innerHTML = svgIcon('expand');
+  $('wide').addEventListener('click', () => setWide(!document.body.classList.contains('wide')));
   $('plan-reset').addEventListener('click', resetView);
   $('layout-add-led').addEventListener('click', () => layoutAdd('led'));
   $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
@@ -1024,6 +1028,31 @@ function layoutDone() {
   saveShow();
   location.reload();
 }
+
+// Phone: the preview alone, full screen and in landscape. Where the browser allows it the
+// screen really goes full screen and turns; where it does not (iPhone) the page is drawn
+// on its side instead, so turning the phone gives the same picture.
+let wideFullscreen = false;
+async function setWide(on) {
+  document.body.classList.toggle('wide', on);
+  $('wide').innerHTML = svgIcon(on ? 'collapse' : 'expand');
+  $('wide').title = on ? 'Leave full screen' : 'Full screen, landscape';
+  try {
+    if (on) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      wideFullscreen = true;
+      await screen.orientation.lock('landscape');
+    } else {
+      if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+      if (document.fullscreenElement) await document.exitFullscreen();
+      wideFullscreen = false;
+    }
+  } catch (e) { /* not available here: the sideways drawing covers it */ }
+  appH = 0; fitWindow();
+}
+document.addEventListener('fullscreenchange', () => {       // left full screen with the system's own gesture
+  if (!document.fullscreenElement && wideFullscreen) { wideFullscreen = false; setWide(false); }
+});
 
 function setWatch(on) {
   document.body.classList.toggle('watch', on);

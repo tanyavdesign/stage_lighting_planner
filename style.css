@@ -103,7 +103,7 @@ main {
 .view-col { grid-area: views; display: flex; flex-direction: column; gap: 0; min-height: 0; min-width: 0; position: relative; }
 .view { flex: 1 1 0; display: flex; flex-direction: column; }
 .view[data-view="front"] { flex: 0 1 var(--front-h, 50%); }
-.seg.view-switch { display: none; }
+.seg.view-switch, #wide { display: none; }
 
 /* Top of the controls panel: menu, project name, hide-panel button. When the panel is
    hidden this becomes a small floating bar over the plan. */
@@ -547,6 +547,34 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
 
   body.watch .view-col { flex: 1; flex-direction: column; }
   body.watch .view[data-view="three"] { border-left: 1px solid var(--line); }
+}
+
+/* Full screen preview on a phone: only the preview and a slim row of transport buttons. */
+@media (max-width: 899px), (max-height: 520px) {
+  #wide { display: inline-flex; position: absolute; right: 8px; bottom: 8px; z-index: 2; background: var(--panel); box-shadow: var(--float); }
+  body.wide main { display: flex; flex-direction: column; padding: 0; }
+  body.wide .side, body.wide .plan-col, body.wide .grip, body.wide .bar, body.wide #wave, body.wide #load-track, body.wide #add-cue { display: none; }
+  body.wide .view-col { flex: 1 1 0; }
+  body.wide .dock { padding: 4px max(12px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  body.wide .seg.view-switch { right: max(8px, env(safe-area-inset-right)); }
+}
+/* a large phone on its side is wide enough for both previews next to each other */
+@media (min-width: 900px) and (max-height: 520px) {
+  body.wide .view-col { flex-direction: row; }
+  body.wide .view, body.wide .view[data-view="front"] { flex: 1 1 0; }
+  body.wide .view .panel-head, body.wide #toggle-right { display: none; }
+}
+/* still upright (the screen did not turn by itself): draw the page on its side */
+@media (max-width: 899px) and (orientation: portrait) and (pointer: coarse) {
+  body.wide {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: var(--app-h, 100dvh);
+    height: 100vw;
+    transform-origin: 0 0;
+    transform: translateX(100vw) rotate(90deg);
+  }
 }
 
 /* A phone on its side: preview and controls on the left, the plan on the right. */
