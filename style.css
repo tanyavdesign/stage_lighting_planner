@@ -232,6 +232,12 @@ input[type="number"] { width: 62px; font-variant-numeric: tabular-nums; }
   cursor: pointer;
 }
 .menu > button:hover, .menu > label:hover { background: var(--accent); }
+/* view switches as a row of icons: watch mode, people, light or dark */
+.menu-icons { display: flex; gap: 4px; margin-bottom: 8px; }
+.menu-icons .btn.icon { flex: 1; height: 32px; color: inherit; background: rgba(255, 255, 255, .08); }
+.menu-icons .btn.icon:hover { background: rgba(255, 255, 255, .16); }
+.menu-icons .btn.icon.active { background: var(--accent); color: #fff; }
+.menu hr { width: 100%; height: 1px; margin: 6px 0; border: 0; background: #444; }
 .menu input.menu-note {
   width: 100%;
   height: 32px;

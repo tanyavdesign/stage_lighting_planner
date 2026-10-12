@@ -254,6 +254,10 @@ const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
   back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
+  person: '<circle cx="8" cy="5" r="2.4"/><path d="M3.5 13.5c.4-2.7 2.2-4.1 4.5-4.1s4.1 1.4 4.5 4.1"/>',
+  sun: '<circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.7M8 12.8v1.7M1.5 8h1.7M12.8 8h1.7M3.4 3.4l1.2 1.2M11.4 11.4l1.2 1.2M12.6 3.4l-1.2 1.2M4.6 11.4l-1.2 1.2"/>',
+  moon: '<path d="M13.2 9.6A5.6 5.6 0 1 1 6.4 2.8a4.4 4.4 0 0 0 6.8 6.8z"/>',
   download: '<path d="M8 2.5v8M4.8 7.5 8 10.7l3.2-3.2M3 13.5h10"/>',
   play: '<path d="M5 3.2v9.6L12.5 8z"/>',
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
@@ -854,7 +858,6 @@ function buildControls() {
   $('theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); });
   $('watch').addEventListener('click', () => setWatch(!document.body.classList.contains('watch')));
   $('plan-reset').addEventListener('click', resetView);
-  $('edit-layout').addEventListener('click', enterLayout);
   $('layout-add-led').addEventListener('click', () => layoutAdd('led'));
   $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
   $('layout-delete').addEventListener('click', layoutDelete);
@@ -886,7 +889,7 @@ function buildControls() {
 
   // "More" menu
   $('more').addEventListener('click', (e) => { e.stopPropagation(); $('menu').hidden = !$('menu').hidden; });
-  $('menu').addEventListener('click', (e) => { if (!e.target.closest('label, input')) $('menu').hidden = true; e.stopPropagation(); });
+  $('menu').addEventListener('click', (e) => { if (!e.target.closest('label, input, .menu-icons')) $('menu').hidden = true; e.stopPropagation(); });
   $('menu').addEventListener('change', (e) => { if (e.target.type === 'file') $('menu').hidden = true; });
   document.addEventListener('click', () => { $('menu').hidden = true; });
 
@@ -1025,7 +1028,8 @@ function layoutDone() {
 function setWatch(on) {
   document.body.classList.toggle('watch', on);
   $('watch').classList.toggle('active', on);
-  $('watch').textContent = on ? 'Exit watch' : 'Watch';
+  $('watch').title = on ? 'Exit watch mode' : 'Watch: previews only';
+  $('menu').hidden = true;
 }
 
 // Draggable dividers. On phones the bars under the preview and the plan change their
@@ -1084,8 +1088,10 @@ function setupGrips() {
 
 function applyPrefs() {
   document.documentElement.dataset.theme = prefs.theme;
-  $('theme').textContent = prefs.theme === 'dark' ? 'Light mode' : 'Dark mode';
-  $('people').textContent = prefs.people ? 'Hide people' : 'Show people';
+  $('theme').innerHTML = svgIcon(prefs.theme === 'dark' ? 'sun' : 'moon');
+  $('theme').title = prefs.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  $('people').classList.toggle('active', prefs.people);
+  $('people').title = prefs.people ? 'Hide the people' : 'Show the people';
   document.body.classList.toggle('no-left', !!prefs.hideLeft);
   document.body.classList.toggle('no-right', !!prefs.hideRight);
   store.set('kdt-lighting-prefs-v1', prefs);
