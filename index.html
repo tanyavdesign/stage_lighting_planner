@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610122349">
+<link rel="stylesheet" href="style.css?v=202610122351">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -270,20 +270,19 @@
   <aside class="panel side" id="mods">
     <div id="layout-panel">
       <div class="group">
-        <div class="sec-head"><h3>Edit Layout</h3><span id="layout-count" class="count"></span></div>
-        <div class="line" id="layout-classic">
-          <span class="lbl">Add</span>
-          <div class="seg">
-            <button class="btn" id="layout-add-led">LED</button>
-            <button class="btn" id="layout-add-spot">Spotlight</button>
-            <button class="btn" id="layout-add-side">Side</button>
-            <button class="btn" id="layout-add-face">Face</button>
+        <div class="sec-head">
+          <h3>Edit Layout</h3>
+          <div class="seg tools">
+            <button class="btn icon" id="layout-undo" data-icon="undo" title="Undo"></button>
+            <button class="btn icon" id="layout-redo" data-icon="redo" title="Redo"></button>
+            <button class="btn icon" id="layout-paste" data-icon="paste" title="Paste"></button>
+            <button class="btn icon" id="layout-snap" data-icon="magnet" title="Snap: Line Up With Other Lights, Objects and the Stage Centre"></button>
           </div>
         </div>
+        <div class="count" id="layout-count"></div>
       </div>
-      <div class="group">
-        <p class="hint" id="layout-none" hidden></p>
-        <div id="layout-picked" hidden>
+      <div class="group" id="layout-sel" hidden>
+        <div id="layout-picked">
           <div class="sec-head"><h3 id="layout-kind">LED</h3></div>
           <div id="layout-single">
             <div class="line">
@@ -347,52 +346,48 @@
             </div>
           </div>
         </div>
-        <div class="line">
-          <button class="btn" id="layout-paste">Paste</button>
-          <button class="btn" id="layout-undo">Undo</button>
-          <button class="btn" id="layout-redo">Redo</button>
-        </div>
       </div>
       <div class="group">
-        <div class="sec-head"><h3>Library</h3></div>
-        <div class="line"><span class="lbl">Show</span><div class="seg" id="layout-layers"></div></div>
+        <div class="sec-head"><h3>Library</h3><button class="btn icon" id="lib-eye" data-icon="eye" title="Show or Hide This Group on the Plan While Editing"></button></div>
         <div class="line"><div class="seg" id="lib-tabs"></div></div>
         <div id="lib-list"></div>
+        <div id="lib-more" hidden>
+          <div class="line" id="layout-classic">
+            <div class="seg">
+              <button class="btn" id="layout-add-led">LED</button>
+              <button class="btn" id="layout-add-spot">Spotlight</button>
+              <button class="btn" id="layout-add-side">Side</button>
+              <button class="btn" id="layout-add-face">Face</button>
+            </div>
+          </div>
+          <div class="line"><button class="btn" id="layout-new-kind" title="A Light of Your Own, With a Name and a Shape">New Custom Light</button></div>
+          <div id="layout-kinds"></div>
+        </div>
       </div>
       <div class="group">
-        <div class="sec-head"><h3>Stage</h3><span class="count">Metres</span></div>
-        <div class="line nums">
-          <label class="num"><span>Width</span><input id="stage-w" type="number" min="2" max="40" step="0.1"></label>
-          <label class="num"><span>Depth</span><input id="stage-d" type="number" min="2" max="30" step="0.1"></label>
-          <label class="num" title="How High the Stage Floor Is Above the Room Floor"><span>Height</span><input id="stage-h" type="number" min="0" max="3" step="0.1"></label>
+        <button class="row-btn" id="stage-toggle" title="Stage Size and Back Wall"><span>Stage</span><span class="count" id="stage-sum"></span><span data-icon="chevron"></span></button>
+        <div id="stage-fields" hidden>
+          <div class="line nums">
+            <label class="num"><span>Width</span><input id="stage-w" type="number" min="2" max="40" step="0.1"></label>
+            <label class="num"><span>Depth</span><input id="stage-d" type="number" min="2" max="30" step="0.1"></label>
+            <label class="num" title="How High the Stage Floor Is Above the Room Floor"><span>Height</span><input id="stage-h" type="number" min="0" max="3" step="0.1"></label>
+          </div>
+          <div class="line"><button class="btn" id="layout-cyclo" title="The Lit Back Wall (Cyclorama): the Bar Across the Back of the Plan">Back Wall</button></div>
         </div>
-        <div class="line">
-          <button class="btn" id="layout-snap" title="Line Up With Other Lights, Objects and the Stage Centre; Land on a 5 cm Grid; Turn in Steps of 15 Degrees">Snap</button>
-          <button class="btn" id="layout-cyclo" title="The Lit Back Wall (Cyclorama): the Bar Across the Back of the Plan">Back Wall</button>
-        </div>
-      </div>
-      <div class="group">
-        <div class="sec-head"><h3>Custom Lights</h3><button class="btn" id="layout-new-kind">New Kind</button></div>
-        <div id="layout-kinds"></div>
       </div>
       <div class="group">
         <div class="line">
           <button class="btn primary" id="layout-done">Done</button>
           <button class="btn" id="layout-cancel">Cancel</button>
-          <button class="btn" id="layout-template">Reset to Saved Layout</button>
+          <button class="btn icon" id="layout-more" data-icon="dots" title="More: Save as a Layout, Reset, Patch, Fixture List"></button>
         </div>
-        <div class="line">
-          <button class="btn" id="layout-patch" title="Give Every Library Light a DMX Address, in Order">Patch All</button>
-          <button class="btn" id="layout-list" title="A Spreadsheet of Every Light and Object: Position, Height, Aim and Patch">Download Fixture List</button>
-        </div>
-      </div>
-      <div class="group" id="layout-keep">
-        <div class="sec-head"><h3>Save as a Layout</h3></div>
-        <div class="line">
-          <input id="layout-tpl-name" type="text" placeholder="Layout Name" maxlength="60" autocomplete="off">
+        <div class="line" id="layout-keep" hidden>
+          <input id="layout-tpl-name" type="text" placeholder="New Layout Name" maxlength="60" autocomplete="off">
           <button class="btn" id="layout-save-tpl">Save</button>
         </div>
-        <div class="line"><button class="btn" id="layout-update-tpl" hidden>Update Layout</button></div>
+        <div hidden>
+          <button id="layout-template"></button><button id="layout-patch"></button><button id="layout-list"></button><button id="layout-update-tpl" hidden></button>
+        </div>
       </div>
     </div>
     <div class="group" id="sec-cue" hidden>
@@ -539,6 +534,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610122349"></script>
+<script src="app.js?v=202610122351"></script>
 </body>
 </html>

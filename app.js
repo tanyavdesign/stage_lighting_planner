@@ -179,7 +179,7 @@ let CYCLO_ON = true;
 // add a line here.
 // Truss, rigging and other equipment are no longer offered (group 'old'): they stay listed so
 // layouts that already use them still draw.
-const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens']];
+const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens'], ['more', 'More']];     // More: the classic kinds and lights of your own
 const ENDS = [[-1, 0], [1, 0]], SIDES4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 const ASSETS = [
   { type: 'platform', group: 'stage', name: 'Platform', w: 2, d: 1, h: 0.3, z: 0, look: 'solid' },
@@ -623,6 +623,9 @@ const ICONS = {
   alignbottom: '<path d="M2.5 13.5h11M5 4.5V11h2.2V4.5zM9 7v4h2.2V7z"/>',
   spreadx: '<path d="M2.5 2.5v11M13.5 2.5v11M6.9 5h2.2v6H6.9z"/>',
   spready: '<path d="M2.5 2.5h11M2.5 13.5h11M5 6.9h6v2.2H5z"/>',
+  paste: '<rect x="3.5" y="3.5" width="9" height="10.5" rx="1.5"/><path d="M6 3.5V2.2h4v1.3M6 7.5h4M6 10h4"/>',
+  magnet: '<path d="M3.5 2.5h3v6a1.5 1.5 0 0 0 3 0v-6h3v6a4.5 4.5 0 0 1-9 0zM3.5 5.2h3M9.5 5.2h3"/>',
+  dots: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2.2" stroke-linecap="round"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -1446,7 +1449,8 @@ function buildControls() {
   let libGroup = ASSET_GROUPS[0][0];
   const renderLibrary = () => {
     $('lib-tabs').textContent = ''; $('lib-list').textContent = '';
-    for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup ? ' active' : ''), () => { libGroup = id; renderLibrary(); });
+    for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup ? ' active' : ''), () => { libGroup = id; renderLibrary(); if (layoutMode) redrawLayout(); }).dataset.group = id;
+    $('lib-list').hidden = libGroup === 'more'; $('lib-more').hidden = libGroup !== 'more';
     if (libGroup === 'light') for (const f of FIXTURES) {
       const b = button($('lib-list'), '', 'btn lib', () => {
         let kind = work.kinds.find((k) => k.fixture === f.type);            // every light of one fixture shares a kind, made the first time
@@ -1478,10 +1482,25 @@ function buildControls() {
     toast(`${file.name} will show on ${item.name} after you press Done.`, 3000);
   });
   $('media-clear').addEventListener('click', () => { const item = pickedItem(); if (!item) return; layoutKeep(); delete item.media; redrawLayout(); });
-  for (const [id, name] of LAYERS) {
-    const b = button($('layout-layers'), name, 'btn active', () => { hiddenLayers.has(id) ? hiddenLayers.delete(id) : hiddenLayers.add(id); redrawLayout(); });
-    b.dataset.layer = id; b.title = `Show or Hide ${name} While Editing`;
-  }
+  $('lib-eye').addEventListener('click', () => {
+    const tab = document.querySelector('#lib-tabs .btn.active'), id = tab && tab.dataset.group;
+    if (!id) return;
+    hiddenLayers.has(id) ? hiddenLayers.delete(id) : hiddenLayers.add(id);
+    redrawLayout();
+  });
+  $('stage-toggle').addEventListener('click', () => { $('stage-fields').hidden = !$('stage-fields').hidden; $('stage-toggle').classList.toggle('open', !$('stage-fields').hidden); });
+  // The rest of what the editor can do, behind one button
+  $('layout-more').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const alone = document.body.classList.contains('tpl-edit'), update = $('layout-update-tpl');
+    popMenu($('layout-more'), [
+      !alone && ['Save as a New Layout', () => { $('layout-keep').hidden = false; $('layout-tpl-name').focus(); }],
+      !alone && !update.hidden && [update.textContent, () => update.click()],
+      !alone && ['Reset to Saved Layout', () => $('layout-template').click()],
+      ['Give Every Light a DMX Address', () => $('layout-patch').click()],
+      ['Download Fixture List', () => $('layout-list').click()],
+    ].filter(Boolean));
+  });
   $('layout-list').addEventListener('click', () => saveBlob(new Blob([fixtureList(work, currentProject())], { type: 'text/csv' }), `${currentProject().name} Fixture List.csv`));
   $('layout-patch').addEventListener('click', () => {
     layoutKeep();
@@ -1565,6 +1584,7 @@ function buildControls() {
     saveTemplates();
     field.value = '';
     toast(`Saved "${name}" to My layouts.`, 3000);
+    $('layout-keep').hidden = true;
   });
   // Put this layout back into the template the project was made from (and publish it, if it is shared from here).
   const ownTemplate = () => templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -1702,10 +1722,14 @@ function enterLayout() {
 function redrawLayout() {
   work.sel = work.sel.filter((one) => { const item = itemOf(one); return item && !hiddenLayers.has(layerOf(one.kind, item)); });
   drawFixtures(seen('led'), seen('spot'), work.sel, seen('side'), seen('face'), seen('custom'), work.kinds, seen('object'));
-  each('#layout-layers .btn', (b) => b.classList.toggle('active', !hiddenLayers.has(b.dataset.layer)));
+  // the eye beside Library shows or hides the open tab's group on the plan; a hidden group's tab is dimmed
+  each('#lib-tabs .btn', (b) => b.classList.toggle('off', hiddenLayers.has(b.dataset.group)));
+  const tab = document.querySelector('#lib-tabs .btn.active');
+  $('lib-eye').hidden = !tab || tab.dataset.group === 'more';
+  $('lib-eye').classList.toggle('active', !!tab && !hiddenLayers.has(tab.dataset.group));
   renderKinds();
   const item = pickedItem(), many = work.sel.length;
-  $('layout-picked').hidden = !many;
+  $('layout-sel').hidden = !many;
   $('layout-single').hidden = !item;
   $('layout-align').hidden = many < 2;
   each('[data-spread]', (b) => { b.disabled = many < 3; });
@@ -1744,6 +1768,7 @@ function redrawLayout() {
   $('layout-count').textContent = counts.join(' · ') || 'Empty';
   $('layout-classic').hidden = !work.classic;
   const stage = stageOf(work);
+  $('stage-sum').textContent = `${stage.w} × ${stage.d} m`;
   for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
   $('layout-snap').classList.toggle('active', snapOn);
   $('layout-cyclo').classList.toggle('active', cycloOf(work));

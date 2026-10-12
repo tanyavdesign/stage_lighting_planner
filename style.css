@@ -620,6 +620,19 @@ body.layout-mode .history { display: none; }
 .kind-row .select-btn { flex: 0 1 96px; }
 #layout-panel .sec-head .btn { height: 26px; padding: 0 8px; }
 #layout-panel .line { flex-wrap: wrap; }
+#layout-panel .sec-head .seg.tools { margin-right: -4px; }
+#layout-panel .seg.tools .btn.icon.active { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
+#layout-panel #layout-count { display: block; margin-top: 2px; }
+#lib-tabs .btn.off { opacity: .4; text-decoration: line-through; }
+#lib-eye { color: var(--muted); }
+#lib-eye.active { color: var(--text); }
+#lib-more .line:first-child { margin-top: 8px; }
+/* a whole-width row that opens what is under it */
+.row-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; background: none; border: 0; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; min-height: 24px; text-align: left; }
+.row-btn .count { flex: 1; text-align: right; font-weight: 400; }
+.row-btn svg { width: 16px; height: 16px; transition: transform .15s; }
+.row-btn.open svg { transform: rotate(180deg); }
+#stage-fields { margin-top: 8px; }
 /* typed measurements: a small label over each number */
 #layout-panel .nums { gap: 8px; align-items: flex-end; }
 #layout-panel .num { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
