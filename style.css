@@ -877,6 +877,20 @@ body.tpl-edit #layout-template, body.tpl-edit #layout-keep, body.tpl-edit #layou
 body.show-run .bar, body.show-run #wide + .seg.view-switch { }
 body.show-run .bar { display: none; }
 
+/* the project page's settings: separate buttons where there is room, one menu on a phone */
+.home-settings { display: none; }
+@media (max-width: 760px) {
+  .home-settings { display: inline-flex; }
+  #home-showset, #home-layout, #home-lights { display: none; }
+}
+/* show settings: one row per item */
+#showset { z-index: 60; padding: 16px; }
+#showset .mini { width: min(520px, 100%); }
+#showset input[type="number"] { width: 76px; text-align: center; }
+.showset-row { flex-wrap: wrap; }
+.showset-name { flex: 1 1 140px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.showset-row .btn { flex: 0 0 132px; }
+
 /* ---------- Tours: the first question, then cards that point at the real controls ---------- */
 .role-card { width: min(400px, 100%); }
 .role-body { display: flex; flex-direction: column; gap: 12px; padding: 24px 20px 20px; }

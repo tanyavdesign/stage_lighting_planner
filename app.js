@@ -1392,21 +1392,94 @@ function editTemplateLayout(tpl) {
 // watch mode. The run is remembered while the pages change from item to item (`slp-show`).
 let showRun = false, showStarted = false;
 try { showRun = !!sessionStorage.getItem('slp-show') && !!currentItemId && !currentProject().draft; } catch (e) { /* no session storage */ }
-function showLeave(itemId) {              // on to another item of the run, or (with none) back to the project
-  if (!itemId) { try { sessionStorage.removeItem('slp-show'); } catch (e) { /* no session storage */ } }
+// `auto`: the show moved on by itself (the item before finished), so the gap between items applies.
+function showLeave(itemId, auto) {        // on to another item of the run, or (with none) back to the project
+  try { if (itemId) sessionStorage.setItem('slp-show', auto ? 'auto' : '1'); else sessionStorage.removeItem('slp-show'); } catch (e) { /* no session storage */ }
   setOpen(currentId, itemId || null);
 }
-function showNext() {
+function showNext(auto) {
   const items = currentProject().items, at = items.findIndex((it) => it.id === currentItemId);
   showStarted = false;
-  showLeave(at + 1 < items.length ? items[at + 1].id : null);
+  showLeave(at + 1 < items.length ? items[at + 1].id : null, auto === true);
 }
-function showBegin() {
-  seek(0);
+let showWait = 0;                         // timer of the countdown before an item
+function showStart() {
+  clearInterval(showWait);
+  $('show-tap').hidden = true;
   setPlaying(true);
   showStarted = true;
   // a browser that will not start sound by itself (iPhone does this) gets a button to tap
-  setTimeout(() => { if (showRun && !player.playing && currentTime() < 0.2) { showStarted = false; $('show-tap').hidden = false; } }, 700);
+  setTimeout(() => { if (showRun && !player.playing && currentTime() < 0.2) { showStarted = false; $('show-tap').textContent = 'Tap to Play'; $('show-tap').hidden = false; } }, 700);
+}
+// An item of the show is ready. Show settings decide what happens next: it waits for Play,
+// or counts down the gap after the item before, or simply starts.
+function showBegin() {
+  const item = currentItem(), own = item.show || {}, tap = $('show-tap');
+  let auto = false;
+  try { auto = sessionStorage.getItem('slp-show') === 'auto'; } catch (e) { /* no session storage */ }
+  const gap = auto ? (own.gap != null ? own.gap : currentProject().showGap || 0) : 0;
+  seek(0);
+  if (own.manual) { tap.textContent = `Play ${item.name}`; tap.hidden = false; return; }
+  if (!(gap > 0)) return showStart();
+  const until = performance.now() + gap * 1000;
+  const tick = () => {
+    const left = (until - performance.now()) / 1000;
+    if (left <= 0) return showStart();
+    tap.textContent = `Starts in ${Math.ceil(left)} s · Tap to Start Now`;
+  };
+  tap.hidden = false;
+  tick();
+  showWait = setInterval(tick, 200);
+}
+// Show settings for a project: the usual gap between items, and for each item its own gap
+// or that it waits for Play.
+function editShowSettings(project) {
+  const body = $('showset-body');
+  body.textContent = '';
+  const number = (value, placeholder) => {
+    const field = document.createElement('input');
+    field.type = 'number'; field.min = 0; field.max = 600; field.step = 0.5; field.inputMode = 'decimal';
+    field.value = value == null ? '' : value; field.placeholder = placeholder;
+    return field;
+  };
+  const top = document.createElement('div');
+  top.className = 'line';
+  const label = document.createElement('span');
+  label.className = 'lbl mini-lbl'; label.textContent = 'Gap Between Items (Seconds)';
+  const usual = number(project.showGap || 0, '0');
+  top.appendChild(label); top.appendChild(usual); body.appendChild(top);
+  const note = document.createElement('p');
+  note.className = 'hint mini-note';
+  note.textContent = 'Each item can have its own gap before it starts (leave empty for the usual one), or wait until you press Play.';
+  body.appendChild(note);
+  const rows = project.items.map((item, i) => {
+    const own = item.show || {}, row = document.createElement('div');
+    row.className = 'line showset-row';
+    const name = document.createElement('span');
+    name.className = 'showset-name'; name.textContent = `${i + 1}. ${item.name}`;
+    const gap = number(own.gap, 'Usual');
+    gap.title = 'Gap Before This Item (Seconds)';
+    const wait = button(row, '', 'btn', () => { wait.classList.toggle('active'); sync(); });
+    const sync = () => { wait.textContent = wait.classList.contains('active') ? 'Waits for Play' : 'Starts by Itself'; gap.disabled = wait.classList.contains('active'); };
+    wait.classList.toggle('active', !!own.manual);
+    sync();
+    row.insertBefore(name, wait); row.insertBefore(gap, wait);
+    body.appendChild(row);
+    return { item, gap, wait };
+  });
+  $('showset-save').onclick = () => {
+    const seconds = (field) => (field.value === '' ? null : Math.max(0, Math.min(600, +field.value || 0)));
+    project.showGap = seconds(usual) || 0;
+    for (const { item, gap, wait } of rows) {
+      const own = { gap: seconds(gap), manual: wait.classList.contains('active') };
+      if (own.gap == null && !own.manual) delete item.show; else item.show = own;
+    }
+    saveProjects();
+    $('showset').hidden = true;
+    toast('Show settings saved.', 2500);
+  };
+  $('showset-title').textContent = 'Show Settings · ' + project.name;
+  $('showset').hidden = false;
 }
 function buildShowRun() {
   if (!showRun) return;
@@ -1429,7 +1502,7 @@ function buildShowRun() {
     popMenu($('show-text'), items.map((it, i) => [`${i + 1}. ${it.name}`, () => { if (i !== at) { showStarted = false; showLeave(it.id); } }, i === at]));
   });
   $('show-stop').addEventListener('click', () => showLeave(null));
-  $('show-tap').addEventListener('click', () => { $('show-tap').hidden = true; setPlaying(true); showStarted = true; });
+  $('show-tap').addEventListener('click', showStart);
   // an item is over when its track ends; without a track, a few seconds after its last cue
   const lastCue = show.cues.length ? show.cues[show.cues.length - 1] : null;
   const quietEnd = lastCue ? lastCue.time + (lastCue.instant ? 0 : lastCue.fade || 0) + 4 : 3;
@@ -1437,7 +1510,7 @@ function buildShowRun() {
     if (!showStarted) return;
     const T = currentTime();
     const over = player.audio ? player.audio.ended || (!player.playing && T >= duration() - 0.15) : T >= quietEnd;
-    if (over) showNext();
+    if (over) showNext(true);
   }, 250);
 }
 
@@ -3298,6 +3371,7 @@ function createProject(name, stage, from) {
   const project = { id, name: name || 'Untitled Project', template: (from && from.template) || tpl.name, templateId: (from && from.templateId) || tpl.id, created: Date.now(), updated: Date.now(), cues: 0, items: [] };
   const lights = (from && from.lights) || tpl.lights;
   if (lights) project.lights = clone(lights);
+  if (from && from.showGap) project.showGap = from.showGap;
   projects.unshift(project);
   saveProjects();
   return project;
@@ -3306,7 +3380,7 @@ const countCues = (project) => { project.cues = project.items.reduce((n, it) => 
 // The part of an item's file that is its cue list and track details.
 function showPart(data) {
   const part = Object.assign({}, data, { cues: Array.isArray(data.cues) ? data.cues : [] });
-  for (const key of ['format', 'version', 'project', 'projectName', 'template', 'templateId', 'layout', 'look', 'name', 'track']) delete part[key];
+  for (const key of ['format', 'version', 'project', 'projectName', 'template', 'templateId', 'layout', 'look', 'name', 'track', 'show', 'lights']) delete part[key];
   return part;
 }
 // rec: an item read from a file ({ data, track }); without it the item starts empty.
@@ -3318,6 +3392,7 @@ async function addItem(project, name, rec) {
   raw.set(projectKey(SHOW_KEY, id), part);
   if (rec && rec.track) await audioStore.put(id, rec.track);
   const item = { id, name: name || `Item ${project.items.length + 1}`, cues: part.cues.length, updated: Date.now() };
+  if (data.show) item.show = data.show;
   project.items.push(item);
   project.updated = Date.now();
   countCues(project);
@@ -3445,6 +3520,7 @@ function saveBlob(blob, name) {
 async function itemRecord(item) {
   const part = raw.get(projectKey(SHOW_KEY, item.id), {});
   const data = Object.assign({}, part, { name: item.name, look: raw.get(projectKey(LOOK_KEY, item.id), {}), cues: part.cues || [] });
+  if (item.show) data.show = item.show;          // its show settings: own gap, or waits for Play
   delete data.projectName;
   return { data, track: await audioStore.get(item.id) };
 }
@@ -3464,7 +3540,7 @@ async function packProject(project) {
     files.push({ name: paths[i], bytes: jsonBytes(Object.assign(data, { track: path })) });
     if (track) files.push({ name: path, bytes: new Uint8Array(await track.arrayBuffer()) });
   }
-  files.unshift({ name: 'project.json', bytes: jsonBytes({ format: 'slp-project', version: 1, name: project.name, template: project.template, templateId: project.templateId, layout: projectLayout(project), lights: project.lights, items: paths }) });
+  files.unshift({ name: 'project.json', bytes: jsonBytes({ format: 'slp-project', version: 1, name: project.name, template: project.template, templateId: project.templateId, layout: projectLayout(project), lights: project.lights, showGap: project.showGap || 0, items: paths }) });
   return zipWrite(files);
 }
 const AUDIO_TYPES = { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', flac: 'audio/flac' };
@@ -3604,7 +3680,8 @@ function renderHome() {
   list.className = 'project-list view-' + view;
   each('[data-home-view]', (b) => b.classList.toggle('active', b.dataset.homeView === view));
   $('home-layout').hidden = $('home-lights').hidden = !project;
-  $('home-play').hidden = !(project && project.items.length);
+  $('home-play').hidden = $('home-showset').hidden = !(project && project.items.length);
+  $('home-settings').hidden = !project;
   $('layout-news').hidden = !(project && project.layoutNews);
   $('home-back').hidden = $('new-item-wrap').hidden = !project;
   $('home-logo').hidden = $('new-project').hidden = $('draft-new').hidden = !!project;
@@ -4371,6 +4448,19 @@ function buildHome() {
     try { sessionStorage.setItem('slp-show', '1'); } catch (e) { /* no session storage */ }
     setOpen(project.id, project.items[0].id);
   });
+  $('home-showset').addEventListener('click', () => editShowSettings(currentProject()));
+  // on a phone the project's settings buttons fold into one Settings menu
+  const settingsMenu = $('home-settings-menu');
+  $('home-settings-arrow').innerHTML = svgIcon('chevron');
+  $('home-settings-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsMenu.hidden = !settingsMenu.hidden; keepOnScreen(settingsMenu); });
+  document.addEventListener('click', () => { settingsMenu.hidden = true; });
+  each('[data-go]', (b) => b.addEventListener('click', () => {
+    if (b.dataset.go === 'home-showset' && !currentProject().items.length) return toast('Add an item first.', 2500);
+    $(b.dataset.go).click();
+  }));
+  $('showset-close').innerHTML = svgIcon('close');
+  $('showset-close').addEventListener('click', () => { $('showset').hidden = true; });
+  $('showset').addEventListener('click', (e) => { if (e.target === $('showset')) $('showset').hidden = true; });
   buildLights();
   buildShare();
   refreshShared();
