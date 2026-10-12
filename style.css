@@ -621,6 +621,18 @@ body.layout-mode .history { display: none; }
 .kind-row .select-btn { flex: 0 1 96px; }
 #layout-panel .sec-head .btn { height: 26px; padding: 0 8px; }
 #layout-panel .line { flex-wrap: wrap; }
+/* typed measurements: a small label over each number */
+#layout-panel .nums { gap: 8px; align-items: flex-end; }
+#layout-panel .num { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+#layout-panel .num input[type="number"] { width: 68px; }
+#layout-panel [hidden] { display: none; }
+/* stage objects on the plan, and the handle that turns the selected one */
+.plan .obj { fill: var(--muted); fill-opacity: .16; stroke: var(--muted); stroke-width: 2; }
+.plan .obj.picked, .plan .fx:hover > .obj.picked { stroke: var(--accent); stroke-width: 4; }
+.plan text.obj-name { font-size: 13px; fill: var(--muted); }
+.plan .rot-stem { stroke: var(--accent); stroke-width: 2; }
+.plan .rot-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; cursor: grab; }
+.tp-obj { fill: currentColor; fill-opacity: .18; stroke: none; }
 /* align and space buttons: a strip of small icon buttons */
 .seg.tools { flex: 0 1 auto; background: none; gap: 2px; }
 .seg.tools .btn.icon { flex: 0 0 var(--ctl); color: var(--text); }

@@ -38,6 +38,33 @@ const CURTAIN_Y = [230, 338, 357, 443, 531, 631, 737];
 const ZONES = { x: 624, w: 253, y: 218, h: 203.3 };       // left edge and size of one zone
 const ZONE_X = [750.5, 1003.5, 1256.5];
 const ZONE_Y = [320, 523, 726];
+// The stage's size comes from the layout, in metres: `layout.stage = { w, d, h }` (width,
+// depth, and how high the stage floor is above the room's). A layout without one has the KDT
+// stage. setStage moves everything that is placed by the stage: its edges, the aiming zones,
+// the cyclorama, how far lights can be dragged, and how much of the drawing is shown.
+const UNIT = 101;                        // plan units in a metre
+const stageOf = (layout) => Object.assign({ w: 10, d: 6, h: 0.6 }, layout.stage);
+const BOUNDS = {}, PLAN_BOUNDS = {}, FULL = {}, PHONE_VIEW = {};
+const FIT = { x: 1, z: 1 };              // the front view always shows the whole stage: how much it is squeezed to fit
+let STAGE_H = 0.6;
+// A place on the KDT plan, moved to where it belongs on this stage: across the stage in
+// proportion, and off the stage at the same distance from its edge.
+const sx = (x) => (x < 495 ? STAGE.x0 - (495 - x) : x > 1505 ? STAGE.x1 + (x - 1505) : STAGE.cx + (x - 1000) * (STAGE.x1 - STAGE.x0) / 1010);
+const sy = (y) => (y < 218 ? STAGE.y0 - (218 - y) : y > 828 ? STAGE.y1 + (y - 828) : STAGE.cy + (y - 523) * (STAGE.y1 - STAGE.y0) / 610);
+function setStage(stage) {
+  const halfW = stage ? stage.w * UNIT / 2 : 505, halfD = stage ? stage.d * UNIT / 2 : 305;
+  Object.assign(STAGE, { x0: STAGE.cx - halfW, x1: STAGE.cx + halfW, y0: STAGE.cy - halfD, y1: STAGE.cy + halfD });
+  STAGE_H = stage ? stage.h : 0.6;
+  const w = halfW * 2, d = halfD * 2;
+  Object.assign(ZONES, { x: sx(624), w: (sx(1383) - sx(624)) / 3, y: STAGE.y0, h: d / 3 });
+  for (const i of [0, 1, 2]) { ZONE_X[i] = ZONES.x + ZONES.w * (i + 0.5); ZONE_Y[i] = Math.round(ZONES.y + ZONES.h * (i + 0.5)); }
+  Object.assign(CYC, { z: -(d / UNIT / 2 + 0.13), halfW: 3.8 * w / 1010 });
+  Object.assign(BOUNDS, { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: STAGE.y1 - 24 });
+  Object.assign(PLAN_BOUNDS, { x0: STAGE.x0 - 205, x1: STAGE.x1 + 205, y0: STAGE.y0 - 68, y1: STAGE.y1 + 262 });      // face and side lights stand off the stage
+  Object.assign(FULL, { x: STAGE.x0 - 245, y: STAGE.y0 - 108, w: w + 490, h: d + 400 });       // the whole drawing, face lights included
+  Object.assign(PHONE_VIEW, { x: STAGE.x0 - 123, y: STAGE.y0 - 68, w: w + 246, h: d + 120 });
+  FIT.x = 1010 / w; FIT.z = 610 / d;
+}
 const ZONE_NAMES = ['Back L', 'Back C', 'Back R', 'Mid L', 'Mid C', 'Mid R', 'Front L', 'Front C', 'Front R', 'Cyclorama'];
 const CYCLO_ZONE = 10;       // aiming here points the beam at the cyclorama itself, not the floor
 const PEOPLE_AT = [[830, 455], [1000, 425], [1170, 455], [745, 600], [885, 680], [1000, 610], [1115, 680], [1255, 600]];
@@ -117,6 +144,11 @@ function classicSides() {
 const SHAPES = [['circle', 'Circle'], ['square', 'Square'], ['bar', 'Bar'], ['triangle', 'Triangle']];
 const kindsOf = (layout) => layout.kinds || [];
 const customsOf = (layout) => layout.customs || [];
+// Things that stand on or around the stage and give no light (a platform, a riser...):
+//   layout.objects = [{ id, type, name, x, y, z, rot, w, d, h }]
+// x and y are where its centre is on the plan; z is how far its underside is above the stage
+// floor, and w, d, h its width, depth and height, all in metres; rot turns it, in degrees.
+const objectsOf = (layout) => layout.objects || [];
 const facesOf = (layout) => layout.faces || classicFaces();
 const sidesOf = (layout) => layout.sides || classicSides();
 // side lights by the wing they stand in (left or right of centre), from the back of the stage to the front
@@ -137,9 +169,13 @@ function inRows(items) {
   rows.forEach((row) => row.sort((a, b) => a.x - b.x));
   return rows;
 }
-const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], CUSTOMS = [], KINDS = [], SIDE_LIGHTS = { L: [], R: [] };       // filled by useLayout once the project is known
+const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], CUSTOMS = [], KINDS = [], OBJECTS = [], PEOPLE = [], SIDE_LIGHTS = { L: [], R: [] };       // filled by useLayout once the project is known
 let ledRows = 0, spotRows = 0, FACE_Z = 0;
 function useLayout(layout) {
+  setStage(layout.stage);
+  PEOPLE.length = OBJECTS.length = 0;
+  for (const [x, y] of PEOPLE_AT) { const [x3, z3] = to3(sx(x), sy(y)); PEOPLE.push({ x3, z3 }); }
+  for (const o of objectsOf(layout)) { const [x3, z3] = to3(o.x, o.y); OBJECTS.push(Object.assign({}, o, { x3, z3 })); }
   LEDS.length = SPOTS.length = LED_ROW_Y.length = 0;
   const leds = inRows(layout.leds), spots = inRows(layout.spots);
   ledRows = leds.length; spotRows = spots.length;
@@ -157,14 +193,13 @@ function useLayout(layout) {
   const metres = (it) => { const [x3, z3] = to3(it.x, it.y); return { id: it.id, x: it.x, y: it.y, x3, z3 }; };
   FACES.length = 0;
   for (const it of facesOf(layout)) FACES.push(metres(it));
-  FACE_Z = FACES.length ? FACES.reduce((sum, f) => sum + f.z3, 0) / FACES.length : to3(0, FACE_Y)[1];
+  FACE_Z = FACES.length ? FACES.reduce((sum, f) => sum + f.z3, 0) / FACES.length : to3(0, sy(FACE_Y))[1];
   const wings = bySide(sidesOf(layout));
   for (const side of SIDES) SIDE_LIGHTS[side] = wings[side].map(metres);
   KINDS.length = CUSTOMS.length = 0;
   KINDS.push(...kindsOf(layout));
   for (const it of customsOf(layout)) if (KINDS.some((k) => k.id === it.kind)) CUSTOMS.push(Object.assign(metres(it), { kind: it.kind }));
 }
-const PEOPLE = PEOPLE_AT.map(([x, y]) => { const [x3, z3] = to3(x, y); return { x3, z3 }; });
 const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
 
 // Where each aimed LED lands, in plan units. LEDs sent to the same zone fan out across
@@ -189,7 +224,7 @@ function aimTargets(look) {
         // where to draw the plan's aim line to: the cyclorama bar.
         const wx = u * CYC.halfW * 1.85, wy = 1.5 - v * 1.3, along = (RIG_H - wy) / RIG_H;   // low on the wall, edge to edge
         const tx = led.x3 + (wx - led.x3) / along, tz = led.z3 + (CYC.z - led.z3) / along;
-        out[led.id] = [tx * 101 + STAGE.cx, tz * 101 + STAGE.cy, wx * 101 + STAGE.cx, 218];
+        out[led.id] = [tx * 101 + STAGE.cx, tz * 101 + STAGE.cy, wx * 101 + STAGE.cx, STAGE.y0];
       } else {
         out[led.id] = [cx + u * ZONES.w * 0.72, cy + v * ZONES.h * 0.62];
       }
@@ -297,6 +332,8 @@ function copyLayout(layout) {
     out.kinds = layout.kinds.map(({ id, name, shape }) => ({ id, name, shape }));
     out.customs = (layout.customs || []).map(({ id, kind, x, y }) => ({ id, kind, x, y }));
   }
+  if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
+  if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h }) => ({ id, type, name, x, y, z, rot, w, d, h }));
   return out;
 }
 const templateName = () => (currentProject() && currentProject().template) || TEMPLATE;
@@ -707,8 +744,7 @@ const toggleIn = (set, key) => { set.has(key) ? set.delete(key) : set.add(key); 
 // The part of the drawing on screen. Phones crop to the stage so fixtures are as large
 // as possible; pinching zooms further in.
 const mqPhone = window.matchMedia('(max-width: 899px)');
-const FULL = { x: 250, y: 110, w: 1500, h: 1010 };       // the whole drawing, face lights included
-const baseView = () => (mqPhone.matches ? { x: 372, y: 150, w: 1256, h: 730 } : Object.assign({}, FULL));
+const baseView = () => Object.assign({}, mqPhone.matches ? PHONE_VIEW : FULL);
 let view = baseView();
 function applyView() {
   svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
@@ -756,7 +792,7 @@ function tapFixture(g) {
 
 // Draw the LEDs and spotlights (and their labels and aim lines) into their layer.
 // Called once normally, and again after every change while the layout is being edited.
-function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_LIGHTS.R], faces = FACES, customs = CUSTOMS, kinds = KINDS) {
+function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_LIGHTS.R], faces = FACES, customs = CUSTOMS, kinds = KINDS, objects = OBJECTS) {
   const layer = planEls.fixtureLayer;
   layer.textContent = '';
   planEls.leds = {}; planEls.aims = {}; planEls.spots = {}; planEls.face = []; planEls.side = { L: [], R: [] }; planEls.custom = {};
@@ -766,6 +802,12 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
     if (editing && editing.some((one) => one.kind === kind && one.id === id)) shape.classList.add('picked');
     return shape;
   };
+  for (const o of objects) {                     // stage objects lie under the lights
+    const w = o.w * UNIT, d = o.d * UNIT, g = el('g', { class: editing ? 'fx' : '', transform: `rotate(${o.rot || 0} ${o.x} ${o.y})` }, null, layer);
+    const shape = el('rect', { x: o.x - w / 2, y: o.y - d / 2, width: w, height: d, rx: 4, class: 'obj' }, null, g);
+    if (editing) tag(shape, 'object', o.id);
+    el('text', { x: o.x, y: o.y + 5, 'text-anchor': 'middle', class: 'obj-name' }, o.name, layer);
+  }
   const aims = el('g', {}, null, layer);
   const firstRowY = Math.min(...leds.map((l) => l.y));
   for (const led of leds) {
@@ -818,32 +860,50 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
       () => { toggleIn(selCustom, light.id); syncUI(); }, null, layer), 'custom', light.id);
     text(x, y + 38, light.id);
   }
+  // one object selected in the layout editor: a handle to turn it by
+  const turn = editing && editing.length === 1 && editing[0].kind === 'object' && objects.find((o) => o.id === editing[0].id);
+  if (turn) {
+    const a = (turn.rot || 0) * Math.PI / 180, near = turn.d * UNIT / 2, far = near + 38;
+    el('line', { x1: turn.x + Math.sin(a) * near, y1: turn.y - Math.cos(a) * near, x2: turn.x + Math.sin(a) * far, y2: turn.y - Math.cos(a) * far, class: 'rot-stem' }, null, layer);
+    el('circle', { cx: turn.x + Math.sin(a) * far, cy: turn.y - Math.cos(a) * far, r: 10, class: 'rot-handle', 'data-rot': turn.id }, null, layer);
+  }
 }
 
-function buildPlan() {
-  el('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
-  for (const c of [0, 1, 2, 3]) el('line', { x1: ZONES.x + ZONES.w * c, y1: 244, x2: ZONES.x + ZONES.w * c, y2: 816, class: 'grid' });
-  for (const y of [421, 625]) el('line', { x1: ZONES.x, y1: y, x2: ZONES.x + ZONES.w * 3, y2: y, class: 'grid' });
+// The stage itself and what is fixed around it. Drawn once, and again in the layout editor
+// whenever the stage's size changes.
+function drawStage() {
+  const layer = planEls.stageLayer;
+  layer.textContent = '';
+  const put = (name, attrs, text) => el(name, attrs, text, layer);
+  const area = (x, y, text) => put('text', { x, y, 'text-anchor': 'middle', class: 'area' }, text);
+  const at = (points) => points.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ');
+  put('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
+  for (const c of [0, 1, 2, 3]) put('line', { x1: ZONES.x + ZONES.w * c, y1: STAGE.y0 + 26, x2: ZONES.x + ZONES.w * c, y2: STAGE.y1 - 12, class: 'grid' });
+  for (const r of [1, 2]) put('line', { x1: ZONES.x, y1: ZONES.y + ZONES.h * r, x2: ZONES.x + ZONES.w * 3, y2: ZONES.y + ZONES.h * r, class: 'grid' });
   for (let z = 0; z < 9; z++) {
-    el('text', { x: ZONES.x + ZONES.w * (z % 3) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / 3) + 192, 'text-anchor': 'end', class: 'zone' }, z + 1);
+    put('text', { x: ZONES.x + ZONES.w * (z % 3) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / 3) + ZONES.h - 11, 'text-anchor': 'end', class: 'zone' }, z + 1);
   }
   planEls.cyclo = fixture(
-    ['rect', { x: 624, y: 192, width: 759, height: 52 }],
-    ['rect', { x: 624, y: 205, width: 759, height: 26, rx: 6, class: 'cyclo' }],
-    () => { selCyclo = !selCyclo; syncUI(); });
+    ['rect', { x: ZONES.x, y: STAGE.y0 - 26, width: ZONES.w * 3, height: 52 }],
+    ['rect', { x: ZONES.x, y: STAGE.y0 - 13, width: ZONES.w * 3, height: 26, rx: 6, class: 'cyclo' }],
+    () => { selCyclo = !selCyclo; syncUI(); }, null, layer);
   for (const y of CURTAIN_Y) {
-    el('line', { x1: 515, y1: y, x2: 609, y2: y, class: 'curtain' });
-    el('line', { x1: 1392, y1: y, x2: 1486, y2: y, class: 'curtain' });
+    put('line', { x1: STAGE.x0 + 20, y1: sy(y), x2: STAGE.x0 + 114, y2: sy(y), class: 'curtain' });
+    put('line', { x1: STAGE.x1 - 113, y1: sy(y), x2: STAGE.x1 - 19, y2: sy(y), class: 'curtain' });
   }
-  label(1000, 168, 'BACKSTAGE', 'area');
-  label(1000, 866, 'STAGE FRONT', 'area');
-  label(318, 508, 'STAGE LEFT', 'area');
-  label(1684, 508, 'STAGE RIGHT', 'area');
-  el('polygon', { points: '581,880 693,920 638,1052 527,1014', class: 'stairs' });
-  el('polygon', { points: '1307,920 1419,880 1473,1014 1362,1052', class: 'stairs' });
-  label(610, 972, 'STAIRS', 'area'); label(1390, 972, 'STAIRS', 'area');
-  el('line', { x1: 522, y1: FACE_Y, x2: 1478, y2: FACE_Y, class: 'rail' });
-  label(1000, 1110, 'AUDIENCE', 'area');
+  area(STAGE.cx, sy(168), 'BACKSTAGE');
+  area(STAGE.cx, sy(866), 'STAGE FRONT');
+  area(sx(318), STAGE.cy - 15, 'STAGE LEFT');
+  area(sx(1684), STAGE.cy - 15, 'STAGE RIGHT');
+  put('polygon', { points: at([[581, 880], [693, 920], [638, 1052], [527, 1014]]), class: 'stairs' });
+  put('polygon', { points: at([[1307, 920], [1419, 880], [1473, 1014], [1362, 1052]]), class: 'stairs' });
+  area(sx(610), sy(972), 'STAIRS'); area(sx(1390), sy(972), 'STAIRS');
+  put('line', { x1: sx(522), y1: sy(FACE_Y), x2: sx(1478), y2: sy(FACE_Y), class: 'rail' });
+  area(STAGE.cx, sy(1110), 'AUDIENCE');
+}
+function buildPlan() {
+  planEls.stageLayer = el('g', {});
+  drawStage();
 
   planEls.fixtureLayer = el('g', {});
   drawFixtures(LEDS, SPOTS);
@@ -853,13 +913,13 @@ function buildPlan() {
     const x = ZONES.x + ZONES.w * (z % 3), y = ZONES.y + ZONES.h * Math.floor(z / 3);
     fixture(
       ['rect', { x: x + 4, y: y + 4, width: ZONES.w - 8, height: ZONES.h - 8, rx: 10 }],
-      ['text', { x: x + ZONES.w / 2, y: y + 128, 'text-anchor': 'middle', class: 'zone-num' }, z + 1],
+      ['text', { x: x + ZONES.w / 2, y: y + ZONES.h / 2 + 27, 'text-anchor': 'middle', class: 'zone-num' }, z + 1],
       () => { aiming = false; forSelection((id) => { state.aim[id] = z + 1; }); },
       null, planEls.zonePick);
   }
   fixture(                                     // zone 10: the cyclorama itself
-    ['rect', { x: ZONES.x + 4, y: 184, width: ZONES.w * 3 - 8, height: 34, rx: 8 }],
-    ['text', { x: ZONES.x + ZONES.w * 1.5, y: 210, 'text-anchor': 'middle', class: 'zone-num small' }, '10  Cyclorama'],
+    ['rect', { x: ZONES.x + 4, y: STAGE.y0 - 34, width: ZONES.w * 3 - 8, height: 34, rx: 8 }],
+    ['text', { x: ZONES.x + ZONES.w * 1.5, y: STAGE.y0 - 8, 'text-anchor': 'middle', class: 'zone-num small' }, '10  Cyclorama'],
     () => { aiming = false; forSelection((id) => { state.aim[id] = CYCLO_ZONE; }); },
     null, planEls.zonePick);
   applyView();
@@ -1119,6 +1179,33 @@ function buildControls() {
   $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
   $('layout-add-side').addEventListener('click', () => layoutAdd('side'));
   $('layout-add-face').addEventListener('click', () => layoutAdd('face'));
+  $('layout-add-object').addEventListener('click', () => layoutAdd('object'));
+  $('layout-redo').addEventListener('click', layoutRedo);
+  $('layout-snap').addEventListener('click', () => { snapOn = !snapOn; redrawLayout(); });
+  // Typed numbers. A value that cannot be used puts the old one back.
+  const typed = (id, low, high, apply) => $(id).addEventListener('change', () => {
+    const v = parseFloat($(id).value);
+    if (Number.isFinite(v) && v >= low && v <= high) { layoutKeep(); apply(metres(v)); }
+    else toast(`Use a number from ${low} to ${high}.`, 2500);
+    $(id).blur();
+    return work.stageDirty ? (delete work.stageDirty, applyStage()) : redrawLayout();
+  });
+  const sized = (key) => (v) => { work.stage = Object.assign(stageOf(work), { [key]: v }); work.stageDirty = true; };
+  typed('stage-w', 2, 40, sized('w')); typed('stage-d', 2, 30, sized('d')); typed('stage-h', 0, 3, sized('h'));
+  const placed = (set) => (v) => { const item = pickedItem(); if (item) set(item, v, work.picked.kind); };
+  typed('pos-x', -40, 40, placed((item, v, kind) => Object.assign(item, hold(kind, STAGE.cx + v * UNIT, item.y))));
+  typed('pos-y', -40, 40, placed((item, v, kind) => Object.assign(item, hold(kind, item.x, STAGE.cy + v * UNIT))));
+  typed('obj-z', -3, 20, placed((item, v) => { item.z = v; }));
+  typed('obj-w', 0.05, 40, placed((item, v) => { item.w = v; }));
+  typed('obj-d', 0.05, 40, placed((item, v) => { item.d = v; }));
+  typed('obj-h', 0.02, 20, placed((item, v) => { item.h = v; }));
+  typed('obj-rot', -360, 360, placed((item, v) => { item.rot = (v % 360 + 360) % 360; }));
+  $('obj-name').addEventListener('change', () => {
+    const item = pickedItem(), name = $('obj-name').value.trim();
+    if (item && name) { layoutKeep(); item.name = name; }
+    $('obj-name').blur();
+    redrawLayout();
+  });
   $('layout-copy').addEventListener('click', layoutCopy);
   $('layout-paste').addEventListener('click', () => layoutPaste());
   $('layout-dup').addEventListener('click', layoutDuplicate);
@@ -1138,9 +1225,9 @@ function buildControls() {
     const template = copyLayout(findTemplate(currentProject() && currentProject().templateId).layout), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
     const keep = (list) => list.map((it) => (had.has(it.id) ? Object.assign({ was: it.id }, it) : it));
     layoutKeep();
-    Object.assign(work, { leds: keep(template.leds), spots: keep(template.spots), faces: facesOf(template), sides: sidesOf(template), customs: customsOf(template), kinds: kindsOf(template), sel: [] });
+    Object.assign(work, { leds: keep(template.leds), spots: keep(template.spots), faces: facesOf(template), sides: sidesOf(template), customs: customsOf(template), kinds: kindsOf(template), objects: objectsOf(template), stage: template.stage || null, sel: [] });
     $('layout-kinds').dataset.shown = '';
-    redrawLayout();
+    applyStage();
   });
   // Keep the layout being edited as a template for new projects.
   $('layout-save-tpl').addEventListener('click', () => {
@@ -1216,42 +1303,57 @@ function buildControls() {
 // every view is rebuilt from the new layout. Cancel reloads without saving.
 // ---------------------------------------------------------------------------
 let layoutMode = false, work = null, moving = null;
-const BOUNDS = { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: STAGE.y1 - 24 };
 const numberOf = (id) => +String(id).replace(/^[A-Z]/, '');
-const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light', custom: 'Custom Light' };
-const PLAN_BOUNDS = { x0: 290, x1: 1710, y0: 150, y1: 1090 };      // face and side lights stand off the stage
+const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light', custom: 'Custom Light', object: 'Object' };
 // What is selected in the layout editor: `work.sel`, a list of { kind, id }. `work.picked`
 // is the one selected light when exactly one is, for the settings that only make sense then.
-const KINDS_OF_LIGHT = ['led', 'spot', 'side', 'face', 'custom'];
+const KINDS_OF_LIGHT = ['led', 'spot', 'side', 'face', 'custom', 'object'];       // everything that can be selected, stage objects too
 const itemOf = (one) => work[one.kind + 's'].find((it) => it.id === one.id);
 const pickedItem = () => work.picked && itemOf(work.picked);
 const selected = () => work.sel.map((one) => ({ kind: one.kind, item: itemOf(one) })).filter((one) => one.item);
 const isSelected = (kind, id) => work.sel.some((one) => one.kind === kind && one.id === id);
-const boundsOf = (kind) => (kind === 'side' || kind === 'face' ? PLAN_BOUNDS : BOUNDS);
+const boundsOf = (kind) => (kind === 'side' || kind === 'face' || kind === 'object' ? PLAN_BOUNDS : BOUNDS);
 const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
-// Undo inside the editor: the layout as it was before each change.
-const layoutPast = [];
-const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds });
-function layoutKeep() { layoutPast.push(layoutNow()); if (layoutPast.length > 80) layoutPast.shift(); }
-function layoutUndo() {
-  if (!layoutPast.length) return toast('Nothing to undo.', 1500);
-  Object.assign(work, JSON.parse(layoutPast.pop()));
+// Undo and redo inside the editor: the layout as it was before each change, and after each undo.
+const layoutPast = [], layoutNext = [];
+const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage });
+function layoutKeep() { layoutPast.push(layoutNow()); if (layoutPast.length > 80) layoutPast.shift(); layoutNext.length = 0; }
+function layoutStep(from, to, none) {
+  if (!from.length) return toast(none, 1500);
+  to.push(layoutNow());
+  const sized = JSON.stringify(work.stage);
+  Object.assign(work, JSON.parse(from.pop()));
   work.sel = work.sel.filter((one) => itemOf(one));
   $('layout-kinds').dataset.shown = '';
+  if (JSON.stringify(work.stage) !== sized) applyStage(); else redrawLayout();
+}
+const layoutUndo = () => layoutStep(layoutPast, layoutNext, 'Nothing to undo.');
+const layoutRedo = () => layoutStep(layoutNext, layoutPast, 'Nothing to redo.');
+// The stage changed size: move everything drawn around it, and show the whole drawing again.
+function applyStage() {
+  setStage(work.stage);
+  drawStage();
+  resetView();
   redrawLayout();
 }
+// With snapping on, lights and objects land on a 5 cm grid and turn in steps of 15 degrees.
+let snapOn = true;
+const snapTo = (v) => (snapOn ? Math.round(v / 5) * 5 : Math.round(v));
+// Numbers in the panel are metres from the centre of the stage, to the centimetre.
+const metres = (v) => Math.round(v * 100) / 100;
 
 function enterLayout() {
   layoutMode = true;
   clearSelection(); aiming = false;
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
-  work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)), sel: [] };
+  work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)),
+    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, sel: [] };
   Object.defineProperty(work, 'picked', {
     get() { return this.sel.length === 1 ? this.sel[0] : null; },
     set(one) { this.sel = one ? [one] : []; },
   });
-  layoutPast.length = 0;
+  layoutPast.length = layoutNext.length = 0;
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -1261,7 +1363,7 @@ function enterLayout() {
   redrawLayout();
 }
 function redrawLayout() {
-  drawFixtures(work.leds, work.spots, work.sel, work.sides, work.faces, work.customs, work.kinds);
+  drawFixtures(work.leds, work.spots, work.sel, work.sides, work.faces, work.customs, work.kinds, work.objects);
   renderKinds();
   const item = pickedItem(), many = work.sel.length;
   $('layout-picked').hidden = !many;
@@ -1274,16 +1376,29 @@ function redrawLayout() {
   if (item) {
     const numbered = work.picked.kind === 'led' || work.picked.kind === 'spot';       // only these carry a number people use
     const ofKind = work.picked.kind === 'custom' && work.kinds.find((k) => k.id === item.kind);
-    $('layout-kind').textContent = ofKind ? ofKind.name : KIND_NAMES[work.picked.kind];
-    $('layout-number').hidden = $('layout-number-lbl').hidden = !numbered;
+    const object = work.picked.kind === 'object';
+    $('layout-kind').textContent = object ? item.name || 'Object' : ofKind ? ofKind.name : KIND_NAMES[work.picked.kind];
+    // where it is, and for an object its name, size and turn; a field being typed in is left alone
+    const fill = (id, value) => { if (document.activeElement !== $(id)) $(id).value = value; };
+    fill('pos-x', metres((item.x - STAGE.cx) / UNIT)); fill('pos-y', metres((item.y - STAGE.cy) / UNIT));
+    each('#layout-picked .obj-only', (n) => { n.hidden = !object; });
+    if (object) { fill('obj-name', item.name); for (const key of ['z', 'w', 'd', 'h', 'rot']) fill('obj-' + key, metres(item[key] || 0)); }
+    $('layout-number').parentNode.hidden = !numbered;
     if (numbered && document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
   }
-  $('layout-count').textContent = `${work.leds.length} LED · ${work.spots.length} spot · ${work.faces.length} face · ${work.sides.length} side` + (work.customs.length ? ` · ${work.customs.length} custom` : '');
+  $('layout-count').textContent = `${work.leds.length} LED · ${work.spots.length} spot · ${work.faces.length} face · ${work.sides.length} side` + (work.customs.length ? ` · ${work.customs.length} custom` : '') + (work.objects.length ? ` · ${work.objects.length} object${work.objects.length === 1 ? '' : 's'}` : '');
+  const stage = stageOf(work);
+  for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
+  $('layout-snap').classList.toggle('active', snapOn);
+  $('layout-undo').disabled = !layoutPast.length; $('layout-redo').disabled = !layoutNext.length;
 }
 let boxing = null;                     // a selection box being dragged out over empty plan
+let turning = null;                    // an object being turned by its handle
 function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+  const handle = e.target.closest('[data-rot]');
+  if (handle) { turning = { item: work.objects.find((o) => o.id === handle.dataset.rot), kept: false }; moving = null; return; }
   if (!g) {                            // empty plan: drag out a box; what it touches is selected
     if (!add) work.sel = [];
     boxing = { start: svgPoint(e), had: [...work.sel], rect: null };
@@ -1301,7 +1416,15 @@ function layoutPress(e) {
   redrawLayout();
 }
 function layoutDrag(e) {
-  const p = svgPoint(e), snap = (v) => Math.round(v / 5) * 5;
+  const p = svgPoint(e), snap = snapTo;
+  if (turning && turning.item) {         // the handle points the way the object's back edge faces
+    const to = Math.atan2(p.x - turning.item.x, turning.item.y - p.y) * 180 / Math.PI, step = snapOn ? 15 : 1;
+    const rot = ((Math.round(to / step) * step) % 360 + 360) % 360;
+    if (rot === (turning.item.rot || 0)) return;
+    if (!turning.kept) { turning.kept = true; layoutKeep(); }
+    turning.item.rot = rot;
+    return redrawLayout();
+  }
   if (boxing) {
     const from = boxing.start, r = { x: Math.min(p.x, from.x), y: Math.min(p.y, from.y), w: Math.abs(p.x - from.x), h: Math.abs(p.y - from.y) };
     const inside = (it) => it.x >= r.x && it.x <= r.x + r.w && it.y >= r.y && it.y <= r.y + r.h;
@@ -1319,15 +1442,20 @@ function layoutDrag(e) {
   redrawLayout();
 }
 function layoutRelease() {
-  moving = null;
+  moving = turning = null;
   if (boxing) { boxing = null; redrawLayout(); }
 }
 // What was copied, kept for this browser tab so it can be pasted into another layout too.
 function layoutClip() {
   try { return JSON.parse(sessionStorage.getItem('slp-clip') || 'null'); } catch (e) { return null; }
 }
+const clipOf = () => selected().map(({ kind, item }) => {
+  const one = { kind, x: item.x, y: item.y, of: item.kind };
+  if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h };
+  return one;
+});
 function layoutCopy() {
-  const lights = selected().map(({ kind, item }) => ({ kind, x: item.x, y: item.y, of: item.kind }));
+  const lights = clipOf();
   if (!lights.length) return;
   const kinds = work.kinds.filter((k) => lights.some((light) => light.of === k.id));
   try { sessionStorage.setItem('slp-clip', JSON.stringify({ lights, kinds })); } catch (e) { /* no session storage */ }
@@ -1342,8 +1470,8 @@ function layoutPaste(clip = layoutClip()) {
   work.sel = [];
   for (const light of clip.lights) {
     const list = work[light.kind + 's'], n = Math.max(0, ...list.map((it) => numberOf(it.id))) + 1;
-    const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C' }[light.kind] + n;
-    const item = Object.assign({ id }, hold(light.kind, light.x + 30, light.y + 30));
+    const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C', object: 'O' }[light.kind] + n;
+    const item = Object.assign({ id }, light.more, hold(light.kind, light.x + 30, light.y + 30));
     if (light.kind === 'custom') item.kind = light.of;
     list.push(item);
     work.sel.push({ kind: light.kind, id });
@@ -1352,7 +1480,7 @@ function layoutPaste(clip = layoutClip()) {
   redrawLayout();
 }
 function layoutDuplicate() {
-  const lights = selected().map(({ kind, item }) => ({ kind, x: item.x, y: item.y, of: item.kind }));
+  const lights = clipOf();
   if (lights.length) layoutPaste({ lights, kinds: [] });
 }
 // Line the selected lights up on one edge or through the middle, or space them evenly.
@@ -1390,7 +1518,8 @@ function layoutKey(e) {
   else if (cmd && key === 'c') layoutCopy();
   else if (cmd && key === 'v') layoutPaste();
   else if (cmd && key === 'd') layoutDuplicate();
-  else if (cmd && key === 'z') layoutUndo();
+  else if (cmd && key === 'z') (e.shiftKey ? layoutRedo : layoutUndo)();
+  else if (cmd && key === 'y') layoutRedo();
   else if (cmd && key === 'a') { work.sel = KINDS_OF_LIGHT.flatMap((kind) => work[kind + 's'].map((it) => ({ kind, id: it.id }))); redrawLayout(); }
   else return;
   e.preventDefault();
@@ -1398,11 +1527,12 @@ function layoutKey(e) {
 function layoutAdd(kind, ofKind) {
   layoutKeep();
   const list = work[kind + 's'], n = Math.max(0, ...list.map((it) => numberOf(it.id))) + 1;
-  const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C' }[kind] + n;
+  const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C', object: 'O' }[kind] + n;
   // drop it somewhere sensible for its kind, nudged along so new ones do not stack up
   const spare = list.filter((it) => !it.was).length, nudge = (spare % 5) * 30;
-  if (kind === 'side') list.push({ id, x: SIDE_X.L, y: STAGE.cy - 60 + nudge });               // in the left wing; drag across for the right
-  else if (kind === 'face') list.push({ id, x: STAGE.cx - 60 + nudge, y: FACE_Y });
+  if (kind === 'object') list.push({ id, type: 'block', name: 'Block ' + n, x: STAGE.cx + nudge, y: STAGE.cy + nudge, z: 0, rot: 0, w: 2, d: 1, h: 0.3 });
+  else if (kind === 'side') list.push({ id, x: sx(SIDE_X.L), y: STAGE.cy - 60 + nudge });               // in the left wing; drag across for the right
+  else if (kind === 'face') list.push({ id, x: STAGE.cx - 60 + nudge, y: sy(FACE_Y) });
   else if (kind === 'custom') list.push({ id, kind: ofKind, x: STAGE.cx - 60 + nudge, y: STAGE.cy });
   else list.push({ id, x: STAGE.cx - 60 + nudge, y: STAGE.cy + (kind === 'led' ? -40 : 40) });
   work.picked = { kind, id };
@@ -2037,12 +2167,12 @@ const haze = document.createElement('canvas');
 haze.width = FW / SOFT; haze.height = Math.ceil(FLOOR_Y / SOFT);
 const hctx = haze.getContext('2d');
 const css = (r, g, b, a) => `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${clamp01(a)})`;
-const depthScale = (z3) => 0.8 + 0.2 * clamp01((z3 + 3) / 6);   // further back sits closer to the centre
-const frontX = (x3, z3) => FW / 2 + x3 * 96 * depthScale(z3);
+const depthScale = (z3) => 0.8 + 0.2 * clamp01((z3 * FIT.z + 3) / 6);   // further back sits closer to the centre
+const frontX = (x3, z3) => FW / 2 + x3 * FIT.x * 96 * depthScale(z3);
 // Where a fixture sits in the picture. The rig hangs above the top edge, so beams come
 // in from off-screen instead of appearing to start in mid-air.
 const rigY = (scale) => (1 - scale) * 130 - 44;
-const floorY = (z3) => HORIZON + 8 + clamp01((z3 + 3) / 6) * (FLOOR_Y - HORIZON - 14);
+const floorY = (z3) => HORIZON + 8 + clamp01((z3 * FIT.z + 3) / 6) * (FLOOR_Y - HORIZON - 14);
 
 function sizeFront() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -2309,11 +2439,17 @@ function buildThree() {
   const setLens = (m, r, g, b) => m.material.color.setRGB(Math.max(0.1, r), Math.max(0.1, g), Math.max(0.11, b));
 
   // Room
-  const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(60, 60), solid(0x08080b)), 0, -0.6, 0);
+  const stageW = (STAGE.x1 - STAGE.x0) / UNIT, stageD = (STAGE.y1 - STAGE.y0) / UNIT, drop = Math.max(0.02, STAGE_H);
+  const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(60 + stageW, 60 + stageD), solid(0x08080b)), 0, -drop, 0);
   floor.rotation.x = -Math.PI / 2;
-  add(new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.6, 6.4), solid(0x15151a)), 0, -0.3, 0);
-  const cyclo = add(new THREE.Mesh(new THREE.PlaneGeometry(7.6, 4.6), solid(0x0c0c11)), 0, 2.3, -3.15);
-  for (const y of LED_ROW_Y) add(new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.06, 0.06), solid(0x222228)), 0, RIG_H + 0.1, to3(0, y)[1]);
+  add(new THREE.Mesh(new THREE.BoxGeometry(stageW + 0.4, drop, stageD + 0.4), solid(0x15151a)), 0, -drop / 2, 0);
+  const cyclo = add(new THREE.Mesh(new THREE.PlaneGeometry(CYC.halfW * 2, CYC.top), solid(0x0c0c11)), 0, CYC.top / 2, CYC.z);
+  for (const y of LED_ROW_Y) add(new THREE.Mesh(new THREE.BoxGeometry(6.6 / FIT.x, 0.06, 0.06), solid(0x222228)), 0, RIG_H + 0.1, to3(0, y)[1]);
+  // stage objects: plain blocks of their own size, standing where the plan puts them
+  for (const o of OBJECTS) {
+    const block = add(new THREE.Mesh(new THREE.BoxGeometry(o.w, Math.max(0.02, o.h), o.d), solid(0x24242b)), o.x3, (o.z || 0) + Math.max(0.02, o.h) / 2, o.z3);
+    block.rotation.y = -(o.rot || 0) * Math.PI / 180;
+  }
 
   const leds = LEDS.map((led) => {
     const pivot = add(new THREE.Group(), led.x3, RIG_H, led.z3);
@@ -2354,7 +2490,7 @@ function buildThree() {
     cone.quaternion.setFromUnitVectors(DOWN, dir.normalize());
     return { cone, lens: lens(x, FACE_H, faceZ) };
   });
-  if (FACES.length) add(new THREE.Mesh(new THREE.BoxGeometry(7, 0.06, 0.06), solid(0x222228)), 0, FACE_H + 0.1, FACE_Z);
+  if (FACES.length) add(new THREE.Mesh(new THREE.BoxGeometry(7 / FIT.x, 0.06, 0.06), solid(0x222228)), 0, FACE_H + 0.1, FACE_Z);
   const faceGlow = add(new THREE.Mesh(new THREE.PlaneGeometry(9, 5), glow(glowTex)), 0, 0.014, 0.9);
   faceGlow.rotation.x = -Math.PI / 2;
 
@@ -2367,7 +2503,8 @@ function buildThree() {
   });
 
   // Orbit camera
-  const orbit = { az: 0.5, el: 0.45, dist: 16, target: new THREE.Vector3(0, 1.7, 0) };
+  const far = Math.max(1, 1 / FIT.x, 1 / FIT.z);          // a bigger stage is looked at from further back
+  const orbit = { az: 0.5, el: 0.45, dist: 16 * far, target: new THREE.Vector3(0, 1.7, 0) };
   function placeCamera() {
     const { az, el, dist, target: c } = orbit;
     camera.position.set(c.x + dist * Math.sin(az) * Math.cos(el), c.y + dist * Math.sin(el), c.z + dist * Math.cos(az) * Math.cos(el));
@@ -2387,7 +2524,7 @@ function buildThree() {
   host.addEventListener('wheel', (e) => {
     if (!e.ctrlKey && !e.metaKey) return;        // plain scrolling moves the page
     e.preventDefault();
-    orbit.dist = Math.max(8, Math.min(34, orbit.dist * (1 + e.deltaY * (e.metaKey ? 0.001 : 0.01))));
+    orbit.dist = Math.max(8, Math.min(34 * far, orbit.dist * (1 + e.deltaY * (e.metaKey ? 0.001 : 0.01))));
     placeCamera();
   }, { passive: false });
 
@@ -3136,8 +3273,8 @@ function planSvgText(look) {
   });
   copy.querySelectorAll('.zone-pick, .box').forEach((n) => n.remove());
   copy.removeAttribute('id'); copy.removeAttribute('class');
-  copy.setAttribute('viewBox', '250 110 1500 1010');
-  copy.setAttribute('width', 1500); copy.setAttribute('height', 1010);
+  copy.setAttribute('viewBox', `${FULL.x} ${FULL.y} ${FULL.w} ${FULL.h}`);
+  copy.setAttribute('width', FULL.w); copy.setAttribute('height', FULL.h);
   return new XMLSerializer().serializeToString(copy);
 }
 
@@ -3187,7 +3324,7 @@ function drawPage(c, page, mapImg, shotImg) {
   c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
 
   // lighting map on the left, front view and settings on the right
-  const top = EDGE + 100, mapW = 1080, mapH = Math.round(mapW * 1010 / 1500);
+  const top = EDGE + 100, mapW = 1080, mapH = Math.round(mapW * FULL.h / FULL.w);
   c.drawImage(mapImg, EDGE, top, mapW, mapH);
   const rx = EDGE + mapW + 50, rw = PAGE_W - EDGE - rx, shotH = Math.round(rw * FH / FW);
   c.save();
@@ -4349,8 +4486,10 @@ function templatePreview(layout) {
     + sidesOf(layout).map((sd) => `<rect class="tp-other" x="${sd.x - 12}" y="${sd.y - 10}" width="24" height="20" rx="5"/>`).join('')
     + facesOf(layout).map((f) => `<rect class="tp-other" x="${f.x - 6}" y="${f.y - 14}" width="12" height="28" rx="6"/>`).join('')
     + customsOf(layout).map((c) => `<rect class="tp-custom" x="${c.x - 14}" y="${c.y - 14}" width="28" height="28" rx="7"/>`).join('');
-  return `<svg viewBox="330 150 1340 960"><rect class="tp-stage" x="${STAGE.x0}" y="${STAGE.y0}" width="${STAGE.x1 - STAGE.x0}" height="${STAGE.y1 - STAGE.y0}" rx="10"/>`
-    + `<rect class="tp-cyc" x="${ZONES.x}" y="${STAGE.y0 - 16}" width="${ZONES.w * 3}" height="12" rx="5"/>${leds}${spots}</svg>`;
+  const st = layout.stage, hw = st ? st.w * UNIT / 2 : 505, hd = st ? st.d * UNIT / 2 : 305, x0 = STAGE.cx - hw, y0 = STAGE.cy - hd;
+  const objects = objectsOf(layout).map((o) => `<rect class="tp-obj" x="${o.x - o.w * UNIT / 2}" y="${o.y - o.d * UNIT / 2}" width="${o.w * UNIT}" height="${o.d * UNIT}" rx="4" transform="rotate(${o.rot || 0} ${o.x} ${o.y})"/>`).join('');
+  return `<svg viewBox="${x0 - 165} ${y0 - 68} ${hw * 2 + 330} ${hd * 2 + 350}"><rect class="tp-stage" x="${x0}" y="${y0}" width="${hw * 2}" height="${hd * 2}" rx="10"/>`
+    + `<rect class="tp-cyc" x="${STAGE.cx - hw * 0.7515}" y="${y0 - 16}" width="${hw * 1.503}" height="12" rx="5"/>${objects}${leds}${spots}</svg>`;
 }
 const countText = (layout) => `${layout.leds.length} LED${layout.leds.length === 1 ? '' : 's'} · ${layout.spots.length} spotlight${layout.spots.length === 1 ? '' : 's'}`;
 
