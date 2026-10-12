@@ -18,9 +18,10 @@
 // worked out which screen to show. Otherwise a reload flashes the wrong screen for a moment.
 (function () {
   var root = document.documentElement;
+  root.dataset.theme = 'dark';
   try {
     var prefs = JSON.parse(localStorage.getItem('kdt-lighting-prefs-v1') || '{}');
-    root.dataset.theme = prefs.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    root.dataset.theme = prefs.themeChosen && prefs.theme === 'light' ? 'light' : 'dark';      // dark unless light was picked by hand
   } catch (e) { /* storage unavailable */ }
   root.classList.add('booting');
   setTimeout(function () { root.classList.remove('booting'); }, 4000);     // never stay blank if something fails
@@ -29,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121329">
+<link rel="stylesheet" href="style.css?v=202610121332">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -341,6 +342,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121329"></script>
+<script src="app.js?v=202610121332"></script>
 </body>
 </html>

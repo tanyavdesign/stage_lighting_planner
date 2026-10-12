@@ -244,9 +244,10 @@ useLayout(layout);
 let state = Object.assign(blankLook(), store.get(LOOK_KEY, {}));
 let show = Object.assign({ cues: [], trackName: '' }, store.get(SHOW_KEY, {}));
 if (currentProject()) show.projectName = currentProject().name;      // the project list holds the name
-const prefs = Object.assign(
-  { people: true, theme: window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' },
-  store.get('kdt-lighting-prefs-v1', {}));
+const prefs = Object.assign({ people: true, theme: 'dark' }, store.get('kdt-lighting-prefs-v1', {}));
+// Dark is the app's theme unless light was picked by hand (`themeChosen`); a theme saved
+// before that was recorded only followed the device's setting, so it does not count.
+if (!prefs.themeChosen) prefs.theme = 'dark';
 const selection = new Set();
 
 // Line icons, drawn on a 16 x 16 grid with a thin stroke
@@ -866,7 +867,7 @@ function buildControls() {
   });
   $('reset').addEventListener('click', () => { state = blankLook(); clearSelection(); commit(); });
   $('people').addEventListener('click', () => { prefs.people = !prefs.people; applyPrefs(); });
-  $('theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); });
+  $('theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; prefs.themeChosen = true; applyPrefs(); });
   $('watch').addEventListener('click', () => setWatch(!document.body.classList.contains('watch')));
   $('wide').innerHTML = svgIcon('expand');
   $('wide').addEventListener('click', () => setWide(!document.body.classList.contains('wide')));
@@ -3222,7 +3223,7 @@ function buildHome() {
   themeLabel();
   $('home-more').addEventListener('click', (e) => { e.stopPropagation(); homeMenu.hidden = !homeMenu.hidden; });
   document.addEventListener('click', () => { homeMenu.hidden = true; });
-  $('home-theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); themeLabel(); });
+  $('home-theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; prefs.themeChosen = true; applyPrefs(); themeLabel(); });
   $('home-templates').addEventListener('click', () => openTemplates(true));
   $('home-backup').addEventListener('click', () => (projects.length ? downloadFiles(projects) : toast('There are no projects to download yet.', 2500)));
   $('home-reload').addEventListener('click', async () => {
