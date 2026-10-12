@@ -455,19 +455,18 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
 }
 
 /* ---------- Phone and narrow windows ----------
-   Stacked cards: preview, plan, controls. Preview and plan stay put and can be resized
-   by dragging the bars between them; the controls list scrolls. */
+   Stacked edge to edge: preview, plan, controls. Preview and plan stay put and can be
+   resized by dragging the bars between them; the controls list scrolls. */
 @media (max-width: 899px) {
   body { font-size: 13px; }
   .view .panel-head, #next-text, .bar-name, #toggle-left, #toggle-right { display: none; }
-  main { display: flex; flex-direction: column; gap: 0; padding: 6px 6px 0; padding-top: max(6px, env(safe-area-inset-top)); }
-  .panel { border: 1px solid var(--line); border-radius: 8px; }
+  main { display: flex; flex-direction: column; gap: 0; padding: env(safe-area-inset-top) 0 0; }
 
   /* the menu button floats over the corner of the preview */
   .bar {
     position: absolute;
-    left: 12px;
-    top: calc(max(6px, env(safe-area-inset-top)) + 6px);
+    left: 8px;
+    top: calc(env(safe-area-inset-top) + 8px);
     height: auto;
     padding: 0;
     border: 0;
@@ -479,7 +478,7 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
   .view { overflow: hidden; }
   body[data-view="front"] .view[data-view="three"],
   body[data-view="three"] .view[data-view="front"] { display: none; }
-  .seg.view-switch { display: flex; position: absolute; right: 6px; top: 6px; z-index: 2; background: var(--panel); box-shadow: var(--float); }
+  .seg.view-switch { display: flex; position: absolute; right: 8px; top: 8px; z-index: 2; background: var(--panel); box-shadow: var(--float); }
   .seg.view-switch .btn.active { background: var(--accent-bg); border-color: transparent; color: var(--accent-text); }
 
   .plan-col { flex: 0 0 min(var(--plan-h, 34dvh), 60dvh); padding: 4px; }
@@ -488,9 +487,10 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
   #plan-reset { right: 4px; }
   .history { left: 4px; bottom: 4px; padding: 2px; }
 
-  .grip { flex: 0 0 16px; background: none; cursor: row-resize; }
-  .grip:hover, .grip:active { background: none; }
-  .grip::before { display: none; }
+  /* a slim strip with a handle; the touch area reaches a little past it */
+  .grip { flex: 0 0 12px; background: var(--panel); border: solid var(--line); border-width: 1px 0; cursor: row-resize; }
+  .grip:hover, .grip:active { background: var(--panel); }
+  .grip::before { inset: -6px 0; }
   .grip::after {
     content: "";
     position: absolute;
@@ -505,7 +505,7 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
   .grip.split { display: none; }
   .view, .view[data-view="front"] { flex: 1 1 0; }
 
-  .side { flex: 1 1 0; min-height: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 0; }
+  .side { flex: 1 1 0; min-height: 0; }
   .side .group { padding: 10px 12px 12px; }
 
   .dock { padding: 6px 8px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
@@ -517,8 +517,10 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
 
 /* A phone on its side: preview and controls on the left, the plan on the right. */
 @media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
-  main { display: grid; grid-template-columns: 1fr 1.2fr; grid-template-rows: 40dvh minmax(0, 1fr); grid-template-areas: "views plan" "side plan"; gap: 6px; }
+  main { display: grid; grid-template-columns: 1fr 1.2fr; grid-template-rows: 40dvh minmax(0, 1fr); grid-template-areas: "views plan" "side plan"; gap: 0; }
   .grip { display: none; }
+  .plan-col { border-left: 1px solid var(--line); }
+  .side { border-top: 1px solid var(--line); }
 }
 
 /* ---------- Layout editor ---------- */
