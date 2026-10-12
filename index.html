@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121302">
+<link rel="stylesheet" href="style.css?v=202610121306">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -37,11 +37,15 @@
     <div class="home-head">
       <button id="home-back" class="btn icon" aria-label="All projects" title="All projects" hidden></button>
       <img id="home-logo" src="icons/icon.svg" width="24" height="24" alt="">
-      <h1 id="home-title">Stage Lighting Planner</h1>
+      <h1 id="home-title" hidden></h1>
       <div class="spacer"></div>
       <label class="btn">Import<input id="home-import" type="file" multiple hidden></label>
       <button id="new-project" class="btn primary">New project</button>
-      <button id="new-item" class="btn primary" hidden>New item</button>
+      <div id="new-item-wrap" class="split" hidden>
+        <button id="new-item" class="btn primary">New item</button>
+        <button id="new-item-more" class="btn primary icon" aria-label="More ways to add items" title="More ways to add items"></button>
+        <div id="new-item-menu" class="menu" hidden><button id="new-item-many">Add several items…</button></div>
+      </div>
     </div>
     <div class="home-sub">
       <h2 class="home-title" id="home-heading">Projects</h2>
@@ -51,6 +55,24 @@
     </div>
     <div id="project-list" class="project-list"></div>
     <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
+  </div>
+  <div id="items-new" class="tpl-back" hidden>
+    <div class="mini" role="dialog" aria-label="Add several items">
+      <div class="tpl-head"><h2>Add several items</h2><button type="button" id="many-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+      <div class="mini-body">
+        <div class="line">
+          <span class="lbl mini-lbl">How many</span>
+          <div class="tpl-count">
+            <button type="button" id="many-less" class="btn icon" aria-label="One fewer"></button>
+            <input id="many-count" type="number" min="1" max="60" step="1" value="2" inputmode="numeric" aria-label="Number of items">
+            <button type="button" id="many-more" class="btn icon" aria-label="One more"></button>
+          </div>
+        </div>
+        <p class="hint mini-note">Names are optional. Paste a list (one name per line) into any field to fill them all.</p>
+        <div id="many-names" class="mini-names"></div>
+      </div>
+      <div class="tpl-foot"><span class="hint"></span><button id="many-create" class="btn primary" type="button">Add items</button></div>
+    </div>
   </div>
   <div id="tpl" class="tpl-back" hidden>
     <div class="tpl" role="dialog" aria-label="New project">
@@ -70,11 +92,12 @@
             <div class="tpl-field"><span>Items</span>
               <div class="tpl-count">
                 <button type="button" id="items-less" class="btn icon" aria-label="One fewer"></button>
-                <input id="items-count" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" aria-label="Number of items">
+                <input id="items-count" type="number" min="1" max="60" step="1" value="1" inputmode="numeric" aria-label="Number of items">
                 <button type="button" id="items-more" class="btn icon" aria-label="One more"></button>
               </div>
             </div>
             <div id="items-names" class="tpl-names"></div>
+            <p class="hint tpl-tip">Paste a list (one name per line) into any item field to fill them all.</p>
           </div>
           <div class="tpl-pickhead">
             <h3>Stage template</h3>
@@ -302,6 +325,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121302"></script>
+<script src="app.js?v=202610121306"></script>
 </body>
 </html>

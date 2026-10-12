@@ -676,13 +676,31 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .tpl-foot { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--line); }
 .tpl-foot .hint { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tpl-foot .btn { height: 32px; padding: 0 12px; }
+.tpl-tip { grid-column: 1 / -1; }
+/* a button with a second, narrow half that opens a menu */
+.split { position: relative; display: inline-flex; gap: 1px; }
+.split .btn:first-child { border-radius: 5px 0 0 5px; }
+.split .btn.icon { width: 30px; border-radius: 0 5px 5px 0; }
+.split .menu { left: auto; right: 0; top: calc(100% + 6px); min-width: 190px; }
+/* a small window: add several items */
+.mini { width: min(440px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--panel); border-radius: 13px; box-shadow: var(--float); }
+.mini-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 20px 16px; }
+.mini-lbl { flex: 1; color: var(--text); }
+.mini-note { margin: 12px 0; }
+.mini-names { display: flex; flex-direction: column; gap: 8px; }
+.mini-names input { width: 100%; height: 32px; }
+#items-new { padding: 16px; }
 /* one name field per item, under the count */
 .tpl-names { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; max-height: 124px; overflow-y: auto; }
 .tpl-names input { width: 100%; min-width: 0; height: 32px; }
 /* phone: the window floats with a margin; the template tabs sit above the cards */
 @media (max-width: 899px) {
   .tpl-back { padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
-  .tpl { width: 100%; height: 100%; grid-template-columns: minmax(0, 1fr); }
+  /* only as tall as what is in it, up to the screen */
+  .tpl { width: 100%; height: auto; max-height: 100%; display: flex; flex-direction: column; }
+  .tpl-main { flex: 0 1 auto; }
+  .tpl-scroll { flex: 0 1 auto; }
+  .split .menu { left: 0; right: auto; }
   .tpl-side { display: none; }
   .tpl-tabs { display: flex; }
   .tpl-tabs .btn { padding: 0 12px; }

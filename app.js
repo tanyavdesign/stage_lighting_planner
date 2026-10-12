@@ -253,6 +253,7 @@ const selection = new Set();
 const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
   back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
+  chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
   eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
@@ -2898,9 +2899,10 @@ function renderHome() {
   const list = $('project-list'), project = currentProject();
   const things = project ? project.items : [...projects].sort((a, b) => b.updated - a.updated);
   list.textContent = '';
-  $('home-back').hidden = $('new-item').hidden = !project;
+  $('home-back').hidden = $('new-item-wrap').hidden = !project;
   $('home-logo').hidden = $('new-project').hidden = !!project;
-  $('home-title').textContent = project ? project.name : 'Stage Lighting Planner';
+  $('home-title').textContent = project ? project.name : '';       // the project list has no title, only the small icon
+  $('home-title').hidden = !project;
   $('home-heading').textContent = project ? `Items · ${project.template}` : 'Projects';
   $('home-empty').hidden = things.length > 0;
   $('home-empty').textContent = project ? 'No items yet. Press New item to add one.' : 'No projects yet. Press New project to start one.';
@@ -3091,27 +3093,62 @@ function buildHome() {
     const project = currentProject(), item = await addItem(project);
     setOpen(project.id, item.id);
   });
-  // A new project starts with as many items as asked for; any of them can be named here.
-  const count = $('items-count'), names = $('items-names');
-  const howMany = () => Math.max(1, Math.min(30, Math.floor(+count.value) || 1));
-  const nameFields = () => {
-    const n = howMany();
-    while (names.children.length > n) names.lastChild.remove();
-    while (names.children.length < n) {
-      const field = document.createElement('input');
-      field.type = 'text'; field.maxLength = 60; field.autocomplete = 'off';
-      field.placeholder = `Item ${names.children.length + 1} name`;
-      names.appendChild(field);
-    }
+  // A count with one name field per item. Pasting a list (a setlist copied from notes or
+  // a spreadsheet) into any field fills that field and the ones after it, one line each,
+  // and adds fields if the list is longer.
+  const MOST = 60;
+  const itemFields = (count, less, more, names, base) => {
+    const howMany = () => Math.max(1, Math.min(MOST, Math.floor(+count.value) || 1));
+    const fill = () => {
+      const n = howMany();
+      while (names.children.length > n) names.lastChild.remove();
+      while (names.children.length < n) {
+        const field = document.createElement('input');
+        field.type = 'text'; field.maxLength = 60; field.autocomplete = 'off';
+        field.placeholder = `Item ${base() + names.children.length + 1} name`;
+        names.appendChild(field);
+      }
+    };
+    const set = (n) => { count.value = Math.max(1, Math.min(MOST, n)); fill(); };
+    less.innerHTML = svgIcon('minus');
+    more.innerHTML = svgIcon('plus');
+    less.addEventListener('click', () => set(howMany() - 1));
+    more.addEventListener('click', () => set(howMany() + 1));
+    count.addEventListener('input', fill);
+    count.addEventListener('change', () => set(howMany()));
+    names.addEventListener('paste', (e) => {
+      const lines = ((e.clipboardData && e.clipboardData.getData('text')) || '').split(/[\r\n\t]+/)
+        .map((line) => line.replace(/^\s*(?:\d+\s*[.):\-]|[-•*])\s*/, '').trim()).filter(Boolean);     // drops "1." or "-" in front
+      if (lines.length < 2) return;                   // a single name pastes the usual way
+      e.preventDefault();
+      const from = Math.max(0, [...names.children].indexOf(e.target));
+      set(Math.max(howMany(), from + lines.length));
+      lines.slice(0, MOST - from).forEach((line, k) => { names.children[from + k].value = line.slice(0, 60); });
+    });
+    return { reset(n) { names.textContent = ''; set(n); }, names: () => [...names.children].map((field) => field.value.trim()) };
   };
-  const setCount = (n) => { count.value = Math.max(1, Math.min(30, n)); nameFields(); };
-  $('items-less').innerHTML = svgIcon('minus');
-  $('items-more').innerHTML = svgIcon('plus');
-  $('items-less').addEventListener('click', () => setCount(howMany() - 1));
-  $('items-more').addEventListener('click', () => setCount(howMany() + 1));
-  count.addEventListener('input', nameFields);
-  count.addEventListener('change', () => setCount(howMany()));
-  $('new-project').addEventListener('click', () => { names.textContent = ''; setCount(1); });
+  // a new project starts with as many items as asked for
+  const starting = itemFields($('items-count'), $('items-less'), $('items-more'), $('items-names'), () => 0);
+  $('new-project').addEventListener('click', () => starting.reset(1));
+  // New item makes one; the arrow beside it opens a menu for adding several at once
+  const several = itemFields($('many-count'), $('many-less'), $('many-more'), $('many-names'), () => currentProject().items.length);
+  const manyDialog = $('items-new'), manyMenu = $('new-item-menu');
+  const closeMany = () => { manyDialog.hidden = true; };
+  $('new-item-more').innerHTML = svgIcon('chevron');
+  $('many-close').innerHTML = svgIcon('close');
+  $('new-item-more').addEventListener('click', (e) => { e.stopPropagation(); manyMenu.hidden = !manyMenu.hidden; });
+  document.addEventListener('click', () => { manyMenu.hidden = true; });
+  $('new-item-many').addEventListener('click', () => { several.reset(2); manyDialog.hidden = false; });
+  $('many-close').addEventListener('click', closeMany);
+  manyDialog.addEventListener('click', (e) => { if (e.target === manyDialog) closeMany(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMany(); });
+  $('many-create').addEventListener('click', async () => {
+    const project = currentProject(), names = several.names();
+    for (const name of names) await addItem(project, name);
+    closeMany();
+    renderHome();
+    toast(`Added ${names.length} item${names.length === 1 ? '' : 's'}.`, 3000);
+  });
   $('pick-all').addEventListener('click', () => {
     const things = currentProject() ? currentProject().items : projects;
     if (picked.size === things.length) picked.clear(); else things.forEach((t) => picked.add(t.id));
