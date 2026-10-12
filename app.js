@@ -2926,7 +2926,7 @@ async function downloadFiles(list, owner) {       // owner: the project the item
   else {
     const inside = [];
     for (const file of files) inside.push({ name: file.name, bytes: new Uint8Array(await file.blob.arrayBuffer()) });
-    saveBlob(zipWrite(inside), (project ? safeName(project.name) + ' - items' : 'Stage Lighting projects') + '.zip');
+    saveBlob(zipWrite(inside), (project ? safeName(project.name) + ' - items' : 'Cueo projects') + '.zip');
   }
   toast(`Downloaded ${files.length} ${project ? 'item' : 'project'}${files.length === 1 ? '' : 's'}.`, 3000);
 }

@@ -1,6 +1,6 @@
 {
-  "name": "Stage Lighting Planner",
-  "short_name": "Stage Lighting Planner",
+  "name": "Cueo",
+  "short_name": "Cueo",
   "description": "Plan stage lighting cues on a stage plan with a live front view and 3D preview.",
   "start_url": "./",
   "scope": "./",
