@@ -473,7 +473,8 @@ body.watch .view[data-view="front"] .panel-head { padding-left: 300px; }
    resized by dragging the bars between them; the controls list scrolls. */
 @media (max-width: 899px) {
   body { font-size: 13px; }
-  .view .panel-head, #next-text, .bar-name, #toggle-left, #toggle-right { display: none; }
+  .view .panel-head, #next-text, .bar-project, #toggle-left, #toggle-right { display: none; }
+  .bar-name { flex: 0 1 auto; max-width: 40vw; padding: 0 12px 0 4px; }     /* the item's name beside the menu button */
   main { display: flex; flex-direction: column; gap: 0; padding: env(safe-area-inset-top) 0 0; }
 
   /* the menu button floats over the corner of the preview */
