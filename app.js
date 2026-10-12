@@ -3070,25 +3070,12 @@ function buildShow() {
   $('export-pdf').addEventListener('click', exportPdf);
   $('import').addEventListener('change', (e) => { if (e.target.files[0]) importShow(e.target.files[0]); e.target.value = ''; });
   if (show.trackName) $('load-track').title = `Track: ${show.trackName}`;
-  $('go-home').addEventListener('click', goProjects);
   $('back').addEventListener('click', goHome);
   window.addEventListener('pagehide', saveThumbnail);
   if (currentItemId) audioStore.get(currentItemId).then((file) => { if (file) loadTrack(file, true); });
-  // The item's name sits at the top of the menu; the bar shows "project / item".
-  const field = $('project-name'), item = currentItem();
-  const showNames = () => {
-    field.value = item ? item.name : '';
-    $('bar-project').textContent = show.projectName || '';
-    $('bar-item').textContent = item ? item.name : '';
-  };
-  showNames();
-  field.addEventListener('change', () => {
-    if (!item) return;
-    item.name = field.value.trim() || 'Untitled item';
-    saveProjects();
-    showNames();
-  });
-  field.addEventListener('keydown', (e) => { if (e.key === 'Enter') field.blur(); });
+  // The bar shows "project / item"; items are renamed from their card in the project.
+  $('bar-project').textContent = show.projectName || '';
+  $('bar-item').textContent = currentItem() ? currentItem().name : '';
   renderCues();
 }
 
