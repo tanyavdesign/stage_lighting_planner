@@ -256,6 +256,8 @@ const ICONS = {
   viewtile: '<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/>',
   viewsmall: '<path d="M3 3h.01M8 3h.01M13 3h.01M3 8h.01M8 8h.01M13 8h.01M3 13h.01M8 13h.01M13 13h.01" stroke-width="2.4"/>',
   viewlist: '<path d="M6 4h7.5M6 8h7.5M6 12h7.5"/><path d="M2.8 4h.01M2.8 8h.01M2.8 12h.01" stroke-width="2"/>',
+  moveback: '<path d="M13 8H3.5M7 4.2 3.2 8 7 11.8"/>',
+  moveon: '<path d="M3 8h9.5M9 4.2 12.8 8 9 11.8"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -2984,8 +2986,8 @@ function renderHome() {
         project.items.splice(at + by, 0, thing);
         saveProjects(); renderHome();
       };
-      act('back', 'Move earlier', move(-1)).disabled = at === 0;
-      act('forward', 'Move later', move(1)).disabled = at === things.length - 1;
+      act('moveback', 'Move earlier', move(-1)).disabled = at === 0;
+      act('moveon', 'Move later', move(1)).disabled = at === things.length - 1;
     }
     act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
     act('download', 'Download', () => downloadFiles([thing]));
