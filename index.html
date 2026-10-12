@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121254">
+<link rel="stylesheet" href="style.css?v=202610121255">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -52,22 +52,6 @@
     <div id="project-list" class="project-list"></div>
     <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
   </div>
-  <div id="items-new" class="tpl-back" hidden>
-    <form id="items-form" class="mini" role="dialog" aria-label="New items">
-      <div class="tpl-head"><h2>New items</h2><button type="button" id="items-close" class="btn icon" aria-label="Close" title="Close"></button></div>
-      <div class="mini-body">
-        <div class="line">
-          <span class="lbl mini-lbl">How many</span>
-          <button type="button" id="items-less" class="btn icon" aria-label="One fewer"></button>
-          <input id="items-count" type="number" min="1" max="30" step="1" value="1" inputmode="numeric">
-          <button type="button" id="items-more" class="btn icon" aria-label="One more"></button>
-        </div>
-        <p class="hint mini-note">Names are optional. Leave one empty and it is called Item 1, Item 2 and so on.</p>
-        <div id="items-names" class="mini-names"></div>
-      </div>
-      <div class="tpl-foot"><span class="hint"></span><button id="items-create" class="btn primary" type="submit">Create</button></div>
-    </form>
-  </div>
   <div id="tpl" class="tpl-back" hidden>
     <div class="tpl" role="dialog" aria-label="New project">
       <div class="tpl-side">
@@ -79,6 +63,15 @@
       <div class="tpl-main">
         <div class="tpl-head"><h2>New project</h2><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
         <div id="tpl-grid" class="tpl-grid"></div>
+        <div class="tpl-items">
+          <div class="line">
+            <span class="lbl tpl-items-lbl">Items in this project</span>
+            <button type="button" id="items-less" class="btn icon" aria-label="One fewer"></button>
+            <input id="items-count" type="number" min="1" max="30" step="1" value="1" inputmode="numeric">
+            <button type="button" id="items-more" class="btn icon" aria-label="One more"></button>
+          </div>
+          <div id="items-names" class="tpl-names"></div>
+        </div>
         <form id="tpl-foot" class="tpl-foot">
           <input id="new-name" type="text" placeholder="Project name" maxlength="60" autocomplete="off">
           <span id="tpl-picked" class="hint"></span>
@@ -296,6 +289,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121254"></script>
+<script src="app.js?v=202610121255"></script>
 </body>
 </html>

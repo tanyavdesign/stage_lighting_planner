@@ -253,6 +253,7 @@ const selection = new Set();
 const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
   back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
+  forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
   eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
   person: '<circle cx="8" cy="5" r="2.4"/><path d="M3.5 13.5c.4-2.7 2.2-4.1 4.5-4.1s4.1 1.4 4.5 4.1"/>',
@@ -2933,7 +2934,7 @@ function renderHome() {
     const meta = document.createElement('div');
     meta.className = 'hint';
     meta.textContent = project
-      ? `${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`
+      ? `#${things.indexOf(thing) + 1} · ${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`
       : `${plural(thing.items.length, 'item')} · ${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`;
     info.appendChild(name); info.appendChild(meta);
     card.appendChild(info);
@@ -2954,6 +2955,16 @@ function renderHome() {
       field.addEventListener('blur', done);
       field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
     });
+    if (project) {                              // items keep the order you give them
+      const at = things.indexOf(thing);
+      const move = (by) => () => {
+        project.items.splice(at, 1);
+        project.items.splice(at + by, 0, thing);
+        saveProjects(); renderHome();
+      };
+      act('back', 'Move earlier', move(-1)).disabled = at === 0;
+      act('forward', 'Move later', move(1)).disabled = at === things.length - 1;
+    }
     act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
     act('download', 'Download', () => downloadFiles([thing]));
     // Deleting takes two taps: the first arms the button, the second within a few seconds deletes.
@@ -3053,8 +3064,10 @@ function renderTemplates() {
 async function newFromTemplate() {
   if (!tplPicked) return toast('Pick a template, or Start from scratch.', 2500);
   const project = createProject($('new-name').value.trim(), tplPicked);
-  const item = await addItem(project, 'Item 1');
-  setOpen(project.id, item.id);
+  const made = [];
+  for (const field of [...$('items-names').children]) made.push(await addItem(project, field.value.trim()));
+  if (!made.length) made.push(await addItem(project));
+  setOpen(project.id, made[0].id);
 }
 
 function buildHome() {
@@ -3074,47 +3087,31 @@ function buildHome() {
   });
   $('home-back').innerHTML = svgIcon('back');
   $('home-back').addEventListener('click', () => setOpen(null, null));
-  // New items: choose how many, name any of them, and they are all made in one go.
-  const itemsDialog = $('items-new'), count = $('items-count'), names = $('items-names');
-  const closeItems = () => { itemsDialog.hidden = true; };
+  $('new-item').addEventListener('click', async () => {
+    const project = currentProject(), item = await addItem(project);
+    setOpen(project.id, item.id);
+  });
+  // A new project starts with as many items as asked for; any of them can be named here.
+  const count = $('items-count'), names = $('items-names');
   const howMany = () => Math.max(1, Math.min(30, Math.floor(+count.value) || 1));
   const nameFields = () => {
-    const n = howMany(), base = currentProject().items.length;
+    const n = howMany();
     while (names.children.length > n) names.lastChild.remove();
     while (names.children.length < n) {
       const field = document.createElement('input');
       field.type = 'text'; field.maxLength = 60; field.autocomplete = 'off';
-      field.placeholder = `Item ${base + names.children.length + 1}`;
+      field.placeholder = `Item ${names.children.length + 1} name`;
       names.appendChild(field);
     }
-    $('items-create').textContent = n === 1 ? 'Create item' : `Create ${n} items`;
   };
   const setCount = (n) => { count.value = Math.max(1, Math.min(30, n)); nameFields(); };
-  $('items-close').innerHTML = svgIcon('close');
   $('items-less').innerHTML = svgIcon('minus');
   $('items-more').innerHTML = svgIcon('plus');
   $('items-less').addEventListener('click', () => setCount(howMany() - 1));
   $('items-more').addEventListener('click', () => setCount(howMany() + 1));
   count.addEventListener('input', nameFields);
   count.addEventListener('change', () => setCount(howMany()));
-  $('items-close').addEventListener('click', closeItems);
-  itemsDialog.addEventListener('click', (e) => { if (e.target === itemsDialog) closeItems(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeItems(); });
-  $('new-item').addEventListener('click', () => {
-    names.textContent = '';
-    setCount(1);
-    itemsDialog.hidden = false;
-    names.firstChild.focus();
-  });
-  $('items-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const project = currentProject(), made = [];
-    for (const field of [...names.children]) made.push(await addItem(project, field.value.trim()));
-    if (made.length === 1) return setOpen(project.id, made[0].id);        // a single item opens straight away
-    closeItems();
-    renderHome();
-    toast(`Added ${made.length} items.`, 3000);
-  });
+  $('new-project').addEventListener('click', () => { names.textContent = ''; setCount(1); });
   $('pick-all').addEventListener('click', () => {
     const things = currentProject() ? currentProject().items : projects;
     if (picked.size === things.length) picked.clear(); else things.forEach((t) => picked.add(t.id));
