@@ -1116,6 +1116,7 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
 // The stage itself and what is fixed around it. Drawn once, and again in the layout editor
 // whenever the stage's size changes.
 function drawStage() {
+  if (layoutMode && planView !== 'top') return drawElevStage();
   const layer = planEls.stageLayer;
   layer.textContent = '';
   const put = (name, attrs, text) => el(name, attrs, text, layer);
@@ -1134,8 +1135,6 @@ function drawStage() {
   area(STAGE.cx, sy(866), 'STAGE FRONT');
   area(sx(318), STAGE.cy - 15, 'STAGE LEFT');
   area(sx(1684), STAGE.cy - 15, 'STAGE RIGHT');
-  put('line', { x1: sx(522), y1: sy(FACE_Y), x2: sx(1478), y2: sy(FACE_Y), class: 'rail' });
-  area(STAGE.cx, sy(1110), 'AUDIENCE');
   if (layoutMode) {                      // drag the stage's right or front edge to change its width or depth
     put('rect', { x: STAGE.x1 - 7, y: STAGE.cy - 26, width: 14, height: 52, rx: 5, class: 'size-handle stage-grip across', 'data-stage': 'w' });
     put('rect', { x: STAGE.cx - 26, y: STAGE.y1 - 7, width: 52, height: 14, rx: 5, class: 'size-handle stage-grip down', 'data-stage': 'd' });
@@ -1602,6 +1601,7 @@ function buildControls() {
   for (const [id, to] of [['row-across', 0], ['row-down', 90]]) $(id).addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); turnRow(row, to); redrawLayout(); });
   typed('row-rot', -360, 360, (v) => { const row = wholeRow(); if (row) turnRow(row, (v % 360 + 360) % 360); });
   $('row-remove').addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); work.rows = work.rows.filter((r) => r !== row); redrawLayout(); });
+  each('#plan-views .btn', (b) => b.addEventListener('click', () => { planView = b.dataset.view; guides.length = 0; drawStage(); redrawLayout(); }));
   $('more-toggle').addEventListener('click', () => { $('more-fields').hidden = !$('more-fields').hidden; $('more-toggle').classList.toggle('open', !$('more-fields').hidden); });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
   typed('fix-tilt', 0, 180, placed((item, v) => { item.tilt = v; }));
@@ -1837,6 +1837,7 @@ function enterLayout() {
   });
   work.classic = work.leds.length + work.spots.length + work.faces.length + work.sides.length > 0;      // decided once, so the buttons do not vanish mid-edit
   layoutPast.length = layoutNext.length = 0;
+  planView = 'top';
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -1848,7 +1849,9 @@ function enterLayout() {
 }
 function redrawLayout() {
   work.sel = work.sel.filter((one) => { const item = itemOf(one); return item && !hiddenLayers.has(layerOf(one.kind, item)); });
-  drawFixtures(seen('led'), seen('spot'), work.sel, seen('side'), seen('face'), seen('custom'), work.kinds, seen('object'));
+  if (planView === 'top') drawFixtures(seen('led'), seen('spot'), work.sel, seen('side'), seen('face'), seen('custom'), work.kinds, seen('object'));
+  else drawElevation();
+  each('#plan-views .btn', (b) => b.classList.toggle('active', b.dataset.view === planView));
   // the eye beside Library shows or hides the open tab's group on the plan; a hidden group's tab is dimmed
   each('#lib-tabs .btn', (b) => b.classList.toggle('off', hiddenLayers.has(b.dataset.group)));
   const tab = document.querySelector('#lib-tabs .btn.active');
@@ -1866,7 +1869,7 @@ function redrawLayout() {
     $('row-across').classList.toggle('active', angleOf(line) % 180 === 0); $('row-down').classList.toggle('active', angleOf(line) % 180 === 90);
   }
   // an outline round each auto layout
-  for (const row of work.rows) {
+  for (const row of planView === 'top' ? work.rows : []) {
     const its = row.members.map(itemOf).filter(Boolean);
     if (its.length < 2) continue;
     const x0 = Math.min(...its.map((it) => it.x)) - 44, y0 = Math.min(...its.map((it) => it.y)) - 40, x1 = Math.max(...its.map((it) => it.x)) + 44, y1 = Math.max(...its.map((it) => it.y)) + 46;
@@ -1931,10 +1934,115 @@ function redrawLayout() {
   $('layout-cyclo').classList.toggle('active', cycloOf(work));
   $('layout-undo').disabled = !layoutPast.length; $('layout-redo').disabled = !layoutNext.length;
 }
+// The layout editor can look at the stage three ways, as a drawing program does: from above
+// (the plan), from the front and from the side. The front and side views show height: a light
+// or an object dragged up or down there is raised or lowered, and an object's top edge can be
+// dragged to make it taller.
+let planView = 'top';
+const elevH = (item) => (planView === 'side' ? item.y + STAGE.cx - STAGE.cy : item.x);          // where it sits across the view (the side view is centred like the others)
+const elevGround = () => FULL.y + FULL.h - 190;                            // the stage floor's line in the view
+const elevY = (z) => elevGround() - z * UNIT;
+const CLASSIC_Z = { led: RIG_H, spot: RIG_H, face: 5.4, side: 1 };         // the four classic kinds hang at fixed heights
+const zOf = (kind, item) => (kind === 'custom' ? heightOf(item) : kind === 'object' ? item.z || 0 : CLASSIC_Z[kind]);
+const acrossOf = (o) => { const a = (o.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(a)), n = Math.abs(Math.sin(a)); return planView === 'side' ? o.w * n + o.d * c : o.w * c + o.d * n; };
+function drawElevStage() {
+  const layer = planEls.stageLayer, side = planView === 'side', ground = elevGround(), drop = Math.max(3, STAGE_H * UNIT);
+  layer.textContent = '';
+  const put = (name, attrs, text) => el(name, attrs, text, layer);
+  const from = side ? elevH({ y: STAGE.y0 }) : STAGE.x0, to = side ? elevH({ y: STAGE.y1 }) : STAGE.x1, mid = (from + to) / 2;
+  for (let m = 1; m <= 8; m++) {                 // a line for every metre of height
+    put('line', { x1: FULL.x + 60, y1: elevY(m), x2: FULL.x + FULL.w - 30, y2: elevY(m), class: 'grid' });
+    put('text', { x: FULL.x + 52, y: elevY(m) + 5, 'text-anchor': 'end', class: 'zone' }, m + ' m');
+  }
+  put('rect', { x: from, y: ground, width: to - from, height: drop, rx: 3, class: 'stage' });
+  put('line', { x1: FULL.x + 30, y1: ground + drop, x2: FULL.x + FULL.w - 30, y2: ground + drop, class: 'rail' });
+  const area = (x, y, text) => put('text', { x, y, 'text-anchor': 'middle', class: 'area' }, text);
+  area(mid, ground + drop + 44, side ? 'SIDE VIEW' : 'FRONT VIEW');
+  area(from - 90, ground + 5, side ? 'BACK' : 'STAGE LEFT'); area(to + 90, ground + 5, side ? 'FRONT' : 'STAGE RIGHT');
+}
+function drawElevation() {
+  const layer = planEls.fixtureLayer, side = planView === 'side', ground = elevGround();
+  layer.textContent = '';
+  const group = (kind, id, hit, shape) => {       // something that can be pressed: a roomy invisible box, then what is seen
+    const g = el('g', { class: 'fx' }, null, layer);
+    el('rect', Object.assign({ class: 'obj-hit' }, hit), null, g);
+    const n = el(shape[0], shape[1], null, g);
+    g.dataset.kind = kind; g.dataset.id = id;
+    if (isSelected(kind, id)) n.classList.add('picked');
+    return n;
+  };
+  const far = (it) => (side ? -it.x : it.y);      // what is further from the viewer is drawn first
+  for (const o of [...seen('object')].sort((a, b) => far(a) - far(b))) {
+    const wide = Math.max(acrossOf(o) * UNIT, 8), tall = Math.max(o.h * UNIT, 6), x = elevH(o) - wide / 2, y = elevY((o.z || 0) + o.h);
+    group('object', o.id, { x: x - 8, y: y - 8, width: wide + 16, height: tall + 16 }, ['rect', { x, y, width: wide, height: tall, rx: 2, class: 'obj ' + assetOf(o).look }]);
+    if (wide > 70 && tall > 18) el('text', { x: elevH(o), y: y + tall / 2 + 5, 'text-anchor': 'middle', class: 'obj-name' }, o.name, layer);
+  }
+  const box = (x, y) => ({ x: x - 32, y: y - 26, width: 64, height: 52 });
+  for (const it of seen('led')) { const x = elevH(it), y = elevY(CLASSIC_Z.led); group('led', it.id, box(x, y), ['rect', { x: x - 23, y: y - 13, width: 46, height: 26, rx: 13, class: 'led' }]); }
+  for (const it of seen('spot')) { const x = elevH(it), y = elevY(CLASSIC_Z.spot); group('spot', it.id, box(x, y), ['circle', { cx: x, cy: y, r: 17, class: 'spot' }]); }
+  for (const it of seen('face')) { const x = elevH(it), y = elevY(CLASSIC_Z.face); group('face', it.id, box(x, y), ['rect', { x: x - 8, y: y - 19, width: 16, height: 38, rx: 8, class: 'face' }]); }
+  for (const it of seen('side')) { const x = elevH(it), y = elevY(CLASSIC_Z.side); group('side', it.id, box(x, y), ['circle', { cx: x, cy: y, r: 14, class: 'side' }]); }
+  for (const light of seen('custom')) {
+    const kind = work.kinds.find((k) => k.id === light.kind);
+    if (!kind) continue;
+    const fx = fixtureOf(kind), x = elevH(light), z = heightOf(light), y = elevY(z);
+    const t = (light.tilt || 0) * Math.PI / 180, p = (light.pan || 0) * Math.PI / 180, half = Math.min(60, (light.beam || (fx ? fx.beam : 30)) / 2) * Math.PI / 180;
+    const lean = (side ? -Math.cos(p) : Math.sin(p)) * Math.sin(t), down = Math.cos(t);       // which way the beam goes, seen from here
+    if (down > 0.08 && z > 0.05) {                // the beam, down to where it lands
+      const len = z / down, cx = x + lean * len * UNIT, r = len * Math.tan(half) * UNIT;
+      el('polygon', { points: `${x},${y} ${cx - r},${ground} ${cx + r},${ground}`, class: 'throw cone' }, null, layer);
+    }
+    group('custom', light.id, box(x, y), ['circle', { cx: x, cy: y, r: 16, class: 'custom' }]);
+    el('text', { x, y: y - 24, 'text-anchor': 'middle' }, light.id, layer);
+  }
+  // one object selected: a square on its top edge to make it taller, and one on its side to make it wider
+  const only = work.sel.length === 1 && work.sel[0].kind === 'object' && itemOf(work.sel[0]);
+  if (only) {
+    const wide = acrossOf(only) * UNIT, x = elevH(only), top = elevY((only.z || 0) + only.h), midY = elevY((only.z || 0) + only.h / 2);
+    el('rect', { x: x - 9, y: top - 9, width: 18, height: 18, rx: 3, class: 'size-handle tall', 'data-size': 'tall', 'data-id': only.id }, null, layer);
+    el('rect', { x: x + wide / 2 - 9, y: midY - 9, width: 18, height: 18, rx: 3, class: 'size-handle wide', 'data-size': 'wide', 'data-id': only.id }, null, layer);
+  }
+}
+function elevPress(e) {
+  const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey, grip = e.target.closest('[data-size]');
+  try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+  moving = null;
+  if (grip) { sizing = { elev: grip.dataset.size, item: work.objects.find((o) => o.id === grip.dataset.id), kept: false }; return; }
+  if (!g) { if (!add) work.sel = []; return redrawLayout(); }
+  const one = { kind: g.dataset.kind, id: g.dataset.id };
+  if (add) { work.sel = isSelected(one.kind, one.id) ? work.sel.filter((m) => !(m.kind === one.kind && m.id === one.id)) : [...work.sel, one]; return redrawLayout(); }
+  if (!isSelected(one.kind, one.id)) work.sel = [one];
+  moving = { start: svgPoint(e), kept: false, items: selected().map(({ kind, item }) => ({ kind, item, x: item.x, y: item.y, z: zOf(kind, item) })) };
+  redrawLayout();
+}
+function elevDrag(e) {
+  const p = svgPoint(e), step = (v) => (snapOn ? Math.round(v * 20) / 20 : Math.round(v * 100) / 100);         // 5 cm steps with snapping on
+  if (sizing && sizing.item) {
+    if (!sizing.kept) { sizing.kept = true; layoutKeep(); }
+    const o = sizing.item;
+    if (sizing.elev === 'tall') o.h = Math.max(0.02, step((elevY(o.z || 0) - p.y) / UNIT));
+    else {                                         // wider both ways from its middle, along whichever of its sides faces this view
+      const a = (o.rot || 0) * Math.PI / 180, along = planView === 'side' ? Math.abs(Math.sin(a)) : Math.abs(Math.cos(a));
+      o[along >= 0.7 ? 'w' : 'd'] = Math.max(0.05, step(2 * Math.abs(p.x - elevH(o)) / UNIT));
+    }
+    return redrawLayout();
+  }
+  if (!moving) return;
+  const across = snapTo(p.x - moving.start.x), up = step((moving.start.y - p.y) / UNIT);
+  if (!across && !up) return;
+  if (!moving.kept) { moving.kept = true; const now = moving.items.map((m) => [m.item, m.item.x, m.item.y, m.item.z]); for (const m of moving.items) { m.item.x = m.x; m.item.y = m.y; } layoutKeep(); for (const [it, x, y, z] of now) { it.x = x; it.y = y; if (z !== undefined) it.z = z; } }
+  for (const m of moving.items) {
+    Object.assign(m.item, planView === 'side' ? hold(m.kind, m.x, m.y + across) : hold(m.kind, m.x + across, m.y));
+    if (m.kind === 'custom') m.item.z = Math.max(0, step(m.z + up));          // only library lights and objects can be raised
+    if (m.kind === 'object') m.item.z = Math.max(-3, step(m.z + up));
+  }
+  redrawLayout();
+}
 let boxing = null;                     // a selection box being dragged out over empty plan
 let turning = null;                    // an object being turned by its handle
 let sizing = null;                     // an object's corner, or an edge of the stage, being dragged
 function layoutPress(e) {
+  if (planView !== 'top') return elevPress(e);
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   const handle = e.target.closest('[data-rot]');
@@ -1973,6 +2081,7 @@ function layoutPress(e) {
   redrawLayout();
 }
 function layoutDrag(e) {
+  if (planView !== 'top') return elevDrag(e);
   const p = svgPoint(e), snap = snapTo;
   if (sizing) {
     const step = (v) => (snapOn ? Math.round(v * 20) / 20 : Math.round(v * 100) / 100);        // 5 cm steps with snapping on

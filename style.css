@@ -676,6 +676,13 @@ body.layout-mode .history { display: none; }
 .plan .stage-grip:hover { opacity: 1; }
 .plan .stage-grip.across { cursor: ew-resize; }
 .plan .stage-grip.down { cursor: ns-resize; }
+.plan .throw.cone { fill: var(--accent); fill-opacity: .06; }
+.plan .size-handle.tall { cursor: ns-resize; }
+.plan .size-handle.wide { cursor: ew-resize; }
+/* the editor's view switch: top, front, side */
+#plan-views { display: none; position: absolute; top: 12px; left: 12px; z-index: 3; flex: none; box-shadow: var(--float, none); }
+body.layout-mode #plan-views { display: flex; }
+#plan-views .btn { padding: 0 12px; }
 .plan .rot-stem { stroke: var(--accent); stroke-width: 2; }
 .plan .rot-handle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; cursor: grab; }
 .tp-obj { fill: currentColor; fill-opacity: .18; stroke: none; }
