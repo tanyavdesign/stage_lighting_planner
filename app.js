@@ -2904,7 +2904,7 @@ function renderHome() {
   $('home-title').textContent = project ? project.name : '';       // the project list has no title, only the small icon
   $('home-title').hidden = !project;
   $('home-heading').textContent = project ? `Items · ${project.template}` : 'Projects';
-  $('home-empty').hidden = things.length > 0;
+  $('home-empty').hidden = true;                 // the dashed card below says it instead
   $('home-empty').textContent = project ? 'No items yet. Press New item to add one.' : 'No projects yet. Press New project to start one.';
   for (const id of [...picked]) if (!things.some((t) => t.id === id)) picked.delete(id);
   $('pick-all').hidden = !things.length;
@@ -2978,6 +2978,28 @@ function renderHome() {
     card.appendChild(actions);
     list.appendChild(card);
   }
+  // On the project list: the items worked on last, across all projects, to pick up where you left off.
+  const recent = project ? [] : projects.flatMap((p) => p.items.map((item) => ({ p, item })))
+    .sort((a, b) => (b.item.updated || 0) - (a.item.updated || 0)).slice(0, 4);
+  $('recent').hidden = recent.length < 2;
+  $('recent-list').textContent = '';
+  for (const { p, item } of recent) {
+    const row = button($('recent-list'), '', 'recent', () => setOpen(p.id, item.id));
+    const shot = document.createElement('span');
+    shot.className = 'recent-shot';
+    if (item.thumb) { const img = new Image(); img.src = item.thumb; img.alt = ''; shot.appendChild(img); }
+    const text = document.createElement('span');
+    text.className = 'recent-text';
+    const title = document.createElement('span');
+    title.className = 'project-name'; title.textContent = item.name;
+    const sub = document.createElement('span');
+    sub.className = 'hint'; sub.textContent = `${p.name} · edited ${when(item.updated)}`;
+    text.appendChild(title); text.appendChild(sub);
+    row.appendChild(shot); row.appendChild(text);
+  }
+  // a dashed card at the end: the same as the New project (or New item) button
+  const add = button(list, '', 'project new-card', () => $(project ? 'new-item' : 'new-project').click());
+  add.innerHTML = svgIcon('plus') + `<span>${project ? 'New item' : 'New project'}</span>`;
 }
 
 // A small plan of a template's stage for its card.
