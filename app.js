@@ -258,6 +258,7 @@ const ICONS = {
   viewlist: '<path d="M6 4h7.5M6 8h7.5M6 12h7.5"/><path d="M2.8 4h.01M2.8 8h.01M2.8 12h.01" stroke-width="2"/>',
   moveback: '<path d="M13 8H3.5M7 4.2 3.2 8 7 11.8"/>',
   moveon: '<path d="M3 8h9.5M9 4.2 12.8 8 9 11.8"/>',
+  grip: '<path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" stroke-width="2"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -2911,6 +2912,20 @@ const when = (ms) => {
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+// A small picture of the front view under one look: used to flip through an item's cues
+// on its card without opening it. Drawn with the open project's layout.
+const skimBuf = new Float32Array(FRAME_N);
+function lookPicture(look) {
+  compute(Object.assign(blankLook(), look), 0, skimBuf);
+  shareGround(skimBuf);
+  lightFigures(skimBuf);
+  drawFront(skimBuf);
+  const small = document.createElement('canvas');
+  small.width = 320; small.height = 188;
+  small.getContext('2d').drawImage(front, 0, 0, 320, 188);
+  return small.toDataURL('image/jpeg', 0.7);
+}
+
 // The home screen shows the projects, or the items of the project that is open.
 const picked = new Set();          // ids ticked for downloading
 function renderHome() {
@@ -2943,18 +2958,62 @@ function renderHome() {
     box.type = 'checkbox'; box.checked = picked.has(thing.id);
     box.addEventListener('change', () => { if (box.checked) picked.add(thing.id); else picked.delete(thing.id); renderHome(); });
     tick.appendChild(box); card.appendChild(tick);
+    if (project) card.dataset.id = thing.id;
+    const shot = document.createElement('div');
+    shot.className = 'shot';
     const open = document.createElement('button');
     open.className = 'project-open';
     open.title = 'Open ' + thing.name;
-    if (thing.thumb) { const img = new Image(); img.src = thing.thumb; img.alt = ''; open.appendChild(img); }
+    const img = new Image();
+    img.alt = '';
+    if (thing.thumb) { img.src = thing.thumb; open.appendChild(img); }
     else { const blank = document.createElement('div'); blank.className = 'no-thumb'; blank.textContent = 'No preview yet'; open.appendChild(blank); }
     open.addEventListener('click', () => (project ? setOpen(project.id, thing.id) : openProject(thing.id)));
-    card.appendChild(open);
+    shot.appendChild(open);
+    if (project && thing.cues > 0) {
+      // arrows over the picture flip through the item's cues, one picture each
+      let at = -1;
+      const tag = document.createElement('span');
+      tag.className = 'skim-tag'; tag.hidden = true;
+      const skim = (by) => () => {
+        const cues = (raw.get(projectKey(SHOW_KEY, thing.id), {}).cues) || [];
+        if (!cues.length) return;
+        at = (at + by + (at < 0 && by < 0 ? 1 : 0) + cues.length) % cues.length;
+        try { img.src = lookPicture(cues[at].look); } catch (e) { return; }
+        if (!img.isConnected) open.replaceChildren(img);
+        tag.hidden = false;
+        tag.textContent = `Cue ${at + 1} of ${cues.length} · ${fmt(cues[at].time)}${cues[at].name ? ' · ' + cues[at].name : ''}`;
+      };
+      const arrow = (cls, icon, label, by) => {
+        const b = button(shot, '', 'skim ' + cls, skim(by));
+        b.innerHTML = svgIcon(icon); b.title = label; b.setAttribute('aria-label', label);
+      };
+      arrow('skim-back', 'back', 'Previous cue', -1);
+      arrow('skim-on', 'forward', 'Next cue', 1);
+      shot.appendChild(tag);
+    }
+    card.appendChild(shot);
 
     const info = document.createElement('div');
     info.className = 'project-info';
     const name = document.createElement('div');
     name.className = 'project-name'; name.textContent = thing.name;
+    name.title = 'Rename';
+    name.addEventListener('click', () => {                 // click the name to rename it in place
+      const field = document.createElement('input');
+      field.type = 'text'; field.value = thing.name; field.maxLength = 60; field.className = 'rename';
+      name.replaceWith(field);
+      field.focus(); field.select();
+      let finished = false;
+      const done = (keep) => {
+        if (finished) return;
+        finished = true;
+        if (keep) thing.name = field.value.trim() || thing.name;
+        saveProjects(); renderHome();
+      };
+      field.addEventListener('blur', () => done(true));
+      field.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
+    });
     const meta = document.createElement('div');
     meta.className = 'hint';
     meta.textContent = project
@@ -2970,24 +3029,31 @@ function renderHome() {
       b.innerHTML = svgIcon(path); b.title = label; b.setAttribute('aria-label', label);
       return b;
     };
-    act('pencil', 'Rename', () => {
-      const field = document.createElement('input');
-      field.type = 'text'; field.value = thing.name; field.maxLength = 60; field.className = 'rename';
-      name.replaceWith(field);
-      field.focus(); field.select();
-      const done = () => { thing.name = field.value.trim() || thing.name; saveProjects(); renderHome(); };
-      field.addEventListener('blur', done);
-      field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
-    });
-    if (project) {                              // items keep the order you give them
-      const at = things.indexOf(thing);
-      const move = (by) => () => {
-        project.items.splice(at, 1);
-        project.items.splice(at + by, 0, thing);
-        saveProjects(); renderHome();
-      };
-      act('moveback', 'Move earlier', move(-1)).disabled = at === 0;
-      act('moveon', 'Move later', move(1)).disabled = at === things.length - 1;
+    if (project) {
+      // Items keep the order you give them: drag the handle onto another card to move this one there.
+      const grip = act('grip', 'Drag to reorder', () => {});
+      grip.classList.add('grip-handle');
+      grip.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try { grip.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+        card.classList.add('dragging');
+        const cards = () => [...list.querySelectorAll('.project[data-id]')];
+        const move = (ev) => {
+          const under = document.elementFromPoint(ev.clientX, ev.clientY);
+          const target = under && under.closest('.project[data-id]');
+          if (!target || target === card) return;
+          if (cards().indexOf(target) > cards().indexOf(card)) target.after(card); else target.before(card);
+        };
+        const end = () => {
+          grip.removeEventListener('pointermove', move);
+          const order = cards().map((c) => c.dataset.id);
+          project.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+          saveProjects(); renderHome();
+        };
+        grip.addEventListener('pointermove', move);
+        grip.addEventListener('pointerup', end, { once: true });
+        grip.addEventListener('pointercancel', end, { once: true });
+      });
     }
     act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
     act('download', 'Download', () => downloadFiles([thing]));

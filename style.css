@@ -645,7 +645,8 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .project-list.view-list { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .view-list .project { flex-direction: row; flex-wrap: wrap; align-items: center; border-radius: 10px; }
 .view-list .pick { top: 50%; transform: translateY(-50%); background: none; }
-.view-list .project-open { flex: 0 0 72px; margin: 8px 0 8px 40px; border-radius: 6px; overflow: hidden; }
+.view-list .shot { flex: 0 0 72px; margin: 8px 0 8px 40px; }
+.view-list .project-open { width: 100%; border-radius: 6px; overflow: hidden; }
 .view-list .no-thumb { font-size: 0; }
 .view-list .project-info { flex: 1 1 120px; padding: 0 12px; }
 .view-list .project-actions { padding: 0 8px; }
@@ -654,6 +655,22 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
   .view-list .pick { top: 26px; }
   .view-list .project-actions { flex-basis: 100%; padding: 0 8px 6px 36px; }
 }
+/* the picture, with arrows over it to flip through the item's cues */
+.shot { position: relative; }
+.skim { position: absolute; top: 50%; width: 28px; height: 28px; margin-top: -14px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; cursor: pointer; }
+.skim:hover { background: rgba(0, 0, 0, .8); }
+.skim svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.skim-back { left: 8px; }
+.skim-on { right: 8px; }
+.skim-tag { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 5px; background: rgba(0, 0, 0, .65); color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+@media (hover: hover) { .skim { opacity: 0; transition: opacity .12s; } .project:hover .skim, .skim:focus-visible { opacity: 1; } }
+.view-list .skim, .view-list .skim-tag { display: none; }
+.project-name { cursor: text; }
+.project-name:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
+.recent .project-name { cursor: pointer; text-decoration: none; }
+/* drag this to put the item somewhere else in the order */
+.grip-handle { cursor: grab; touch-action: none; }
+.project.dragging { opacity: .55; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* recently edited items: small rows to jump straight back in */
 .recent-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .recent { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
@@ -666,7 +683,7 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .project.new-card:hover { border-color: var(--accent); color: var(--accent-text); }
 .project.new-card svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; }
 .project { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; }
-.project-open { display: block; padding: 0; border: 0; background: #0b0b10; cursor: pointer; aspect-ratio: 320 / 188; }
+.project-open { display: block; width: 100%; padding: 0; border: 0; background: #0b0b10; cursor: pointer; aspect-ratio: 320 / 188; }
 .project-open img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .project-open:hover { filter: brightness(1.12); }
 .no-thumb { display: grid; place-items: center; height: 100%; color: #7a7a7a; }
@@ -674,9 +691,6 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .project-name { font-weight: 550; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .project-info .rename { width: 100%; }
 .project-actions { display: flex; gap: 2px; padding: 4px 8px 8px; }
-/* one card per row on a phone: the move arrows point up and down instead */
-@media (max-width: 527px) { .project-list:not(.view-small) .project-actions .btn[title^="Move"] svg { transform: rotate(90deg); } }
-.view-list .project-actions .btn[title^="Move"] svg { transform: rotate(90deg); }
 .project-actions .btn.armed { width: auto; padding: 0 10px; background: #f24822; color: #fff; }
 
 /* ---------- New project: pick a stage template ---------- */
