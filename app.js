@@ -93,13 +93,29 @@ function colorLabel(value, cfg) {
   return kelvin ? `White ${kelvin} K` : String(value).toUpperCase();
 }
 
-// LEDs and spotlights come from the project's layout: a list of { id, x, y } for each.
-// The template below is the KDT TB UCC stage; a project can move, add and remove them.
+// Every light comes from the project's layout: a list of { id, x, y } for each kind (LEDs,
+// spotlights, face lights, side lights). The layout below is the KDT TB UCC stage; a project
+// can move, add and remove them. A layout saved before face and side lights could be moved
+// has none listed and gets the classic positions.
 function templateLayout() {
   const leds = [], spots = [];
   LED_ROWS.forEach((r) => LED_X.forEach((x, col) => leds.push({ id: 'F' + (r.first - col), x, y: r.y })));
   SPOT_ROWS.forEach((r) => SPOT_X.forEach((x, col) => spots.push({ id: String(r.first - col), x, y: r.y })));
-  return { leds, spots };
+  return { leds, spots, faces: classicFaces(), sides: classicSides() };
+}
+const classicFaces = () => FACE_X.map((x, i) => ({ id: 'A' + (i + 1), x, y: FACE_Y }));
+function classicSides() {
+  const out = [];
+  SIDES.forEach((side, s) => SIDE_Y.forEach((y, i) => out.push({ id: 'S' + (s * 5 + i + 1), x: SIDE_X[side], y })));
+  return out;
+}
+const facesOf = (layout) => layout.faces || classicFaces();
+const sidesOf = (layout) => layout.sides || classicSides();
+// side lights by the wing they stand in (left or right of centre), from the back of the stage to the front
+function bySide(sides) {
+  const out = { L: [], R: [] };
+  [...sides].sort((a, b) => a.y - b.y || a.x - b.x).forEach((s) => out[s.x < STAGE.cx ? 'L' : 'R'].push(s));
+  return out;
 }
 // Sort fixtures into rows (back to front) and columns (left to right) by where they sit.
 // Fixtures within about a third of a metre of depth of each other count as one row.
@@ -113,8 +129,8 @@ function inRows(items) {
   rows.forEach((row) => row.sort((a, b) => a.x - b.x));
   return rows;
 }
-const LEDS = [], SPOTS = [], LED_ROW_Y = [];       // filled by useLayout once the project is known
-let ledRows = 0, spotRows = 0;
+const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], SIDE_LIGHTS = { L: [], R: [] };       // filled by useLayout once the project is known
+let ledRows = 0, spotRows = 0, FACE_Z = 0;
 function useLayout(layout) {
   LEDS.length = SPOTS.length = LED_ROW_Y.length = 0;
   const leds = inRows(layout.leds), spots = inRows(layout.spots);
@@ -130,8 +146,13 @@ function useLayout(layout) {
     const [x3, z3] = to3(it.x, it.y);
     SPOTS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row });
   }));
+  const metres = (it) => { const [x3, z3] = to3(it.x, it.y); return { id: it.id, x: it.x, y: it.y, x3, z3 }; };
+  FACES.length = 0;
+  for (const it of facesOf(layout)) FACES.push(metres(it));
+  FACE_Z = FACES.length ? FACES.reduce((sum, f) => sum + f.z3, 0) / FACES.length : to3(0, FACE_Y)[1];
+  const wings = bySide(sidesOf(layout));
+  for (const side of SIDES) SIDE_LIGHTS[side] = wings[side].map(metres);
 }
-const SIDE_Z = SIDE_Y.map((y) => to3(0, y)[1]);
 const PEOPLE = PEOPLE_AT.map(([x, y]) => { const [x3, z3] = to3(x, y); return { x3, z3 }; });
 const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
 
@@ -173,7 +194,7 @@ function aimTargets(look) {
 const blankLook = () => ({
   leds: {}, aim: {}, spots: {}, face: 0,
   sideTypes: { sheen: false, mid: false, head: false },
-  sidePos: { L: [false, false, false, false, false], R: [false, false, false, false, false] },
+  sidePos: { L: SIDE_LIGHTS.L.map(() => false), R: SIDE_LIGHTS.R.map(() => false) },
   cyclo: 'none', effect: 'none', bpm: 120,
 });
 // Projects. Everything is kept on this device. The list of projects is one entry in
@@ -245,11 +266,17 @@ const saveProjects = () => raw.set(PROJECTS_KEY, projects);
 // in; the rest are saved from the layout editor and kept on this device.
 const TEMPLATES_KEY = 'slp-templates-v1';
 const BUILTIN = { id: 'kdt-tb-ucc', name: TEMPLATE, builtin: true, get layout() { return templateLayout(); } };
-const SCRATCH = { id: 'blank', name: 'Blank stage', layout: { leds: [], spots: [] } };
+const SCRATCH = { id: 'blank', name: 'Blank stage', layout: { leds: [], spots: [], faces: [], sides: [] } };
 let templates = raw.get(TEMPLATES_KEY, []);
 const saveTemplates = () => raw.set(TEMPLATES_KEY, templates);
 const findTemplate = (id) => (id === SCRATCH.id ? SCRATCH : templates.find((t) => t.id === id) || BUILTIN);
-const copyLayout = (layout) => ({ leds: layout.leds.map(({ id, x, y }) => ({ id, x, y })), spots: layout.spots.map(({ id, x, y }) => ({ id, x, y })) });
+function copyLayout(layout) {
+  const plain = (list) => list.map(({ id, x, y }) => ({ id, x, y }));
+  const out = { leds: plain(layout.leds), spots: plain(layout.spots) };
+  if (layout.faces) out.faces = plain(layout.faces);
+  if (layout.sides) out.sides = plain(layout.sides);
+  return out;
+}
 const templateName = () => (currentProject() && currentProject().template) || TEMPLATE;
 
 // The rest of the app reads and writes through `store`. Lights and cues go to the open
@@ -420,7 +447,8 @@ function stepHistory(from, to) {
 //   per LED: r, g, b (already scaled by brightness), aim x, aim z, beam width
 // ---------------------------------------------------------------------------
 const L = 6;
-const O_SPOT = LEDS.length * L, O_FACE = O_SPOT + SPOTS.length, O_TYPE = O_FACE + 1, O_POS = O_TYPE + 3, O_CYC = O_POS + 10;
+const O_SPOT = LEDS.length * L, O_FACE = O_SPOT + SPOTS.length, O_TYPE = O_FACE + 1, O_POS = O_TYPE + 3, O_CYC = O_POS + SIDE_LIGHTS.L.length + SIDE_LIGHTS.R.length;
+const sideAt = (s, j) => O_POS + (s ? SIDE_LIGHTS.L.length : 0) + j;       // side s (0 left, 1 right), light j from the back
 const FRAME_N = O_CYC + 3;
 
 // Random fade pulses: each LED runs its own offset timeline of segments, and each
@@ -471,7 +499,7 @@ function compute(look, t, out) {
   SPOTS.forEach((s, i) => { out[O_SPOT + i] = look.spots[s.id] ? 1 : 0; });
   out[O_FACE] = look.face / 3;
   SIDE_TYPES.forEach(([id], i) => { out[O_TYPE + i] = look.sideTypes[id] ? 1 : 0; });
-  SIDES.forEach((side, s) => look.sidePos[side].forEach((on, j) => { out[O_POS + s * 5 + j] = on ? 1 : 0; }));
+  SIDES.forEach((side, s) => SIDE_LIGHTS[side].forEach((light, j) => { out[sideAt(s, j)] = look.sidePos[side] && look.sidePos[side][j] ? 1 : 0; }));
   const c = look.cyclo === 'none' ? ZERO : rgbOf(look.cyclo);
   out[O_CYC] = c[0]; out[O_CYC + 1] = c[1]; out[O_CYC + 2] = c[2];
 }
@@ -568,7 +596,7 @@ const UNLIT = 0.055;        // a figure with no light on it: nearly black, not g
 // has, and only show as plain warm white where there is little LED colour.
 // 1 right next to a light, falling away with distance; `half` is where it drops to a half.
 const nearness = (distance, half) => 1 / (1 + (distance / half) * (distance / half));
-const FACE_AT = { z: to3(0, FACE_Y)[1] }, SIDE_AT = 5.6;
+const FACE_AT = { get z() { return FACE_Z; } }, SIDE_AT = 5.6;
 function lightFigures(D) {
   PEOPLE.forEach((p, n) => {
     const out = figures[n];
@@ -597,7 +625,7 @@ function lightFigures(D) {
     const sheen = D[O_TYPE], mid = D[O_TYPE + 1], low = D[O_TYPE + 2];
     for (let side = 0; side < 2; side++) {
       let reach = 0;
-      for (let j = 0; j < 5; j++) reach += D[O_POS + side * 5 + j] * Math.max(0, 1 - Math.abs(SIDE_Z[j] - p.z3) / 1.3);
+      SIDE_LIGHTS[SIDES[side]].forEach((light, j) => { reach += D[sideAt(side, j)] * Math.max(0, 1 - Math.abs(light.z3 - p.z3) / 1.3); });
       // side lights stand in the wings and do not throw far: strong on the near side of the
       // stage, weak by the middle, almost nothing on the far side
       reach = Math.min(1, reach) * 1.3 * nearness(Math.abs(p.x3 - (side === 0 ? -SIDE_AT : SIDE_AT)), 2.8);
@@ -688,10 +716,10 @@ function tapFixture(g) {
 
 // Draw the LEDs and spotlights (and their labels and aim lines) into their layer.
 // Called once normally, and again after every change while the layout is being edited.
-function drawFixtures(leds, spots, editing) {
+function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_LIGHTS.R], faces = FACES) {
   const layer = planEls.fixtureLayer;
   layer.textContent = '';
-  planEls.leds = {}; planEls.aims = {}; planEls.spots = {};
+  planEls.leds = {}; planEls.aims = {}; planEls.spots = {}; planEls.face = []; planEls.side = { L: [], R: [] };
   const text = (x, y, value) => el('text', { x, y, 'text-anchor': 'middle' }, value, layer);
   const tag = (shape, kind, id) => {             // lets the layout editor find what was pressed
     shape.parentNode.dataset.kind = kind; shape.parentNode.dataset.id = id;
@@ -715,6 +743,25 @@ function drawFixtures(leds, spots, editing) {
       () => { toggleIn(selSpots, s.id); syncUI(); },
       () => { selSpots.delete(s.id); state.spots[s.id] = !state.spots[s.id]; commit(); }, layer), 'spot', s.id);
     text(s.x, s.y + 34, s.id);
+  }
+  const wings = bySide(sides);
+  for (const side of SIDES) {
+    const d = side === 'L' ? 1 : -1;               // they point in at the stage
+    wings[side].forEach((light, i) => {
+      const { x, y } = light, key = side + i;
+      planEls.side[side].push(tag(fixture(
+        ['rect', { x: x - 36, y: y - 30, width: 72, height: 60 }],
+        ['polygon', { points: `${x - 22 * d},${y} ${x + 20 * d},${y - 16} ${x + 20 * d},${y + 16}`, class: 'side' }],
+        () => { toggleIn(selSides, key); syncUI(); },
+        () => { selSides.delete(key); state.sidePos[side][i] = !state.sidePos[side][i]; commit(); }, layer), 'side', light.id));
+    });
+  }
+  for (const light of faces) {
+    const { x, y } = light;
+    planEls.face.push(tag(fixture(
+      ['rect', { x: x - 22, y: y - 30, width: 44, height: 60 }],
+      ['rect', { x: x - 8, y: y - 19, width: 16, height: 38, rx: 8, class: 'face' }],
+      () => { state.face = (state.face + 1) % 4; commit(); }, null, layer), 'face', light.id));
   }
 }
 
@@ -743,25 +790,8 @@ function buildPlan() {
   el('line', { x1: 522, y1: FACE_Y, x2: 1478, y2: FACE_Y, class: 'rail' });
   label(1000, 1110, 'AUDIENCE', 'area');
 
-  for (const side of SIDES) {
-    const x = SIDE_X[side], d = side === 'L' ? 1 : -1;
-    SIDE_Y.forEach((y, i) => {
-      const key = side + i;
-      planEls.side[side].push(fixture(
-        ['rect', { x: x - 36, y: y - 30, width: 72, height: 60 }],
-        ['polygon', { points: `${x - 22 * d},${y} ${x + 20 * d},${y - 16} ${x + 20 * d},${y + 16}`, class: 'side' }],
-        () => { toggleIn(selSides, key); syncUI(); },
-        () => { selSides.delete(key); state.sidePos[side][i] = !state.sidePos[side][i]; commit(); }));
-    });
-  }
   planEls.fixtureLayer = el('g', {});
   drawFixtures(LEDS, SPOTS);
-  for (const x of FACE_X) {
-    planEls.face.push(fixture(
-      ['rect', { x: x - 22, y: FACE_Y - 30, width: 44, height: 60 }],
-      ['rect', { x: x - 8, y: FACE_Y - 19, width: 16, height: 38, rx: 8, class: 'face' }],
-      () => { state.face = (state.face + 1) % 4; commit(); }));
-  }
   // Shown over the stage while choosing where the selected LEDs should point.
   planEls.zonePick = el('g', { class: 'zone-pick' });
   for (let z = 0; z < 9; z++) {
@@ -832,7 +862,7 @@ function endPointer(e) {
     const r = d.area, inside = (x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
     for (const led of LEDS) if (inside(led.x, led.y)) selection.add(led.id);
     for (const s of SPOTS) if (inside(s.x, s.y)) selSpots.add(s.id);
-    for (const side of SIDES) SIDE_Y.forEach((y, i) => { if (inside(SIDE_X[side], y)) selSides.add(side + i); });
+    for (const side of SIDES) SIDE_LIGHTS[side].forEach((light, i) => { if (inside(light.x, light.y)) selSides.add(side + i); });
     d.rect.remove();
   } else if (performance.now() < suppressTapsUntil) {
     return;
@@ -934,7 +964,7 @@ function buildControls() {
     commit();
   }));
   each('[data-sel-sides]', (b) => b.addEventListener('click', () => {
-    for (const key of selSides) state.sidePos[key[0]][+key[1]] = b.dataset.selSides === 'on';
+    for (const key of selSides) state.sidePos[key[0]][+key.slice(1)] = b.dataset.selSides === 'on';
     commit();
   }));
 
@@ -952,7 +982,7 @@ function buildControls() {
     clearSelection();
     if (kind === 'led') for (const led of LEDS) if (match(led)) selection.add(led.id);
     if (kind === 'spot') for (const s of SPOTS) if (match(s)) selSpots.add(s.id);
-    if (kind === 'side') for (const side of SIDES) for (let i = 0; i < 5; i++) selSides.add(side + i);
+    if (kind === 'side') for (const side of SIDES) SIDE_LIGHTS[side].forEach((light, i) => selSides.add(side + i));
     syncUI();
   }));
 
@@ -995,6 +1025,8 @@ function buildControls() {
   $('plan-reset').addEventListener('click', resetView);
   $('layout-add-led').addEventListener('click', () => layoutAdd('led'));
   $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
+  $('layout-add-side').addEventListener('click', () => layoutAdd('side'));
+  $('layout-add-face').addEventListener('click', () => layoutAdd('face'));
   $('layout-delete').addEventListener('click', layoutDelete);
   $('layout-number').addEventListener('change', layoutRenumber);
   $('layout-done').addEventListener('click', layoutDone);
@@ -1073,20 +1105,24 @@ function buildControls() {
 }
 
 // ---------------------------------------------------------------------------
-// Layout editor: move, add, renumber and delete LEDs and spotlights.
+// Layout editor: move, add and delete LEDs, spotlights, face lights and side lights
+// (LEDs and spotlights can be renumbered too).
 // Changes are made on a working copy; Done saves it to the project and reloads, so
 // every view is rebuilt from the new layout. Cancel reloads without saving.
 // ---------------------------------------------------------------------------
 let layoutMode = false, work = null, moving = null;
 const BOUNDS = { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: STAGE.y1 - 24 };
-const numberOf = (id) => +String(id).replace(/^F/, '');
+const numberOf = (id) => +String(id).replace(/^[A-Z]/, '');
+const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light' };
+const PLAN_BOUNDS = { x0: 290, x1: 1710, y0: 150, y1: 1090 };      // face and side lights stand off the stage
 const pickedItem = () => work.picked && work[work.picked.kind + 's'].find((it) => it.id === work.picked.id);
 
 function enterLayout() {
   layoutMode = true;
   clearSelection(); aiming = false;
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
-  work = { leds: layout.leds.map((it) => Object.assign({ was: it.id }, it)), spots: layout.spots.map((it) => Object.assign({ was: it.id }, it)), picked: null };
+  const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
+  work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), picked: null };
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -1096,15 +1132,17 @@ function enterLayout() {
   redrawLayout();
 }
 function redrawLayout() {
-  drawFixtures(work.leds, work.spots, work.picked);
+  drawFixtures(work.leds, work.spots, work.picked, work.sides, work.faces);
   const item = pickedItem();
   $('layout-picked').hidden = !item;
   $('layout-none').hidden = !!item;
   if (item) {
-    $('layout-kind').textContent = work.picked.kind === 'led' ? 'LED' : 'Spotlight';
-    if (document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
+    const numbered = work.picked.kind === 'led' || work.picked.kind === 'spot';       // only these carry a number people use
+    $('layout-kind').textContent = KIND_NAMES[work.picked.kind];
+    $('layout-number').hidden = $('layout-number-lbl').hidden = !numbered;
+    if (numbered && document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
   }
-  $('layout-count').textContent = `${work.leds.length} LEDs, ${work.spots.length} spotlights`;
+  $('layout-count').textContent = `${work.leds.length} LED · ${work.spots.length} spot · ${work.faces.length} face · ${work.sides.length} side`;
 }
 function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]');
@@ -1117,16 +1155,19 @@ function layoutPress(e) {
 function layoutDrag(e) {
   if (!moving) return;
   const p = svgPoint(e), snap = (v) => Math.round(v / 5) * 5;
-  moving.item.x = Math.max(BOUNDS.x0, Math.min(BOUNDS.x1, snap(moving.x + p.x - moving.start.x)));
-  moving.item.y = Math.max(BOUNDS.y0, Math.min(BOUNDS.y1, snap(moving.y + p.y - moving.start.y)));
+  const within = work.picked.kind === 'led' || work.picked.kind === 'spot' ? BOUNDS : PLAN_BOUNDS;
+  moving.item.x = Math.max(within.x0, Math.min(within.x1, snap(moving.x + p.x - moving.start.x)));
+  moving.item.y = Math.max(within.y0, Math.min(within.y1, snap(moving.y + p.y - moving.start.y)));
   redrawLayout();
 }
 function layoutAdd(kind) {
   const list = work[kind + 's'], n = Math.max(0, ...list.map((it) => numberOf(it.id))) + 1;
-  const id = kind === 'led' ? 'F' + n : String(n);
-  // drop it near the middle of the stage, nudged along so new ones do not stack up
-  const spare = list.filter((it) => !it.was).length;
-  list.push({ id, x: STAGE.cx - 60 + (spare % 5) * 30, y: STAGE.cy + (kind === 'led' ? -40 : 40) });
+  const id = { led: 'F', spot: '', side: 'S', face: 'A' }[kind] + n;
+  // drop it somewhere sensible for its kind, nudged along so new ones do not stack up
+  const spare = list.filter((it) => !it.was).length, nudge = (spare % 5) * 30;
+  if (kind === 'side') list.push({ id, x: SIDE_X.L, y: STAGE.cy - 60 + nudge });               // in the left wing; drag across for the right
+  else if (kind === 'face') list.push({ id, x: STAGE.cx - 60 + nudge, y: FACE_Y });
+  else list.push({ id, x: STAGE.cx - 60 + nudge, y: STAGE.cy + (kind === 'led' ? -40 : 40) });
   work.picked = { kind, id };
   redrawLayout();
 }
@@ -1139,7 +1180,7 @@ function layoutDelete() {
 }
 function layoutRenumber() {
   const item = pickedItem(), n = Math.floor(+$('layout-number').value);
-  if (!item || !(n >= 1)) return redrawLayout();
+  if (!item || !(n >= 1) || (work.picked.kind !== 'led' && work.picked.kind !== 'spot')) return redrawLayout();
   const id = work.picked.kind === 'led' ? 'F' + n : String(n);
   if (id !== item.id && work[work.picked.kind + 's'].some((it) => it.id === id)) {
     toast(`${id} is already used in this layout`, 3000);
@@ -1150,13 +1191,15 @@ function layoutRenumber() {
   redrawLayout();
 }
 // Carry a look over to the edited layout: deleted fixtures drop out, renumbered ones follow.
-function relook(look, renamed, alive) {
+// `resides` does the same for the side lights, which a look lists by position rather than by name.
+function relook(look, renamed, alive, resides) {
   const move = (map) => {
     const out = {};
     for (const id in map || {}) { const now = id in renamed ? renamed[id] : id; if (alive.has(now)) out[now] = map[id]; }
     return out;
   };
   look.leds = move(look.leds); look.aim = move(look.aim); look.spots = move(look.spots);
+  if (resides) resides(look);
   return look;
 }
 function layoutDone() {
@@ -1164,11 +1207,17 @@ function layoutDone() {
   const before = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
   for (const it of [...work.leds, ...work.spots]) { alive.add(it.id); if (it.was) renamed[it.was] = it.id; }
   for (const id of before) if (!(id in renamed)) renamed[id] = '';        // deleted: maps to nothing
-  const plain = (list) => list.map(({ id, x, y }) => ({ id, x, y }));
-  layout = { leds: plain(work.leds), spots: plain(work.spots) };
+  // Side lights: which ones were on is remembered by light, then laid out in their new order.
+  const was = { L: SIDE_LIGHTS.L.map((light) => light.id), R: SIDE_LIGHTS.R.map((light) => light.id) }, now = bySide(work.sides);
+  const resides = (look) => {
+    const on = new Set();
+    for (const side of SIDES) was[side].forEach((id, i) => { if (look.sidePos && look.sidePos[side] && look.sidePos[side][i]) on.add(id); });
+    look.sidePos = { L: now.L.map((light) => on.has(light.was)), R: now.R.map((light) => on.has(light.was)) };
+  };
+  layout = copyLayout(work);
   layoutMode = false;                       // let the saves below go through normally
-  relook(state, renamed, alive);
-  show.cues.forEach((cue) => relook(cue.look, renamed, alive));
+  relook(state, renamed, alive, resides);
+  show.cues.forEach((cue) => relook(cue.look, renamed, alive, resides));
   store.set(LAYOUT_KEY, layout);
   store.set(LOOK_KEY, state);
   saveShow();
@@ -1176,8 +1225,8 @@ function layoutDone() {
   for (const item of currentProject().items) {
     if (item.id === currentItemId) continue;
     const look = raw.get(projectKey(LOOK_KEY, item.id), null), part = raw.get(projectKey(SHOW_KEY, item.id), null);
-    if (look) raw.set(projectKey(LOOK_KEY, item.id), relook(look, renamed, alive));
-    if (part && Array.isArray(part.cues)) { part.cues.forEach((cue) => relook(cue.look, renamed, alive)); raw.set(projectKey(SHOW_KEY, item.id), part); }
+    if (look) raw.set(projectKey(LOOK_KEY, item.id), relook(look, renamed, alive, resides));
+    if (part && Array.isArray(part.cues)) { part.cues.forEach((cue) => relook(cue.look, renamed, alive, resides)); raw.set(projectKey(SHOW_KEY, item.id), part); }
   }
   leaveLayout(true);
 }
@@ -1511,7 +1560,7 @@ function paintPlan(look, bare) {
   }
   for (const n of planEls.face) n.setAttribute('class', 'face f' + look.face);
   for (const side of SIDES) planEls.side[side].forEach((n, i) => {
-    n.classList.toggle('on', look.sidePos[side][i]);
+    n.classList.toggle('on', !!(look.sidePos[side] && look.sidePos[side][i]));
     n.classList.toggle('selected', !bare && selSides.has(side + i));
     n.parentNode.classList.toggle('sel', !bare && selSides.has(side + i));
   });
@@ -1551,7 +1600,7 @@ function syncUI() {
   planEls.zonePick.style.display = aiming ? '' : 'none';
   const allSame = (values) => values.length > 0 && values.every((v) => v === values[0]);
   const spotStates = [...selSpots].map((id) => !!state.spots[id]);
-  const sideStates = [...selSides].map((key) => state.sidePos[key[0]][+key[1]]);
+  const sideStates = [...selSides].map((key) => !!state.sidePos[key[0]][+key.slice(1)]);
   each('[data-sel-spots]', (b) => b.classList.toggle('active', allSame(spotStates) && spotStates[0] === (b.dataset.selSpots === 'on')));
   each('[data-sel-sides]', (b) => b.classList.toggle('active', allSame(sideStates) && sideStates[0] === (b.dataset.selSides === 'on')));
 
@@ -1723,7 +1772,7 @@ function drawFront(D) {
   });
   SIDES.forEach((side, sIdx) => {
     let n = 0;
-    for (let j = 0; j < 5; j++) n += D[O_POS + sIdx * 5 + j];
+    SIDE_LIGHTS[side].forEach((light, j) => { n += D[sideAt(sIdx, j)]; });
     if (n < 0.01) return;
     const edge = side === 'L' ? 0 : FW, tip = side === 'L' ? FW * 0.26 : FW * 0.74;     // a short throw
     SIDE_TYPES.forEach(([id], t) => {
@@ -1861,26 +1910,27 @@ function buildThree() {
   const sides = [];
   SIDES.forEach((side, sIdx) => {
     const d = side === 'L' ? -1 : 1;
-    SIDE_Z.forEach((z, j) => {
-      add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.9, 0.1), solid(0x222228)), d * 5.75, 0.65, z);
+    SIDE_LIGHTS[side].forEach((light, j) => {
+      const z = light.z3, x = light.x3 - d * 0.15;
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.9, 0.1), solid(0x222228)), light.x3, 0.65, z);
       SIDE_TYPES.forEach(([type], t) => {
-        const cone = add(beam(0.05, 0.42, 3.8), d * 5.6, SIDE_H[type], z);     // a short throw
+        const cone = add(beam(0.05, 0.42, 3.8), x, SIDE_H[type], z);     // a short throw
         cone.rotation.z = -d * Math.PI / 2;
-        sides.push({ pos: O_POS + sIdx * 5 + j, type: O_TYPE + t, cone, lens: lens(d * 5.6, SIDE_H[type], z) });
+        sides.push({ pos: sideAt(sIdx, j), type: O_TYPE + t, cone, lens: lens(x, SIDE_H[type], z) });
       });
     });
   });
 
   // Face lights hang high above the audience and point down at the front of the stage.
-  const faceZ = to3(0, FACE_Y)[1], FACE_H = 5.4;
-  const faces = FACE_X.map((px) => {
-    const x = to3(px, 0)[0];
+  const FACE_H = 5.4;
+  const faces = FACES.map((light) => {
+    const x = light.x3, faceZ = light.z3;
     dir.set(x * 0.9 - x, -FACE_H, 1.2 - faceZ);
     const cone = add(beam(0.06, 1.0, dir.length()), x, FACE_H, faceZ);
     cone.quaternion.setFromUnitVectors(DOWN, dir.normalize());
     return { cone, lens: lens(x, FACE_H, faceZ) };
   });
-  add(new THREE.Mesh(new THREE.BoxGeometry(7, 0.06, 0.06), solid(0x222228)), 0, FACE_H + 0.1, faceZ);
+  if (FACES.length) add(new THREE.Mesh(new THREE.BoxGeometry(7, 0.06, 0.06), solid(0x222228)), 0, FACE_H + 0.1, FACE_Z);
   const faceGlow = add(new THREE.Mesh(new THREE.PlaneGeometry(9, 5), glow(glowTex)), 0, 0.014, 0.9);
   faceGlow.rotation.x = -Math.PI / 2;
 
@@ -3793,8 +3843,10 @@ function buildLights() {
 // A small plan of a template's stage for its card.
 function templatePreview(layout) {
   const leds = layout.leds.map((l) => `<rect class="tp-led" x="${l.x - 17}" y="${l.y - 9}" width="34" height="18" rx="9"/>`).join('');
-  const spots = layout.spots.map((sp) => `<circle class="tp-spot" cx="${sp.x}" cy="${sp.y}" r="11"/>`).join('');
-  return `<svg viewBox="425 150 1150 760"><rect class="tp-stage" x="${STAGE.x0}" y="${STAGE.y0}" width="${STAGE.x1 - STAGE.x0}" height="${STAGE.y1 - STAGE.y0}" rx="10"/>`
+  const spots = layout.spots.map((sp) => `<circle class="tp-spot" cx="${sp.x}" cy="${sp.y}" r="11"/>`).join('')
+    + sidesOf(layout).map((sd) => `<rect class="tp-other" x="${sd.x - 12}" y="${sd.y - 10}" width="24" height="20" rx="5"/>`).join('')
+    + facesOf(layout).map((f) => `<rect class="tp-other" x="${f.x - 6}" y="${f.y - 14}" width="12" height="28" rx="6"/>`).join('');
+  return `<svg viewBox="330 150 1340 960"><rect class="tp-stage" x="${STAGE.x0}" y="${STAGE.y0}" width="${STAGE.x1 - STAGE.x0}" height="${STAGE.y1 - STAGE.y0}" rx="10"/>`
     + `<rect class="tp-cyc" x="${ZONES.x}" y="${STAGE.y0 - 16}" width="${ZONES.w * 3}" height="12" rx="5"/>${leds}${spots}</svg>`;
 }
 const countText = (layout) => `${layout.leds.length} LED${layout.leds.length === 1 ? '' : 's'} · ${layout.spots.length} spotlight${layout.spots.length === 1 ? '' : 's'}`;
@@ -3911,7 +3963,7 @@ function buildHome() {
   };
   $('new-project').addEventListener('click', () => openTemplates(false));
   $('tpl-new').addEventListener('click', () => {
-    const tpl = { id: 't' + newId(), name: 'Untitled Layout', layout: { leds: [], spots: [] }, created: Date.now() };
+    const tpl = { id: 't' + newId(), name: 'Untitled Layout', layout: { leds: [], spots: [], faces: [], sides: [] }, created: Date.now() };
     templates.unshift(tpl);
     saveTemplates();
     editTemplateLayout(tpl);

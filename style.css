@@ -604,7 +604,7 @@ body.layout-mode #layout-panel { display: block; }
 body.layout-mode #mods > .group { display: none; }
 body.layout-mode .plan .fx[data-kind] { cursor: move; }
 body.layout-mode .history { display: none; }
-.plan .led.picked, .plan .spot.picked { stroke: var(--accent); stroke-width: 5; }
+.plan .led.picked, .plan .spot.picked, .plan .side.picked, .plan .face.picked { stroke: var(--accent); stroke-width: 5; }
 #layout-panel .line { flex-wrap: wrap; }
 #layout-panel input[type="number"] { width: 80px; }
 #layout-panel input[type="text"] { flex: 1; min-width: 0; }
@@ -758,6 +758,7 @@ body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing
 .tp-cyc { fill: var(--fix-line); }
 .tp-led { fill: var(--accent); }
 .tp-spot { fill: var(--panel); stroke: var(--muted); stroke-width: 4; }
+.tp-other { fill: var(--fix-line); }
 .tpl-row { display: flex; align-items: center; gap: 2px; min-height: 34px; }
 .tpl-row { flex-wrap: wrap; }
 .tpl-info { flex: 1 1 100%; min-width: 0; }       /* name and details on their own line, buttons underneath */

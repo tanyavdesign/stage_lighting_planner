@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121502">
+<link rel="stylesheet" href="style.css?v=202610121507">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -260,15 +260,17 @@
           <div class="seg">
             <button class="btn" id="layout-add-led">LED</button>
             <button class="btn" id="layout-add-spot">Spotlight</button>
+            <button class="btn" id="layout-add-side">Side</button>
+            <button class="btn" id="layout-add-face">Face</button>
           </div>
         </div>
       </div>
       <div class="group">
-        <p class="hint" id="layout-none">Tap a light on the plan to renumber or delete it.</p>
+        <p class="hint" id="layout-none">Tap a light on the plan to select it. Drag a side light across the stage to put it in the other wing.</p>
         <div id="layout-picked" hidden>
           <div class="sec-head"><h3 id="layout-kind">LED</h3></div>
           <div class="line">
-            <span class="lbl">Number</span>
+            <span class="lbl" id="layout-number-lbl">Number</span>
             <input id="layout-number" type="number" min="1" step="1">
             <button class="btn" id="layout-delete">Delete</button>
           </div>
@@ -427,6 +429,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121502"></script>
+<script src="app.js?v=202610121507"></script>
 </body>
 </html>
