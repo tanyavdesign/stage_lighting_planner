@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#00f0ff" stop-opacity=".95"/><stop offset="1" stop-color="#00f0ff" stop-opacity=".12"/></linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe98a" stop-opacity=".98"/><stop offset="1" stop-color="#ffe98a" stop-opacity=".16"/></linearGradient>
+    <linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff40e9" stop-opacity=".95"/><stop offset="1" stop-color="#ff40e9" stop-opacity=".12"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="#17181b"/>
+  <!-- three beams from the rig down to the stage -->
+  <polygon points="150,118 176,118 232,366 92,366" fill="url(#a)"/>
+  <polygon points="336,118 362,118 420,366 280,366" fill="url(#c)"/>
+  <polygon points="243,104 269,104 344,372 168,372" fill="url(#b)"/>
+  <!-- rig bar and fixtures -->
+  <rect x="112" y="96" width="288" height="10" rx="5" fill="#5f6368"/>
+  <rect x="145" y="104" width="36" height="20" rx="8" fill="#00f0ff"/>
+  <rect x="238" y="104" width="36" height="20" rx="8" fill="#ffe98a"/>
+  <rect x="331" y="104" width="36" height="20" rx="8" fill="#ff40e9"/>
+  <!-- stage -->
+  <rect x="84" y="366" width="344" height="34" rx="9" fill="#e8eaed"/>
+</svg>

@@ -2199,4 +2199,10 @@ function frame(ms) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Installable app: keep a copy of the files on the device so it opens offline.
+// Only on the live site; a local preview should always show the files on disk.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 })();
