@@ -142,7 +142,7 @@ const blankLook = () => ({
 // list and a reload stays inside the project you were in.
 const TEMPLATE = 'KDT TB UCC Layout';        // the only stage layout so far
 const LOOK_KEY = 'kdt-lighting-v1', SHOW_KEY = 'kdt-lighting-show-v1', LAYOUT_KEY = 'slp-layout-v1', PROJECTS_KEY = 'slp-projects-v1';
-const PER_PROJECT = [LOOK_KEY, SHOW_KEY, LAYOUT_KEY];
+const PER_ITEM = [LOOK_KEY, SHOW_KEY];             // the layout is the project's; lights and cues are each item's
 const raw = {
   get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (e) { return fallback; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ } },
@@ -163,10 +163,19 @@ if (!projects) {
   }
   raw.set(PROJECTS_KEY, projects);
 }
-let currentId = null;
-try { currentId = sessionStorage.getItem('slp-open'); } catch (e) { /* no session storage */ }
+// A project holds one or more items (one dance each); every item has its own track, cues
+// and lights, and they all share the project's stage layout. A project from before items
+// becomes a project with one item, which keeps the project's id so its saved data still fits.
+if (projects.some((p) => !Array.isArray(p.items))) {
+  for (const p of projects) if (!Array.isArray(p.items)) p.items = [{ id: p.id, name: 'Item 1', cues: p.cues || 0, updated: p.updated, thumb: p.thumb }];
+  raw.set(PROJECTS_KEY, projects);
+}
+let currentId = null, currentItemId = null;
+try { currentId = sessionStorage.getItem('slp-open'); currentItemId = sessionStorage.getItem('slp-item'); } catch (e) { /* no session storage */ }
 if (!projects.some((p) => p.id === currentId)) currentId = null;
 const currentProject = () => projects.find((p) => p.id === currentId);
+if (!currentId || !currentProject().items.some((it) => it.id === currentItemId)) currentItemId = null;
+const currentItem = () => (currentItemId ? currentProject().items.find((it) => it.id === currentItemId) : null);
 const saveProjects = () => raw.set(PROJECTS_KEY, projects);
 
 // Stage templates: where the LEDs and spotlights sit when a project starts. One is built
@@ -180,26 +189,31 @@ const findTemplate = (id) => (id === SCRATCH.id ? SCRATCH : templates.find((t) =
 const copyLayout = (layout) => ({ leds: layout.leds.map(({ id, x, y }) => ({ id, x, y })), spots: layout.spots.map(({ id, x, y }) => ({ id, x, y })) });
 const templateName = () => (currentProject() && currentProject().template) || TEMPLATE;
 
-// The rest of the app reads and writes through `store`. Project data goes to the open
-// project (and nowhere when the project list is showing); anything else is app-wide.
+// The rest of the app reads and writes through `store`. Lights and cues go to the open
+// item, the layout to its project (and nowhere when a list is showing); anything else is
+// app-wide.
 const store = {
+  owner(key) { return key === LAYOUT_KEY ? currentId : PER_ITEM.includes(key) ? currentItemId : undefined; },
   get(key, fallback) {
-    if (!PER_PROJECT.includes(key)) return raw.get(key, fallback);
-    return currentId ? raw.get(projectKey(key, currentId), fallback) : fallback;
+    const id = this.owner(key);
+    if (id === undefined) return raw.get(key, fallback);
+    return id ? raw.get(projectKey(key, id), fallback) : fallback;
   },
   set(key, value) {
-    if (!PER_PROJECT.includes(key)) return raw.set(key, value);
-    if (!currentId) return;
-    raw.set(projectKey(key, currentId), value);
-    const project = currentProject();
-    project.updated = Date.now();
-    project.cues = show.cues.length;
+    const id = this.owner(key);
+    if (id === undefined) return raw.set(key, value);
+    if (!id || !currentItemId) return;
+    raw.set(projectKey(key, id), value);
+    const project = currentProject(), item = currentItem();
+    project.updated = item.updated = Date.now();
+    item.cues = show.cues.length;
+    project.cues = project.items.reduce((n, it) => n + (it.cues || 0), 0);
     saveProjects();
   },
 };
 
-// Soundtracks are too big for local storage, so each project's audio file lives in the
-// browser's database instead and is loaded again when the project opens.
+// Soundtracks are too big for local storage, so each item's audio file lives in the
+// browser's database instead and is loaded again when the item opens.
 const audioStore = {
   db: null,
   open() {
@@ -240,6 +254,7 @@ const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
   back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  download: '<path d="M8 2.5v8M4.8 7.5 8 10.7l3.2-3.2M3 13.5h10"/>',
   play: '<path d="M5 3.2v9.6L12.5 8z"/>',
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
   prev: '<path d="M4 3.5v9M12 3.5 6 8l6 4.5z"/>',
@@ -1695,7 +1710,7 @@ function wavePeaks(buf) {
 // as opposed to a file the user has just picked.
 async function loadTrack(file, restored) {
   setPlaying(false);
-  if (!restored && currentId) audioStore.put(currentId, file);
+  if (!restored && currentItemId) audioStore.put(currentItemId, file);
   if (player.url) URL.revokeObjectURL(player.url);
   player.url = URL.createObjectURL(file);
   player.audio = new Audio(player.url);
@@ -2078,41 +2093,35 @@ function addCue() {
 
 // What exported files are called: the project's name, else the track's, else a plain default.
 function fileStem() {
-  const name = show.projectName || (show.trackName || '').replace(/\.[^.]+$/, '') || 'Lighting';
+  const item = currentItem();
+  const name = [show.projectName, item && item.name].filter(Boolean).join(' - ') || 'Lighting';
   return name.replace(/[\\/:*?"<>|]/g, ' ').trim();
 }
+// "Project · Item" for the top of each PDF page
+const showTitle = () => {
+  const title = [show.projectName, currentItem() && currentItem().name].filter(Boolean).join(' · ');
+  return title ? title + '   |   ' : '';
+};
 
-function exportShow() {
-  const blob = new Blob([JSON.stringify({ version: 1, projectName: show.projectName || '', template: templateName(), layout, look: state, cues: show.cues, trackName: show.trackName }, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = fileStem() + ' - lighting show.json';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+async function exportShow() {
+  saveBlob(await packItem(currentProject(), currentItem()), fileStem() + FILE_ITEM);
 }
 
+// Replace this item's cues and lights (and its track, if the file carries one) with a file's.
 async function importShow(file) {
   try {
-    const data = JSON.parse(await file.text());
-    if (!Array.isArray(data.cues)) throw new Error('no cues');
-    show = { cues: data.cues, trackName: data.trackName || '', projectName: data.projectName || '' };
-    if (currentProject()) {              // an imported show keeps this project's name unless it brings its own
-      show.projectName = show.projectName || currentProject().name;
-      currentProject().name = show.projectName;
-    }
-    $('project-name').value = $('bar-name').textContent = show.projectName;
-    state = Object.assign(blankLook(), data.look || {});
-    store.set('kdt-lighting-v1', state);
+    const got = await readFile(file);
+    const rec = got.items[0] || (got.projects[0] && got.projects[0].items[0]);
+    if (!rec) throw new Error('nothing in it');
+    show = Object.assign(showPart(rec.data), { trackName: show.trackName, projectName: currentProject().name });
+    state = Object.assign(blankLook(), rec.data.look || {});
+    store.set(LOOK_KEY, state);
     syncUI();
-    if (data.layout && Array.isArray(data.layout.leds) && JSON.stringify(data.layout) !== JSON.stringify(layout)) {
-      // the show was made on a different layout: take it too, and rebuild every view from it
-      store.set(LAYOUT_KEY, data.layout);
-      saveShow();
-      return location.reload();
-    }
     cuesChanged();
+    if (rec.track) await loadTrack(rec.track);
     toast(`Imported ${file.name}. Undo with Cmd+Z.`, 3500);
   } catch (e) {
-    toast(`${file.name} is not a lighting show export.`, 3500);
+    toast(`${file.name} is not a file from this app.`, 3500);
   }
 }
 
@@ -2407,7 +2416,7 @@ function drawOverview(c, rows, pageNo, pageCount) {
   c.fillStyle = '#202124'; c.textAlign = 'left'; pdfFont(c, 46, 600);
   c.fillText('Cue overview', EDGE, EDGE + 44);
   c.fillStyle = '#5f6368'; c.textAlign = 'right'; pdfFont(c, 23);
-  c.fillText((show.projectName ? show.projectName + '   |   ' : '') + templateName() + `   |   overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
+  c.fillText(showTitle() + templateName() + `   |   overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
   c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
 
   c.textAlign = 'left'; c.fillStyle = '#5f6368'; pdfFont(c, 19, 600);
@@ -2511,8 +2520,8 @@ async function exportPdf() {
         look: cue.look, note: cue.note,
         like: similar[i] && { index: similar[i].index, title: likeTitle(i), lines: similar[i].lines },
         title: show.cues.length ? cueLabel(cue) : cue.name,
-        meta: (show.projectName ? show.projectName + '   |   ' : '') + (show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
-        metaLong: (show.projectName ? show.projectName + '   |   ' : '') + templateName() + (show.cues.length ? `   |   ${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
+        meta: showTitle() + (show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
+        metaLong: showTitle() + templateName() + (show.cues.length ? `   |   ${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
         map: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planSvgText(cue.look)),
         shot: front.toDataURL('image/jpeg', 0.92),
       };
@@ -2565,59 +2574,280 @@ async function exportPdf() {
 // ---------------------------------------------------------------------------
 // Project list (the home screen)
 // ---------------------------------------------------------------------------
-function openProject(id) {
-  try { sessionStorage.setItem('slp-open', id); } catch (e) { /* no session storage */ }
-  location.reload();                     // start clean with that project's data
+function setOpen(projectId, itemId) {
+  try {
+    for (const [key, id] of [['slp-open', projectId], ['slp-item', itemId]]) {
+      if (id) sessionStorage.setItem(key, id); else sessionStorage.removeItem(key);
+    }
+  } catch (e) { /* no session storage */ }
+  location.reload();                     // start clean with that item's data
 }
-// A small picture of the front view, shown on the project's card.
+const openProject = (id) => setOpen(id, null);          // shows the project's items
+// A small picture of the front view, shown on the item's card and its project's.
 function saveThumbnail() {
-  const project = currentProject();
-  if (!project) return;
+  const project = currentProject(), item = currentItem();
+  if (!item) return;
   try {
     const small = document.createElement('canvas');
     small.width = 320; small.height = 188;
     small.getContext('2d').drawImage(front, 0, 0, 320, 188);
-    project.thumb = small.toDataURL('image/jpeg', 0.7);
+    project.thumb = item.thumb = small.toDataURL('image/jpeg', 0.7);
     saveProjects();
   } catch (e) { /* keep the old picture */ }
 }
-function goHome() {
-  saveThumbnail();
-  try { sessionStorage.removeItem('slp-open'); } catch (e) { /* no session storage */ }
-  location.reload();
-}
-function createProject(name, data, template) {     // data: an exported show to start from; template: the stage to start on
-  const id = newId(), stage = template || BUILTIN;
-  const cues = data && Array.isArray(data.cues) ? data.cues : [];
-  raw.set(projectKey(LOOK_KEY, id), (data && data.look) || blankLook());
-  raw.set(projectKey(SHOW_KEY, id), { cues, trackName: '' });
-  if (data && data.layout && Array.isArray(data.layout.leds)) raw.set(projectKey(LAYOUT_KEY, id), data.layout);
-  else if (!stage.builtin) raw.set(projectKey(LAYOUT_KEY, id), copyLayout(stage.layout));
-  projects.unshift({ id, name: name || 'Untitled project', template: (data && data.template) || stage.name, templateId: stage.id, created: Date.now(), updated: Date.now(), cues: cues.length });
+function goHome() { saveThumbnail(); setOpen(currentId, null); }           // back to this project's items
+function goProjects() { saveThumbnail(); setOpen(null, null); }
+
+// stage: the template to start on. from: a file being imported, which brings its own layout.
+function createProject(name, stage, from) {
+  const id = newId(), tpl = stage || BUILTIN;
+  const own = from && from.layout && Array.isArray(from.layout.leds) ? from.layout : (tpl.builtin ? null : copyLayout(tpl.layout));
+  if (own) raw.set(projectKey(LAYOUT_KEY, id), own);
+  const project = { id, name: name || 'Untitled project', template: (from && from.template) || tpl.name, templateId: (from && from.templateId) || tpl.id, created: Date.now(), updated: Date.now(), cues: 0, items: [] };
+  projects.unshift(project);
   saveProjects();
-  return id;
+  return project;
+}
+const countCues = (project) => { project.cues = project.items.reduce((n, it) => n + (it.cues || 0), 0); };
+// The part of an item's file that is its cue list and track details.
+function showPart(data) {
+  const part = Object.assign({}, data, { cues: Array.isArray(data.cues) ? data.cues : [] });
+  for (const key of ['format', 'version', 'project', 'projectName', 'template', 'templateId', 'layout', 'look', 'name', 'track']) delete part[key];
+  return part;
+}
+// rec: an item read from a file ({ data, track }); without it the item starts empty.
+async function addItem(project, name, rec) {
+  const id = newId(), data = rec ? rec.data : {};
+  const part = showPart(data);
+  if (!rec || !rec.track) part.trackName = '';
+  raw.set(projectKey(LOOK_KEY, id), data.look || blankLook());
+  raw.set(projectKey(SHOW_KEY, id), part);
+  if (rec && rec.track) await audioStore.put(id, rec.track);
+  const item = { id, name: name || `Item ${project.items.length + 1}`, cues: part.cues.length, updated: Date.now() };
+  project.items.push(item);
+  project.updated = Date.now();
+  countCues(project);
+  saveProjects();
+  return item;
+}
+async function copyItem(item, into, name) {
+  const id = newId();
+  raw.set(projectKey(LOOK_KEY, id), raw.get(projectKey(LOOK_KEY, item.id), {}));
+  raw.set(projectKey(SHOW_KEY, id), raw.get(projectKey(SHOW_KEY, item.id), {}));
+  const track = await audioStore.get(item.id);
+  if (track) await audioStore.put(id, track);
+  into.items.push(Object.assign({}, item, { id, name: name || item.name, updated: Date.now() }));
+  countCues(into);
+}
+function dropItem(item) {
+  raw.del(projectKey(LOOK_KEY, item.id));
+  raw.del(projectKey(SHOW_KEY, item.id));
+  audioStore.del(item.id);
 }
 async function duplicateProject(project) {
-  const id = newId();
-  raw.set(projectKey(LOOK_KEY, id), raw.get(projectKey(LOOK_KEY, project.id), {}));
-  raw.set(projectKey(SHOW_KEY, id), raw.get(projectKey(SHOW_KEY, project.id), {}));
   const custom = raw.get(projectKey(LAYOUT_KEY, project.id), null);
-  if (custom) raw.set(projectKey(LAYOUT_KEY, id), custom);
-  projects.unshift(Object.assign({}, project, { id, name: project.name + ' copy', created: Date.now(), updated: Date.now() }));
+  const copy = createProject(project.name + ' copy', null, { layout: custom, template: project.template, templateId: project.templateId });
+  copy.thumb = project.thumb;
+  for (const item of project.items) await copyItem(item, copy);
   saveProjects();
-  const track = await audioStore.get(project.id);
-  if (track) await audioStore.put(id, track);
   renderHome();
 }
 function deleteProject(project) {
-  raw.del(projectKey(LOOK_KEY, project.id));
-  raw.del(projectKey(SHOW_KEY, project.id));
+  project.items.forEach(dropItem);
   raw.del(projectKey(LAYOUT_KEY, project.id));
-  audioStore.del(project.id);
   projects = projects.filter((p) => p.id !== project.id);
   saveProjects();
   renderHome();
 }
+async function duplicateItem(project, item) {
+  await copyItem(item, project, item.name + ' copy');
+  project.updated = Date.now();
+  saveProjects();
+  renderHome();
+}
+function deleteItem(project, item) {
+  dropItem(item);
+  project.items = project.items.filter((it) => it !== item);
+  project.updated = Date.now();
+  countCues(project);
+  saveProjects();
+  renderHome();
+}
+
+// ---------------------------------------------------------------------------
+// Files. A .slitem holds one item, a .slproject a whole project; both are zip archives
+// with the cues and lights as JSON and the soundtracks beside them, so a file carries
+// everything needed to open it on another device. Several downloaded at once come as one
+// .zip of those files, which imports again in one go.
+// ---------------------------------------------------------------------------
+const FILE_ITEM = '.slitem', FILE_PROJECT = '.slproject';
+const CRC = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+// files: [{ name, bytes }]. Stored without compression: the audio is compressed already.
+function zipWrite(files) {
+  const encoder = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = encoder.encode(file.name), crc = crc32(file.bytes), size = file.bytes.length;
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true);
+    local.setUint16(12, 0x21, true); local.setUint32(14, crc, true); local.setUint32(18, size, true); local.setUint32(22, size, true);
+    local.setUint16(26, name.length, true);
+    parts.push(local.buffer, name, file.bytes);
+    const entry = new DataView(new ArrayBuffer(46));
+    entry.setUint32(0, 0x02014b50, true); entry.setUint16(4, 20, true); entry.setUint16(6, 20, true); entry.setUint16(8, 0x0800, true);
+    entry.setUint16(14, 0x21, true); entry.setUint32(16, crc, true); entry.setUint32(20, size, true); entry.setUint32(24, size, true);
+    entry.setUint16(28, name.length, true); entry.setUint32(42, offset, true);
+    central.push(entry.buffer, name);
+    offset += 30 + name.length + size;
+  }
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, central.reduce((n, part) => n + part.byteLength, 0), true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end.buffer], { type: 'application/octet-stream' });
+}
+// -> Map of name to bytes
+async function zipRead(buffer) {
+  const view = new DataView(buffer), bytes = new Uint8Array(buffer), decoder = new TextDecoder(), out = new Map();
+  let end = bytes.length - 22;
+  while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--;
+  if (end < 0) throw new Error('not a zip');
+  let at = view.getUint32(end + 16, true);
+  for (let i = view.getUint16(end + 10, true); i > 0; i--) {
+    const method = view.getUint16(at + 10, true), size = view.getUint32(at + 20, true), nameLen = view.getUint16(at + 28, true);
+    const local = view.getUint32(at + 42, true), name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLen));
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    let data = bytes.subarray(start, start + size);
+    if (method === 8) data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    else if (method !== 0) throw new Error('unsupported zip');
+    if (!name.endsWith('/')) out.set(name, data);
+    at += 46 + nameLen + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
+  }
+  return out;
+}
+const safeName = (text) => String(text).replace(/[\\/:*?"<>|]/g, ' ').trim() || 'Untitled';
+const jsonBytes = (value) => new TextEncoder().encode(JSON.stringify(value));
+const projectLayout = (project) => raw.get(projectKey(LAYOUT_KEY, project.id), null) || templateLayout();
+function saveBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+// An item as it is written to a file: its cues, lights and name, and its track if it has one.
+async function itemRecord(item) {
+  const part = raw.get(projectKey(SHOW_KEY, item.id), {});
+  const data = Object.assign({}, part, { name: item.name, look: raw.get(projectKey(LOOK_KEY, item.id), {}), cues: part.cues || [] });
+  delete data.projectName;
+  return { data, track: await audioStore.get(item.id) };
+}
+async function packItem(project, item) {
+  const { data, track } = await itemRecord(item);
+  const path = track ? 'track/' + safeName(track.name || 'track') : '';
+  const files = [{ name: 'item.json', bytes: jsonBytes(Object.assign({ format: 'slp-item', version: 1, project: project.name, template: project.template, layout: projectLayout(project) }, data, { track: path })) }];
+  if (track) files.push({ name: path, bytes: new Uint8Array(await track.arrayBuffer()) });
+  return zipWrite(files);
+}
+async function packProject(project) {
+  const files = [], paths = [];
+  for (const [i, item] of project.items.entries()) {
+    const { data, track } = await itemRecord(item);
+    const path = track ? `tracks/${i + 1} ${safeName(track.name || 'track')}` : '';
+    paths.push(`items/${i + 1}.json`);
+    files.push({ name: paths[i], bytes: jsonBytes(Object.assign(data, { track: path })) });
+    if (track) files.push({ name: path, bytes: new Uint8Array(await track.arrayBuffer()) });
+  }
+  files.unshift({ name: 'project.json', bytes: jsonBytes({ format: 'slp-project', version: 1, name: project.name, template: project.template, templateId: project.templateId, layout: projectLayout(project), items: paths }) });
+  return zipWrite(files);
+}
+const AUDIO_TYPES = { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', flac: 'audio/flac' };
+// Read a file this app wrote. -> { projects: [{ name, layout, ..., items: [{ data, track }] }], items: [{ data, track }] }
+async function readFile(file) {
+  const out = { projects: [], items: [] }, stem = file.name.replace(/\.[^.]+$/, '');
+  if (/\.json$/i.test(file.name)) {              // an export from before the app had its own files
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data.cues)) throw new Error('not a show');
+    out.items.push({ data: Object.assign({}, data, { name: data.projectName || stem }), track: null });
+    return out;
+  }
+  await readArchive(await zipRead(await file.arrayBuffer()), out);
+  if (!out.projects.length && !out.items.length) throw new Error('nothing in it');
+  return out;
+}
+async function readArchive(zip, out) {
+  const json = (path) => JSON.parse(new TextDecoder().decode(zip.get(path)));
+  const itemAt = (data) => {
+    const bytes = data.track && zip.get(data.track);
+    const name = data.trackName || String(data.track).split('/').pop();
+    return { data, track: bytes ? new File([bytes], name, { type: AUDIO_TYPES[name.split('.').pop().toLowerCase()] || 'audio/mpeg' }) : null };
+  };
+  if (zip.has('project.json')) {
+    const project = json('project.json');
+    out.projects.push(Object.assign(project, { items: project.items.map((path) => itemAt(json(path))) }));
+  } else if (zip.has('item.json')) {
+    out.items.push(itemAt(json('item.json')));
+  } else {                                       // several files downloaded together
+    for (const [name, bytes] of zip) {
+      if (/\.(slitem|slproject)$/i.test(name)) await readArchive(await zipRead(bytes.slice().buffer), out);
+    }
+  }
+}
+// Bring files in. On the project list each becomes a project; inside a project their items join it.
+async function importFiles(fileList) {
+  const project = currentProject(), bad = [];
+  let made = 0;
+  toast('Importing...');
+  for (const file of fileList) {
+    try {
+      const got = await readFile(file);
+      for (const p of got.projects) {
+        const into = project || createProject(p.name, null, p);
+        for (const rec of p.items) await addItem(into, rec.data.name, rec);
+        made += project ? p.items.length : 1;
+      }
+      for (const rec of got.items) {
+        const into = project || createProject(rec.data.project || rec.data.name, null, rec.data);
+        await addItem(into, rec.data.name, rec);
+        made++;
+      }
+    } catch (e) { bad.push(file.name); }
+  }
+  renderHome();
+  const what = project ? 'item' : 'project';
+  toast((made ? `Imported ${made} ${what}${made === 1 ? '' : 's'}.` : '') + (bad.length ? ` Could not read ${bad.join(', ')}.` : ''), 4500);
+}
+// Download projects (from the project list) or items (inside a project): one file, or a zip of them.
+async function downloadFiles(list) {
+  const project = currentProject();
+  toast('Preparing the download...');
+  const files = [], used = new Set();
+  for (const thing of list) {
+    let name = safeName(project ? `${project.name} - ${thing.name}` : thing.name);
+    for (let n = 2; used.has(name.toLowerCase()); n++) name = name.replace(/( \(\d+\))?$/, ` (${n})`);
+    used.add(name.toLowerCase());
+    files.push({ name: name + (project ? FILE_ITEM : FILE_PROJECT), blob: project ? await packItem(project, thing) : await packProject(thing) });
+  }
+  if (files.length === 1) saveBlob(files[0].blob, files[0].name);
+  else {
+    const inside = [];
+    for (const file of files) inside.push({ name: file.name, bytes: new Uint8Array(await file.blob.arrayBuffer()) });
+    saveBlob(zipWrite(inside), (project ? safeName(project.name) + ' - items' : 'Stage Lighting projects') + '.zip');
+  }
+  toast(`Downloaded ${files.length} ${project ? 'item' : 'project'}${files.length === 1 ? '' : 's'}.`, 3000);
+}
+
 const when = (ms) => {
   const days = Math.floor((Date.now() - ms) / 86400000);
   if (days < 1) return 'today';
@@ -2625,28 +2855,50 @@ const when = (ms) => {
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+// The home screen shows the projects, or the items of the project that is open.
+const picked = new Set();          // ids ticked for downloading
 function renderHome() {
-  const list = $('project-list');
+  const list = $('project-list'), project = currentProject();
+  const things = project ? project.items : [...projects].sort((a, b) => b.updated - a.updated);
   list.textContent = '';
-  $('home-empty').hidden = projects.length > 0;
-  for (const project of [...projects].sort((a, b) => b.updated - a.updated)) {
+  $('home-back').hidden = $('new-item').hidden = !project;
+  $('home-logo').hidden = $('new-project').hidden = !!project;
+  $('home-title').textContent = project ? project.name : 'Stage Lighting Planner';
+  $('home-heading').textContent = project ? `Items · ${project.template}` : 'Projects';
+  $('home-empty').hidden = things.length > 0;
+  $('home-empty').textContent = project ? 'No items yet. Press New item to add one.' : 'No projects yet. Press New project to start one.';
+  for (const id of [...picked]) if (!things.some((t) => t.id === id)) picked.delete(id);
+  $('pick-all').hidden = !things.length;
+  $('pick-all').textContent = picked.size === things.length ? 'Select none' : 'Select all';
+  $('pick-download').hidden = !picked.size;
+  $('pick-download').textContent = `Download ${picked.size}`;
+  const plural = (n, word) => `${n || 0} ${word}${n === 1 ? '' : 's'}`;
+  for (const thing of things) {
     const card = document.createElement('div');
-    card.className = 'project';
+    card.className = 'project' + (picked.has(thing.id) ? ' picked' : '');
+    const tick = document.createElement('label');
+    tick.className = 'pick'; tick.title = 'Select for download';
+    const box = document.createElement('input');
+    box.type = 'checkbox'; box.checked = picked.has(thing.id);
+    box.addEventListener('change', () => { if (box.checked) picked.add(thing.id); else picked.delete(thing.id); renderHome(); });
+    tick.appendChild(box); card.appendChild(tick);
     const open = document.createElement('button');
     open.className = 'project-open';
-    open.title = 'Open ' + project.name;
-    if (project.thumb) { const img = new Image(); img.src = project.thumb; img.alt = ''; open.appendChild(img); }
+    open.title = 'Open ' + thing.name;
+    if (thing.thumb) { const img = new Image(); img.src = thing.thumb; img.alt = ''; open.appendChild(img); }
     else { const blank = document.createElement('div'); blank.className = 'no-thumb'; blank.textContent = 'No preview yet'; open.appendChild(blank); }
-    open.addEventListener('click', () => openProject(project.id));
+    open.addEventListener('click', () => (project ? setOpen(project.id, thing.id) : openProject(thing.id)));
     card.appendChild(open);
 
     const info = document.createElement('div');
     info.className = 'project-info';
     const name = document.createElement('div');
-    name.className = 'project-name'; name.textContent = project.name;
+    name.className = 'project-name'; name.textContent = thing.name;
     const meta = document.createElement('div');
     meta.className = 'hint';
-    meta.textContent = `${project.template} · ${project.cues || 0} cue${project.cues === 1 ? '' : 's'} · edited ${when(project.updated)}`;
+    meta.textContent = project
+      ? `${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`
+      : `${plural(thing.items.length, 'item')} · ${plural(thing.cues, 'cue')} · edited ${when(thing.updated)}`;
     info.appendChild(name); info.appendChild(meta);
     card.appendChild(info);
 
@@ -2659,17 +2911,18 @@ function renderHome() {
     };
     act('pencil', 'Rename', () => {
       const field = document.createElement('input');
-      field.type = 'text'; field.value = project.name; field.maxLength = 60; field.className = 'rename';
+      field.type = 'text'; field.value = thing.name; field.maxLength = 60; field.className = 'rename';
       name.replaceWith(field);
       field.focus(); field.select();
-      const done = () => { project.name = field.value.trim() || project.name; saveProjects(); renderHome(); };
+      const done = () => { thing.name = field.value.trim() || thing.name; saveProjects(); renderHome(); };
       field.addEventListener('blur', done);
       field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
     });
-    act('copy', 'Duplicate', () => duplicateProject(project));
+    act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
+    act('download', 'Download', () => downloadFiles([thing]));
     // Deleting takes two taps: the first arms the button, the second within a few seconds deletes.
     const del = act('trash', 'Delete', () => {
-      if (del.classList.contains('armed')) return deleteProject(project);
+      if (del.classList.contains('armed')) return project ? deleteItem(project, thing) : deleteProject(thing);
       del.classList.add('armed'); del.textContent = 'Delete?';
       setTimeout(() => { if (del.isConnected) renderHome(); }, 3500);
     });
@@ -2761,9 +3014,11 @@ function renderTemplates() {
     grid.appendChild(none);
   }
 }
-function newFromTemplate() {
+async function newFromTemplate() {
   if (!tplPicked) return toast('Pick a template, or Start from scratch.', 2500);
-  openProject(createProject($('new-name').value.trim(), null, tplPicked));
+  const project = createProject($('new-name').value.trim(), tplPicked);
+  const item = await addItem(project, 'Item 1');
+  setOpen(project.id, item.id);
 }
 
 function buildHome() {
@@ -2776,18 +3031,25 @@ function buildHome() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !/^INPUT$/.test(e.target.tagName)) close(); });
   each('[data-tpl-tab]', (b) => b.addEventListener('click', () => { tplTab = b.dataset.tplTab; renderTemplates(); }));
   $('tpl-foot').addEventListener('submit', (e) => { e.preventDefault(); newFromTemplate(); });
-  $('home-import').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
+  $('home-import').addEventListener('change', (e) => {
+    const files = [...e.target.files];
     e.target.value = '';
-    if (!file) return;
-    try {
-      const data = JSON.parse(await file.text());
-      if (!Array.isArray(data.cues)) throw new Error('not a show');
-      createProject(data.projectName || file.name.replace(/\.[^.]+$/, ''), data);
-      renderHome();
-    } catch (err) {
-      toast(`${file.name} is not a lighting show export.`, 3500);
-    }
+    if (files.length) importFiles(files);
+  });
+  $('home-back').innerHTML = svgIcon('back');
+  $('home-back').addEventListener('click', () => setOpen(null, null));
+  $('new-item').addEventListener('click', async () => {
+    const project = currentProject(), item = await addItem(project);
+    setOpen(project.id, item.id);
+  });
+  $('pick-all').addEventListener('click', () => {
+    const things = currentProject() ? currentProject().items : projects;
+    if (picked.size === things.length) picked.clear(); else things.forEach((t) => picked.add(t.id));
+    renderHome();
+  });
+  $('pick-download').addEventListener('click', () => {
+    const things = currentProject() ? currentProject().items : projects;
+    downloadFiles(things.filter((t) => picked.has(t.id)));
   });
   renderHome();
 }
@@ -2802,20 +3064,25 @@ function buildShow() {
   $('export-pdf').addEventListener('click', exportPdf);
   $('import').addEventListener('change', (e) => { if (e.target.files[0]) importShow(e.target.files[0]); e.target.value = ''; });
   if (show.trackName) $('load-track').title = `Track: ${show.trackName}`;
-  $('go-home').addEventListener('click', goHome);
+  $('go-home').addEventListener('click', goProjects);
   $('back').addEventListener('click', goHome);
   window.addEventListener('pagehide', saveThumbnail);
-  if (currentId) audioStore.get(currentId).then((file) => { if (file) loadTrack(file, true); });
-  // The project's name sits at the top of the menu and names the exported files.
-  const project = $('project-name');
-  project.value = $('bar-name').textContent = show.projectName || '';
-  project.addEventListener('change', () => {
-    show.projectName = project.value.trim() || 'Untitled project';
-    project.value = $('bar-name').textContent = show.projectName;
-    if (currentProject()) currentProject().name = show.projectName;
-    saveShow();
+  if (currentItemId) audioStore.get(currentItemId).then((file) => { if (file) loadTrack(file, true); });
+  // The item's name sits at the top of the menu; the bar shows "project / item".
+  const field = $('project-name'), item = currentItem();
+  const showNames = () => {
+    field.value = item ? item.name : '';
+    $('bar-project').textContent = show.projectName || '';
+    $('bar-item').textContent = item ? item.name : '';
+  };
+  showNames();
+  field.addEventListener('change', () => {
+    if (!item) return;
+    item.name = field.value.trim() || 'Untitled item';
+    saveProjects();
+    showNames();
   });
-  project.addEventListener('keydown', (e) => { if (e.key === 'Enter') project.blur(); });
+  field.addEventListener('keydown', (e) => { if (e.key === 'Enter') field.blur(); });
   renderCues();
 }
 
@@ -2825,7 +3092,7 @@ function buildShow() {
 buildPlan();
 buildControls();
 buildShow();
-const atHome = !currentId;                 // no project open: show the project list
+const atHome = !currentItemId;             // no item open: show the project list, or a project's items
 document.body.classList.toggle('at-home', atHome);
 $('home').hidden = !atHome;
 if (atHome) buildHome();

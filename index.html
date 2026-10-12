@@ -16,19 +16,26 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121227">
+<link rel="stylesheet" href="style.css?v=202610121235">
 </head>
 <body data-view="front">
 <div id="home" hidden>
   <div class="home-inner">
     <div class="home-head">
-      <img src="icons/icon.svg" width="44" height="44" alt="">
-      <h1>Stage Lighting Planner</h1>
+      <button id="home-back" class="btn icon" aria-label="All projects" title="All projects" hidden></button>
+      <img id="home-logo" src="icons/icon.svg" width="44" height="44" alt="">
+      <h1 id="home-title">Stage Lighting Planner</h1>
       <div class="spacer"></div>
-      <label class="btn">Import<input id="home-import" type="file" accept=".json,application/json" hidden></label>
+      <label class="btn">Import<input id="home-import" type="file" multiple hidden></label>
       <button id="new-project" class="btn primary">New project</button>
+      <button id="new-item" class="btn primary" hidden>New item</button>
     </div>
-    <h2 class="home-title">Projects</h2>
+    <div class="home-sub">
+      <h2 class="home-title" id="home-heading">Projects</h2>
+      <div class="spacer"></div>
+      <button id="pick-download" class="btn" hidden>Download</button>
+      <button id="pick-all" class="btn" hidden>Select all</button>
+    </div>
     <div id="project-list" class="project-list"></div>
     <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
   </div>
@@ -55,23 +62,23 @@
 
 <main>
   <div class="bar" id="bar">
-    <button id="back" class="btn icon" data-icon="back" aria-label="Back to all projects" title="Back to all projects"></button>
+    <button id="back" class="btn icon" data-icon="back" aria-label="Back to this project's items" title="Back to this project's items"></button>
     <div class="menu-wrap">
       <button id="more" class="btn icon" data-icon="menu" aria-label="Menu" title="Menu"></button>
       <div id="menu" class="menu" hidden>
-        <input id="project-name" class="menu-note" type="text" placeholder="Project name" title="Project name (used for exported files)" autocomplete="off">
+        <input id="project-name" class="menu-note" type="text" placeholder="Item name" title="Item name" autocomplete="off">
         <button id="go-home">All projects</button>
         <button id="edit-layout">Edit layout</button>
         <button id="watch">Watch</button>
         <button id="people">Hide people</button>
         <button id="theme">Dark mode</button>
         <button id="export-pdf">Export PDF</button>
-        <button id="export">Export show</button>
-        <label>Import show<input id="import" type="file" accept=".json,application/json" hidden></label>
+        <button id="export">Download item</button>
+        <label>Replace from file<input id="import" type="file" hidden></label>
         <button id="reset">Clear lights</button>
       </div>
     </div>
-    <span id="bar-name" class="bar-name"></span>
+    <span id="bar-name" class="bar-name"><span id="bar-project" class="bar-project"></span><span id="bar-item"></span></span>
     <button id="toggle-left" class="btn icon" data-icon="panelLeft" aria-label="Hide or show the controls" title="Hide or show the controls"></button>
   </div>
   <button id="toggle-right" class="btn icon" data-icon="panelRight" aria-label="Hide or show the previews" title="Hide or show the previews"></button>
@@ -259,6 +266,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121227"></script>
+<script src="app.js?v=202610121235"></script>
 </body>
 </html>
