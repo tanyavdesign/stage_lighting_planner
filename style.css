@@ -632,6 +632,28 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 #bar-item:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
 .bar-name input.bar-rename { width: 150px; max-width: 100%; height: 26px; padding: 0 6px; font-weight: 550; vertical-align: middle; }
 .project-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.home-sub { flex-wrap: wrap; }
+.home-views .btn.icon { width: 30px; }
+.home-views .btn.icon svg { stroke-width: 1.2; }
+/* small tiles: more to a row, with a shorter picture */
+.project-list.view-small { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 12px; }
+.view-small .project-info { padding: 8px 10px 0; }
+.view-small .project-info .hint { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.view-small .project-actions { flex-wrap: wrap; padding: 2px 6px 6px; }
+.view-small .project.new-card { min-height: 110px; }
+/* list: one row each, picture at the left, buttons at the right */
+.project-list.view-list { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.view-list .project { flex-direction: row; flex-wrap: wrap; align-items: center; border-radius: 10px; }
+.view-list .pick { top: 50%; transform: translateY(-50%); background: none; }
+.view-list .project-open { flex: 0 0 72px; margin: 8px 0 8px 40px; border-radius: 6px; overflow: hidden; }
+.view-list .no-thumb { font-size: 0; }
+.view-list .project-info { flex: 1 1 120px; padding: 0 12px; }
+.view-list .project-actions { padding: 0 8px; }
+.view-list .project.new-card { min-height: 46px; flex-direction: row; }
+@media (max-width: 640px) {
+  .view-list .pick { top: 26px; }
+  .view-list .project-actions { flex-basis: 100%; padding: 0 8px 6px 36px; }
+}
 /* recently edited items: small rows to jump straight back in */
 .recent-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .recent { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
@@ -653,7 +675,8 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .project-info .rename { width: 100%; }
 .project-actions { display: flex; gap: 2px; padding: 4px 8px 8px; }
 /* one card per row on a phone: the move arrows point up and down instead */
-@media (max-width: 527px) { .project-actions .btn[title^="Move"] svg { transform: rotate(90deg); } }
+@media (max-width: 527px) { .project-list:not(.view-small) .project-actions .btn[title^="Move"] svg { transform: rotate(90deg); } }
+.view-list .project-actions .btn[title^="Move"] svg { transform: rotate(90deg); }
 .project-actions .btn.armed { width: auto; padding: 0 10px; background: #f24822; color: #fff; }
 
 /* ---------- New project: pick a stage template ---------- */

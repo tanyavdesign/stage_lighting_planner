@@ -253,6 +253,9 @@ const selection = new Set();
 const ICONS = {
   menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
   back: '<path d="M9.5 3.5 5 8l4.5 4.5"/>',
+  viewtile: '<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/>',
+  viewsmall: '<path d="M3 3h.01M8 3h.01M13 3h.01M3 8h.01M8 8h.01M13 8h.01M3 13h.01M8 13h.01M13 13h.01" stroke-width="2.4"/>',
+  viewlist: '<path d="M6 4h7.5M6 8h7.5M6 12h7.5"/><path d="M2.8 4h.01M2.8 8h.01M2.8 12h.01" stroke-width="2"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -870,7 +873,7 @@ function buildControls() {
   $('layout-delete').addEventListener('click', layoutDelete);
   $('layout-number').addEventListener('change', layoutRenumber);
   $('layout-done').addEventListener('click', layoutDone);
-  $('layout-cancel').addEventListener('click', () => location.reload());
+  $('layout-cancel').addEventListener('click', leaveLayout);
   $('layout-template').addEventListener('click', () => {
     const template = copyLayout(findTemplate(currentProject() && currentProject().templateId).layout), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
     const keep = (list) => list.map((it) => (had.has(it.id) ? Object.assign({ was: it.id }, it) : it));
@@ -1029,7 +1032,20 @@ function layoutDone() {
   store.set(LAYOUT_KEY, layout);
   store.set(LOOK_KEY, state);
   saveShow();
-  location.reload();
+  // the layout belongs to the whole project: the other items' lights and cues follow the same changes
+  for (const item of currentProject().items) {
+    if (item.id === currentItemId) continue;
+    const look = raw.get(projectKey(LOOK_KEY, item.id), null), part = raw.get(projectKey(SHOW_KEY, item.id), null);
+    if (look) raw.set(projectKey(LOOK_KEY, item.id), relook(look, renamed, alive));
+    if (part && Array.isArray(part.cues)) { part.cues.forEach((cue) => relook(cue.look, renamed, alive)); raw.set(projectKey(SHOW_KEY, item.id), part); }
+  }
+  leaveLayout();
+}
+// Opened from the project page, the layout editor goes back there; otherwise the item reloads.
+function leaveLayout() {
+  let fromProject = false;
+  try { fromProject = !!sessionStorage.getItem('slp-layout'); sessionStorage.removeItem('slp-layout'); } catch (e) { /* no session storage */ }
+  if (fromProject) setOpen(currentId, null); else location.reload();
 }
 
 // Phone: the preview alone, full screen and in landscape. Where the browser allows it the
@@ -2899,6 +2915,10 @@ function renderHome() {
   const list = $('project-list'), project = currentProject();
   const things = project ? project.items : [...projects].sort((a, b) => b.updated - a.updated);
   list.textContent = '';
+  const view = prefs.homeView || 'tile';
+  list.className = 'project-list view-' + view;
+  each('[data-home-view]', (b) => b.classList.toggle('active', b.dataset.homeView === view));
+  $('home-layout').hidden = !project;
   $('home-back').hidden = $('new-item-wrap').hidden = !project;
   $('home-logo').hidden = $('new-project').hidden = !!project;
   $('home-title').textContent = project ? project.name : '';       // the project list has no title, only the small icon
@@ -3194,6 +3214,16 @@ function buildHome() {
     renderHome();
     toast(`Added ${names.length} item${names.length === 1 ? '' : 's'}.`, 3000);
   });
+  each('[data-home-view]', (b) => {
+    b.innerHTML = svgIcon('view' + b.dataset.homeView);
+    b.addEventListener('click', () => { prefs.homeView = b.dataset.homeView; store.set('kdt-lighting-prefs-v1', prefs); renderHome(); });
+  });
+  $('home-layout').addEventListener('click', () => {
+    const project = currentProject();
+    if (!project.items.length) return toast('Add an item first: the layout editor opens on one of the project\'s items.', 3500);
+    try { sessionStorage.setItem('slp-layout', '1'); } catch (e) { /* no session storage */ }
+    setOpen(project.id, project.items[0].id);
+  });
   $('pick-all').addEventListener('click', () => {
     const things = currentProject() ? currentProject().items : projects;
     if (picked.size === things.length) picked.clear(); else things.forEach((t) => picked.add(t.id));
@@ -3257,10 +3287,13 @@ function buildShow() {
 buildPlan();
 buildControls();
 buildShow();
+let layoutAsked = false;
+try { layoutAsked = !!sessionStorage.getItem('slp-layout'); } catch (e) { /* no session storage */ }
 const atHome = !currentItemId;             // no item open: show the project list, or a project's items
 document.body.classList.toggle('at-home', atHome);
 $('home').hidden = !atHome;
 if (atHome) buildHome();
+else if (layoutAsked) enterLayout();          // came from the project page's Edit stage layout
 setupGrips();
 try { buildThree(); } catch (e) { /* no WebGL here: the rest of the app still works */ }
 applyPrefs();
