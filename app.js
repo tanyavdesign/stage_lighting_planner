@@ -489,7 +489,7 @@ function copyLayout(layout) {
     });
   }
   if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
-  if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h }) => ({ id, type, name, x, y, z, rot, w, d, h }));
+  if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h, media }) => (media ? { id, type, name, x, y, z, rot, w, d, h, media: { id: media.id, name: media.name, type: media.type } } : { id, type, name, x, y, z, rot, w, d, h }));
   return out;
 }
 const templateName = () => (currentProject() && currentProject().template) || TEMPLATE;
@@ -545,6 +545,24 @@ const audioStore = {
 // The project's own layout if it has been customised, otherwise the template.
 let layout = store.get(LAYOUT_KEY, null) || templateLayout();
 useLayout(layout);
+// A screen can show a picture or a video: `object.media = { id, name, type }`. The file itself
+// is too big for the layout, so it lives in the browser's database beside the soundtracks,
+// under its id, and travels inside the show file. A layout shared by code does not carry it.
+const mediaKey = (id) => 'media:' + id;
+const mediaShown = {};                   // object id -> a promise of the picture or video element playing it
+function mediaOf(o) {
+  if (!o.media) return null;
+  return mediaShown[o.id] || (mediaShown[o.id] = audioStore.get(mediaKey(o.media.id)).then((file) => new Promise((resolve) => {
+    if (!file) return resolve(null);
+    const url = URL.createObjectURL(file), video = /^video\//.test(o.media.type || file.type);
+    const node = document.createElement(video ? 'video' : 'img');
+    if (video) { node.muted = true; node.loop = true; node.playsInline = true; node.addEventListener('loadeddata', () => { node.play().catch(() => {}); resolve(node); }, { once: true }); }
+    else node.addEventListener('load', () => resolve(node), { once: true });
+    node.addEventListener('error', () => resolve(null), { once: true });
+    node.src = url;
+  })));
+}
+for (const o of FRONT_OBJECTS) { const ready = mediaOf(o); if (ready) ready.then((node) => { o.picture = node; }); }
 
 let state = Object.assign(blankLook(), store.get(LOOK_KEY, {}));
 let show = Object.assign({ cues: [], trackName: '' }, store.get(SHOW_KEY, {}));
@@ -1437,6 +1455,20 @@ function buildControls() {
   };
   renderLibrary();
   $('layout-redo').addEventListener('click', layoutRedo);
+  $('media-pick').addEventListener('click', () => $('media-file').click());
+  $('media-file').addEventListener('change', async () => {
+    const file = $('media-file').files[0], item = pickedItem();
+    $('media-file').value = '';
+    if (!file || !item) return;
+    if (!/^(image|video)\//.test(file.type)) return toast('Choose a picture or a video.', 2500);
+    const id = 'm' + newId();
+    await audioStore.put(mediaKey(id), file);
+    layoutKeep();
+    item.media = { id, name: file.name, type: file.type };
+    redrawLayout();
+    toast(`${file.name} will show on ${item.name} after you press Done.`, 3000);
+  });
+  $('media-clear').addEventListener('click', () => { const item = pickedItem(); if (!item) return; layoutKeep(); delete item.media; redrawLayout(); });
   for (const [id, name] of LAYERS) {
     const b = button($('layout-layers'), name, 'btn active', () => { hiddenLayers.has(id) ? hiddenLayers.delete(id) : hiddenLayers.add(id); redrawLayout(); });
     b.dataset.layer = id; b.title = `Show or Hide ${name} While Editing`;
@@ -1690,6 +1722,9 @@ function redrawLayout() {
       $('fix-mount').textContent = on ? `Mounted on ${on.name}. Drag it off to free it.` : fx ? 'Drag it onto truss, a bar or a stand to mount it.' : '';
       $('fix-mount').hidden = !on && !fx;
     }
+    $('obj-media').hidden = !object || assetOf(item).look !== 'screen';
+    if (object) $('media-name').textContent = item.media ? item.media.name : 'Nothing Showing';
+    $('media-clear').hidden = !object || !item.media;
     if (object) { fill('obj-name', item.name); for (const key of ['z', 'w', 'd', 'h', 'rot']) fill('obj-' + key, metres(item[key] || 0)); }
     $('layout-number').parentNode.hidden = !numbered;
     if (numbered && document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
@@ -1819,7 +1854,7 @@ function layoutClip() {
 }
 const clipOf = () => selected().map(({ kind, item }) => {
   const one = { kind, x: item.x, y: item.y, of: item.kind };
-  if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h };
+  if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h, media: item.media };
   if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'ch']) if (item[key] != null) one.more[key] = item[key]; }
   return one;
 });
@@ -2680,6 +2715,7 @@ function drawFront(D) {
       ctx.fillStyle = { screen: '#141c26', curtain: '#1c0e11', seats: '#15151b' }[o.look] || '#18181e';
       ctx.fillRect(x - half, base - tall, half * 2, tall);
       ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x - half, base - tall, half * 2, 1.5);        // a lit top edge
+      if (o.picture) { ctx.globalAlpha = 0.9; ctx.drawImage(o.picture, x - half, base - tall, half * 2, tall); ctx.globalAlpha = 1; }
     }
   }
 
@@ -2869,6 +2905,13 @@ function buildThree() {
     const look = assetOf(o).look, h = Math.max(0.02, o.h);
     const g = add(new THREE.Group(), o.x3, (o.z || 0) + h / 2, o.z3);      // the group's origin is the object's middle
     g.rotation.y = -(o.rot || 0) * Math.PI / 180;
+    const ready = mediaOf(o);
+    if (ready) ready.then((node) => {              // its picture or video, on the side that faces the audience
+      if (!node) return;
+      const map = node.tagName === 'VIDEO' ? new THREE.VideoTexture(node) : new THREE.Texture(node);
+      map.needsUpdate = true;
+      add(new THREE.Mesh(new THREE.PlaneGeometry(o.w, h), new THREE.MeshBasicMaterial({ map })), 0, 0, o.d / 2 + 0.01, g);
+    });
     if (look === 'truss') lattice(o.w, Math.min(o.d, h), g);
     else if (look === 'tower') { const up = add(new THREE.Group(), 0, 0, 0, g); up.rotation.z = Math.PI / 2; lattice(h, Math.min(o.w, o.d), up); }
     else if (look === 'pipe') box(o.w, h, o.d, 0x6c6c78, 0, 0, 0, g);
@@ -4260,15 +4303,30 @@ async function itemRecord(item) {
   delete data.projectName;
   return { data, track: await audioStore.get(item.id) };
 }
+// The pictures and videos a layout's screens show, as files for a show file: the files, and
+// a list of where each one is ({ id: { path, name, type } }) to find them again on the way in.
+async function packMedia(layout) {
+  const files = [], list = {};
+  for (const o of objectsOf(layout)) {
+    if (!o.media || list[o.media.id]) continue;
+    const file = await audioStore.get(mediaKey(o.media.id));
+    if (!file) continue;
+    const path = `media/${o.media.id} ${safeName(o.media.name || 'media')}`;
+    list[o.media.id] = { path, name: o.media.name, type: o.media.type };
+    files.push({ name: path, bytes: new Uint8Array(await file.arrayBuffer()) });
+  }
+  return { files, list };
+}
 async function packItem(project, item) {
   const { data, track } = await itemRecord(item);
   const path = track ? 'track/' + safeName(track.name || 'track') : '';
-  const files = [{ name: 'item.json', bytes: jsonBytes(Object.assign({ format: 'slp-item', version: 1, project: project.name, template: project.template, layout: projectLayout(project) }, data, { track: path })) }];
+  const media = await packMedia(projectLayout(project));
+  const files = [{ name: 'item.json', bytes: jsonBytes(Object.assign({ format: 'slp-item', version: 1, project: project.name, template: project.template, layout: projectLayout(project), media: media.list }, data, { track: path })) }, ...media.files];
   if (track) files.push({ name: path, bytes: new Uint8Array(await track.arrayBuffer()) });
   return zipWrite(files);
 }
 async function packProject(project) {
-  const files = [], paths = [];
+  const files = [], paths = [], media = await packMedia(projectLayout(project));
   for (const [i, item] of project.items.entries()) {
     const { data, track } = await itemRecord(item);
     const path = track ? `tracks/${i + 1} ${safeName(track.name || 'track')}` : '';
@@ -4276,8 +4334,8 @@ async function packProject(project) {
     files.push({ name: paths[i], bytes: jsonBytes(Object.assign(data, { track: path })) });
     if (track) files.push({ name: path, bytes: new Uint8Array(await track.arrayBuffer()) });
   }
-  files.unshift({ name: 'project.json', bytes: jsonBytes({ format: 'slp-project', version: 1, name: project.name, template: project.template, templateId: project.templateId, layout: projectLayout(project), lights: project.lights, showGap: project.showGap || 0, items: paths }) });
-  return zipWrite(files);
+  files.unshift({ name: 'project.json', bytes: jsonBytes({ format: 'slp-project', version: 1, name: project.name, template: project.template, templateId: project.templateId, layout: projectLayout(project), lights: project.lights, showGap: project.showGap || 0, items: paths, media: media.list }) });
+  return zipWrite([...files, ...media.files]);
 }
 const AUDIO_TYPES = { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', flac: 'audio/flac' };
 // Read a file this app wrote. -> { projects: [{ name, layout, ..., items: [{ data, track }] }], items: [{ data, track }] }
@@ -4295,6 +4353,10 @@ async function readFile(file) {
 }
 async function readArchive(zip, out) {
   const json = (path) => JSON.parse(new TextDecoder().decode(zip.get(path)));
+  // pictures and videos for the screens go straight into the browser's database, under the ids the layout uses
+  const keepMedia = async (list) => {
+    for (const id in list || {}) { const bytes = zip.get(list[id].path); if (bytes) await audioStore.put(mediaKey(id), new File([bytes], list[id].name || 'media', { type: list[id].type || '' })); }
+  };
   const itemAt = (data) => {
     const bytes = data.track && zip.get(data.track);
     const name = data.trackName || String(data.track).split('/').pop();
@@ -4302,9 +4364,12 @@ async function readArchive(zip, out) {
   };
   if (zip.has('project.json')) {
     const project = json('project.json');
+    await keepMedia(project.media);
     out.projects.push(Object.assign(project, { items: project.items.map((path) => itemAt(json(path))) }));
   } else if (zip.has('item.json')) {
-    out.items.push(itemAt(json('item.json')));
+    const data = json('item.json');
+    await keepMedia(data.media);
+    out.items.push(itemAt(data));
   } else {                                       // several files downloaded together
     for (const [name, bytes] of zip) {
       if (/\.(slitem|slproject)$/i.test(name)) await readArchive(await zipRead(bytes.slice().buffer), out);

@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121833">
+<link rel="stylesheet" href="style.css?v=202610121835">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -303,6 +303,13 @@
               <label class="num"><span>Height</span><input id="obj-h" type="number" step="0.05"></label>
               <label class="num" title="Degrees, Clockwise Seen From Above"><span>Turn</span><input id="obj-rot" type="number" step="5"></label>
             </div>
+            <div class="line" id="obj-media">
+              <span class="lbl">Shows</span>
+              <span class="media-name" id="media-name">Nothing Showing</span>
+              <button class="btn" id="media-pick" title="Choose a Picture or a Video for This Screen">Choose</button>
+              <button class="btn" id="media-clear" title="Take the Picture or Video Off This Screen">Remove</button>
+              <input id="media-file" type="file" accept="image/*,video/*" hidden>
+            </div>
             <div class="line nums lit-only">
               <label class="num" title="Which Way It Points: Degrees Clockwise From Upstage"><span>Pan</span><input id="fix-pan" type="number" step="5"></label>
               <label class="num" title="Degrees Away From Straight Down (90 Is Level)"><span>Tilt</span><input id="fix-tilt" type="number" min="0" max="180" step="5"></label>
@@ -533,6 +540,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121833"></script>
+<script src="app.js?v=202610121835"></script>
 </body>
 </html>
