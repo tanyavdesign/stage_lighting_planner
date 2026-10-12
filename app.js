@@ -3244,8 +3244,9 @@ function buildHome() {
   $('home-back').innerHTML = svgIcon('back');
   $('home-back').addEventListener('click', () => setOpen(null, null));
   $('new-item').addEventListener('click', async () => {
-    const project = currentProject(), item = await addItem(project);
-    setOpen(project.id, item.id);
+    const item = await addItem(currentProject());        // it joins the list; it is opened when you choose to
+    renderHome();
+    toast(`Added ${item.name}.`, 2000);
   });
   // A count with one name field per item. Pasting a list (a setlist copied from notes or
   // a spreadsheet) into any field fills that field and the ones after it, one line each,
