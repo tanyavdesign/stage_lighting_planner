@@ -3091,7 +3091,7 @@ async function newFromTemplate() {
   const made = [];
   for (const field of [...$('items-names').children]) made.push(await addItem(project, field.value.trim()));
   if (!made.length) made.push(await addItem(project));
-  setOpen(project.id, made[0].id);
+  setOpen(project.id, null);                  // land on the project's item list, not inside an item
 }
 
 function buildHome() {
