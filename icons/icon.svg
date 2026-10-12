@@ -1,16 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#17181b"/>
-  <!-- left beam: cyan -->
-  <polygon points="134,116 162,116 208,378 68,378" fill="#00c8d6" opacity=".92"/>
-  <ellipse cx="138" cy="378" rx="70" ry="20" fill="#9af0f6"/>
-  <!-- right beam: pink -->
-  <polygon points="350,116 378,116 444,378 304,378" fill="#e040d0" opacity=".92"/>
-  <ellipse cx="374" cy="378" rx="70" ry="20" fill="#f7b0ef"/>
-  <!-- centre beam: warm white, in front -->
-  <polygon points="241,100 271,100 336,396 176,396" fill="#f3dc7a" opacity=".95"/>
-  <ellipse cx="256" cy="396" rx="80" ry="23" fill="#fff6c9"/>
-  <!-- fixtures -->
-  <circle cx="148" cy="116" r="21" fill="#e8eaed"/>
-  <circle cx="364" cy="116" r="21" fill="#e8eaed"/>
-  <circle cx="256" cy="100" r="23" fill="#e8eaed"/>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2e42"/><stop offset="1" stop-color="#0b0c13"/></linearGradient>
+<linearGradient id="cy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8af4ff"/><stop offset="1" stop-color="#00a8e8"/></linearGradient>
+<linearGradient id="pk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa3f3"/><stop offset="1" stop-color="#d916bd"/></linearGradient>
+<linearGradient id="wm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0a0"/><stop offset="1" stop-color="#ff9f0f"/></linearGradient>
+<linearGradient id="metal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a7088"/><stop offset="1" stop-color="#33364a"/></linearGradient>
+<filter id="drop" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity=".5"/></filter>
+<filter id="dropS" x="-40%" y="-60%" width="180%" height="240%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity=".45"/></filter>
+<filter id="halo" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="26"/></filter>
+<clipPath id="tile"><rect width="512" height="512" rx="115"/></clipPath>
+</defs>
+<g clip-path="url(#tile)">
+<rect width="512" height="512" fill="url(#bg)"/>
+<g transform="translate(256 256) scale(0.96) translate(-256 -246)">
+<g filter="url(#halo)" opacity=".45" stroke-linejoin="round" stroke-width="34">
+<path d="M140,150 L150,150 L236,372 L80,372 Z" fill="#19dcf5" stroke="#19dcf5"/><path d="M362,150 L372,150 L432,372 L276,372 Z" fill="#f03fe2" stroke="#f03fe2"/><path d="M251,112 L261,112 L346,392 L166,392 Z" fill="#ffc533" stroke="#ffc533"/>
+</g>
+<g filter="url(#drop)" style="isolation:isolate" stroke-linejoin="round" stroke-width="34">
+<path d="M140,150 L150,150 L236,372 L80,372 Z" fill="url(#cy)" stroke="url(#cy)" style="mix-blend-mode:screen"/>
+<path d="M362,150 L372,150 L432,372 L276,372 Z" fill="url(#pk)" stroke="url(#pk)" style="mix-blend-mode:screen"/>
+<path d="M251,112 L261,112 L346,392 L166,392 Z" fill="url(#wm)" stroke="url(#wm)" style="mix-blend-mode:screen"/>
+</g>
+<g filter="url(#dropS)"><rect x="116" y="120" width="58" height="22" rx="9" fill="url(#metal)"/><rect x="123" y="123" width="44" height="3" rx="1.5" fill="#fff" opacity=".22"/><rect x="338" y="120" width="58" height="22" rx="9" fill="url(#metal)"/><rect x="345" y="123" width="44" height="3" rx="1.5" fill="#fff" opacity=".22"/><rect x="227" y="82" width="58" height="22" rx="9" fill="url(#metal)"/><rect x="234" y="85" width="44" height="3" rx="1.5" fill="#fff" opacity=".22"/></g>
+</g>
+</g>
 </svg>
