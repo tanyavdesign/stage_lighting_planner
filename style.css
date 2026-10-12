@@ -803,6 +803,21 @@ body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing
 }
 }
 
+/* ---------- Light settings, and the controls they produce ---------- */
+#lights { z-index: 60; padding: 16px; }
+.lights-kind { padding: 8px 0 16px; border-bottom: 1px solid var(--line); }
+.lights-kind select { flex: 0 1 180px; }
+.lights-color input[type="text"] { flex: 1; min-width: 0; }
+.lights-add { margin-top: 8px; gap: 6px; }
+.lights-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; }
+.lights-note { margin-top: 10px; }
+.color-pick { flex: 0 0 auto; width: 36px; height: var(--ctl); padding: 2px; background: var(--field); border: 1px solid transparent; border-radius: 5px; cursor: pointer; }
+.swatches { align-items: center; }
+.swatches .btn { padding: 0 10px; }
+.palette-seg .btn { min-width: 56px; }
+.white-slide { flex: 1 1 120px; min-width: 100px; accent-color: var(--accent); }
+.white-tag { min-width: 52px; font-variant-numeric: tabular-nums; }
+
 /* ---------- Tours: the first question, then cards that point at the real controls ---------- */
 .role-card { width: min(400px, 100%); }
 .role-body { display: flex; flex-direction: column; gap: 12px; padding: 24px 20px 20px; }

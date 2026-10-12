@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121409">
+<link rel="stylesheet" href="style.css?v=202610121426">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -81,6 +81,7 @@
       <h2 class="home-title" id="home-heading">Projects</h2>
       <div class="spacer"></div>
       <button id="home-layout" class="btn" hidden>Edit stage layout</button>
+      <button id="home-lights" class="btn" hidden>Light settings</button>
       <button id="pick-download" class="btn" hidden>Download</button>
       <button id="pick-all" class="btn" hidden>Select all</button>
     </div>
@@ -145,6 +146,12 @@
           <div id="tpl-grid" class="tpl-grid"></div>
         </div>
       </div>
+    </div>
+  </div>
+  <div id="lights" class="tpl-back" hidden>
+    <div class="mini" role="dialog" aria-label="Light settings">
+      <div class="tpl-head"><h2 id="lights-title">Light settings</h2><button id="lights-save" class="btn primary" type="button">Save</button><button id="lights-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+      <div class="mini-body" id="lights-body"></div>
     </div>
   </div>
 </div>
@@ -383,6 +390,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121409"></script>
+<script src="app.js?v=202610121426"></script>
 </body>
 </html>

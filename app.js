@@ -52,6 +52,42 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 const hex2rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 const RGB = {};
 for (const name in COLORS) RGB[name] = hex2rgb(COLORS[name]);
+// A light's colour is one of the nine classic names above or any hex value ("#ffcc00"),
+// which is what a template's own colour set, the RGB picker and the white slider store.
+const hexOf = (value) => (value && value[0] === '#' ? value : COLORS[value] || '');
+const rgbOf = (value) => RGB[value] || (RGB[value] = /^#[0-9a-f]{6}$/i.test(value) ? hex2rgb(value) : [0, 0, 0]);
+// White light from warm (2700 K) to cool (6500 K), as a hex colour.
+function kelvinHex(k) {
+  const t = k / 100;
+  const r = t <= 66 ? 255 : 329.698727446 * Math.pow(t - 60, -0.1332047592);
+  const g = t <= 66 ? 99.4708025861 * Math.log(t) - 161.1195681661 : 288.1221695283 * Math.pow(t - 60, -0.0755148492);
+  const b = t >= 66 ? 255 : t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+  return '#' + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+}
+const KELVINS = Array.from({ length: 39 }, (_, i) => 2700 + i * 100);
+// How each kind of light is controlled, set by the project's stage template. Each kind has a
+// type: 'set' (a list of named colours), 'onoff', 'rgb' (any colour) or 'white' (warm to cool).
+// Without settings of its own a project gets the classic colours.
+const LIGHT_KINDS = [['led', 'LEDs'], ['cyclo', 'Cyclorama']];
+const LIGHT_TYPES = [['set', 'Color set'], ['onoff', 'On / off'], ['rgb', 'RGB spectrum'], ['white', 'White spectrum']];
+function lightsOf(owner) {
+  const named = (names) => names.map((name) => ({ name: name[0].toUpperCase() + name.slice(1), value: name }));
+  const own = (owner && owner.lights) || {};
+  return {
+    led: own.led || { type: 'set', colors: named(Object.keys(COLORS)) },
+    cyclo: own.cyclo || { type: 'set', colors: named(CYCLO.filter((name) => name !== 'none')) },
+  };
+}
+// What to call a colour on the PDF: its name in the set, or what the picker or slider made.
+function colorLabel(value, cfg) {
+  const same = (a, b) => hexOf(a).toLowerCase() === hexOf(b).toLowerCase();
+  const hit = cfg && cfg.type === 'set' && cfg.colors.find((c) => same(c.value, value));
+  if (hit) return hit.name;
+  if (COLORS[value]) return value[0].toUpperCase() + value.slice(1);
+  if (cfg && cfg.type === 'onoff') return 'On';
+  const kelvin = KELVINS.find((k) => kelvinHex(k) === String(value).toLowerCase());
+  return kelvin ? `White ${kelvin} K` : String(value).toUpperCase();
+}
 
 // LEDs and spotlights come from the project's layout: a list of { id, x, y } for each.
 // The template below is the KDT TB UCC stage; a project can move, add and remove them.
@@ -276,6 +312,7 @@ const ICONS = {
   folder: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5z"/>',
   moveto: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5zM7 9h4M9.4 7.4 11 9l-1.6 1.6"/>',
   help: '<circle cx="8" cy="8" r="5.5"/><path d="M6.4 6.5a1.7 1.7 0 1 1 2.5 1.5c-.6.3-.9.7-.9 1.2M8 11.2h.01"/>',
+  sliders: '<path d="M2.5 5h3.5M9.5 5h4M2.5 11h5M11 11h2.5"/><circle cx="7.7" cy="5" r="1.7"/><circle cx="9.3" cy="11" r="1.7"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -401,7 +438,7 @@ function compute(look, t, out) {
           break;
       }
     }
-    const c = name ? RGB[name] : ZERO;
+    const c = name ? rgbOf(name) : ZERO;
     out[o] = c[0] * k; out[o + 1] = c[1] * k; out[o + 2] = c[2] * k;
     out[o + 3] = tx; out[o + 4] = tz; out[o + 5] = wide;
   }
@@ -409,7 +446,7 @@ function compute(look, t, out) {
   out[O_FACE] = look.face / 3;
   SIDE_TYPES.forEach(([id], i) => { out[O_TYPE + i] = look.sideTypes[id] ? 1 : 0; });
   SIDES.forEach((side, s) => look.sidePos[side].forEach((on, j) => { out[O_POS + s * 5 + j] = on ? 1 : 0; }));
-  const c = look.cyclo === 'none' ? ZERO : RGB[look.cyclo];
+  const c = look.cyclo === 'none' ? ZERO : rgbOf(look.cyclo);
   out[O_CYC] = c[0]; out[O_CYC + 1] = c[1]; out[O_CYC + 2] = c[2];
 }
 
@@ -798,6 +835,7 @@ svg.addEventListener('wheel', (e) => {
 // Controls
 // ---------------------------------------------------------------------------
 const ui = { face: [], sideTypes: {}, cyclo: {} };
+const LIGHTS = lightsOf(currentProject());      // how this project's LEDs and cyclorama are controlled
 
 function button(parent, text, cls, onClick) {
   const b = document.createElement('button');
@@ -808,14 +846,54 @@ function button(parent, text, cls, onClick) {
 }
 
 function forSelection(fn) { for (const id of selection) fn(id); commit(); }
+// The colour controls for one kind of light, as its settings ask: swatches, an on/off pair,
+// a colour picker or a warm-to-cool slider. `apply` gets the chosen value, or '' for off.
+// `mark` collects the buttons by value so the current one can be highlighted.
+function palette(box, cfg, apply, mark) {
+  box.textContent = '';
+  const off = () => {
+    const b = button(box, '', 'swatch off', () => apply(''));
+    b.title = 'Off';
+    if (mark) mark.none = b;
+  };
+  if (cfg.type === 'onoff') {
+    const seg = document.createElement('div');
+    seg.className = 'seg palette-seg';
+    const on = button(seg, 'On', 'btn', () => apply('#ffffff'));
+    const no = button(seg, 'Off', 'btn', () => apply(''));
+    if (mark) { mark['#ffffff'] = on; mark.none = no; }
+    box.appendChild(seg);
+  } else if (cfg.type === 'rgb') {
+    const pick = document.createElement('input');
+    pick.type = 'color'; pick.className = 'color-pick'; pick.value = '#ff40e9'; pick.title = 'Pick any color';
+    pick.addEventListener('change', () => apply(pick.value));
+    const use = button(box, 'Apply', 'btn', () => apply(pick.value));
+    box.insertBefore(pick, use);
+    off();
+  } else if (cfg.type === 'white') {
+    const slide = document.createElement('input');
+    slide.type = 'range'; slide.min = 2700; slide.max = 6500; slide.step = 100; slide.value = 4000; slide.className = 'white-slide';
+    const tag = document.createElement('span');
+    tag.className = 'hint white-tag';
+    const show = () => { tag.textContent = slide.value + ' K'; };
+    slide.addEventListener('input', show);
+    slide.addEventListener('change', () => apply(kelvinHex(+slide.value)));
+    show();
+    box.appendChild(slide); box.appendChild(tag);
+    off();
+  } else {
+    for (const color of cfg.colors) {
+      const b = button(box, '', 'swatch', () => apply(color.value));
+      b.style.background = hexOf(color.value); b.title = color.name;
+      if (mark) mark[color.value] = b;
+    }
+    off();
+  }
+}
 const each = (selector, fn) => document.querySelectorAll(selector).forEach(fn);
 
 function buildControls() {
-  for (const name in COLORS) {
-    const b = button($('led-colors'), '', 'swatch', () => forSelection((id) => { state.leds[id] = name; }));
-    b.style.background = COLORS[name]; b.title = name;
-  }
-  button($('led-colors'), '', 'swatch off', () => forSelection((id) => { delete state.leds[id]; })).title = 'off';
+  palette($('led-colors'), LIGHTS.led, (value) => forSelection((id) => { if (value) state.leds[id] = value; else delete state.leds[id]; }));
   $('aim-down').addEventListener('click', () => { aiming = false; forSelection((id) => { delete state.aim[id]; }); });
   $('aim-zone').addEventListener('click', () => { aiming = !aiming; syncUI(); });
   $('deselect').addEventListener('click', () => { clearSelection(); syncUI(); });
@@ -850,12 +928,7 @@ function buildControls() {
   for (const [id, name] of SIDE_TYPES) {
     ui.sideTypes[id] = button($('side-types'), name, 'btn', () => { state.sideTypes[id] = !state.sideTypes[id]; commit(); });
   }
-  for (const name of CYCLO) {
-    const b = button($('cyclo-colors'), '', 'swatch' + (name === 'none' ? ' off' : ''), () => { state.cyclo = name; commit(); });
-    if (name !== 'none') b.style.background = COLORS[name];
-    b.title = name;
-    ui.cyclo[name] = b;
-  }
+  palette($('cyclo-colors'), LIGHTS.cyclo, (value) => { state.cyclo = value || 'none'; commit(); }, ui.cyclo);
 
   const effect = $('effect');
   for (const [id, name] of EFFECTS) effect.add(new Option(name, id));
@@ -904,7 +977,7 @@ function buildControls() {
   $('layout-save-tpl').addEventListener('click', () => {
     const field = $('layout-tpl-name'), name = field.value.trim();
     if (!name) { field.focus(); return toast('Give the template a name first.', 2500); }
-    templates.unshift({ id: 't' + newId(), name, layout: copyLayout(work), created: Date.now() });
+    templates.unshift({ id: 't' + newId(), name, layout: copyLayout(work), lights: currentProject().lights && clone(currentProject().lights), created: Date.now() });
     saveTemplates();
     field.value = '';
     toast(`Saved "${name}" to My templates.`, 3000);
@@ -1274,8 +1347,8 @@ function paintPlan(look, bare) {
   const targets = aimTargets(look);
   for (const led of LEDS) {
     const n = planEls.leds[led.id], c = look.leds[led.id], zone = look.aim[led.id];
-    n.style.fill = c ? COLORS[c] : '';
-    n.style.filter = c ? `drop-shadow(0 0 6px ${COLORS[c]})` : '';
+    n.style.fill = c ? hexOf(c) : '';
+    n.style.filter = c ? `drop-shadow(0 0 6px ${hexOf(c)})` : '';
     n.classList.toggle('lit', !!c);
     n.classList.toggle('selected', !bare && selection.has(led.id));
     const line = planEls.aims[led.id];
@@ -1297,7 +1370,7 @@ function paintPlan(look, bare) {
     n.classList.toggle('selected', !bare && selSides.has(side + i));
     n.parentNode.classList.toggle('sel', !bare && selSides.has(side + i));
   });
-  planEls.cyclo.style.fill = look.cyclo === 'none' ? '' : COLORS[look.cyclo];
+  planEls.cyclo.style.fill = look.cyclo === 'none' ? '' : hexOf(look.cyclo);
   planEls.cyclo.classList.toggle('none', look.cyclo === 'none');
   planEls.cyclo.classList.toggle('selected', !bare && selCyclo);
 
@@ -2402,7 +2475,7 @@ function lookRows(look) {
   }
   const leds = [...groups].map(([key, ids]) => {
     const [colour, zone] = key.split('|');
-    return { dot: COLORS[colour], text: `${capital(colour)}: ${ranges(ids, 'F')}, ${+zone ? 'aimed at ' + zoneText(zone) : 'straight down'}` };
+    return { dot: hexOf(colour), text: `${colorLabel(colour, LIGHTS.led)}: ${ranges(ids, 'F')}, ${+zone ? 'aimed at ' + zoneText(zone) : 'straight down'}` };
   });
   const spots = SPOTS.filter((s) => look.spots[s.id]).map((s) => +s.id);
   return [
@@ -2411,7 +2484,7 @@ function lookRows(look) {
     ['Spotlights', [{ text: spots.length ? ranges(spots, '') : 'All off' }]],
     ['Face lights', [{ text: FACE_LEVELS[look.face] || 'Off' }]],
     ['Side lights', [{ text: sideText(look) }]],
-    ['Cyclorama', [look.cyclo === 'none' ? { text: 'None' } : { text: capital(look.cyclo), dot: COLORS[look.cyclo] }]],
+    ['Cyclorama', [look.cyclo === 'none' ? { text: 'None' } : { text: colorLabel(look.cyclo, LIGHTS.cyclo), dot: hexOf(look.cyclo) }]],
   ];
 }
 
@@ -2781,6 +2854,8 @@ function createProject(name, stage, from) {
   const own = from && from.layout && Array.isArray(from.layout.leds) ? from.layout : (tpl.builtin ? null : copyLayout(tpl.layout));
   if (own) raw.set(projectKey(LAYOUT_KEY, id), own);
   const project = { id, name: name || 'Untitled project', template: (from && from.template) || tpl.name, templateId: (from && from.templateId) || tpl.id, created: Date.now(), updated: Date.now(), cues: 0, items: [] };
+  const lights = (from && from.lights) || tpl.lights;
+  if (lights) project.lights = clone(lights);
   projects.unshift(project);
   saveProjects();
   return project;
@@ -2823,7 +2898,7 @@ function dropItem(item) {
 }
 async function duplicateProject(project) {
   const custom = raw.get(projectKey(LAYOUT_KEY, project.id), null);
-  const copy = createProject(project.name + ' copy', null, { layout: custom, template: project.template, templateId: project.templateId });
+  const copy = createProject(project.name + ' copy', null, { layout: custom, template: project.template, templateId: project.templateId, lights: project.lights });
   copy.thumb = project.thumb;
   for (const item of project.items) await copyItem(item, copy);
   saveProjects();
@@ -2946,7 +3021,7 @@ async function packProject(project) {
     files.push({ name: paths[i], bytes: jsonBytes(Object.assign(data, { track: path })) });
     if (track) files.push({ name: path, bytes: new Uint8Array(await track.arrayBuffer()) });
   }
-  files.unshift({ name: 'project.json', bytes: jsonBytes({ format: 'slp-project', version: 1, name: project.name, template: project.template, templateId: project.templateId, layout: projectLayout(project), items: paths }) });
+  files.unshift({ name: 'project.json', bytes: jsonBytes({ format: 'slp-project', version: 1, name: project.name, template: project.template, templateId: project.templateId, layout: projectLayout(project), lights: project.lights, items: paths }) });
   return zipWrite(files);
 }
 const AUDIO_TYPES = { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', flac: 'audio/flac' };
@@ -3076,7 +3151,7 @@ function renderHome() {
   const view = prefs.homeView || 'tile';
   list.className = 'project-list view-' + view;
   each('[data-home-view]', (b) => b.classList.toggle('active', b.dataset.homeView === view));
-  $('home-layout').hidden = !project;
+  $('home-layout').hidden = $('home-lights').hidden = !project;
   $('home-back').hidden = $('new-item-wrap').hidden = !project;
   $('home-logo').hidden = $('new-project').hidden = $('draft-new').hidden = !!project;
   $('import-arrow').hidden = !!project;
@@ -3283,6 +3358,80 @@ function renderHome() {
   add.innerHTML = svgIcon('plus') + `<span>${project ? 'New item' : 'New project'}</span>`;
 }
 
+// Light settings: how the LEDs and the cyclorama are controlled. Edited for a template (new
+// projects made from it get them) or for one project. `owner` is the template or project.
+let lightsDraft = null, lightsDone = null;
+function editLights(title, owner, save) {
+  const now = lightsOf(owner);
+  // work on a copy with every colour as a hex value, so each row has a colour to show
+  lightsDraft = {};
+  for (const [kind] of LIGHT_KINDS) lightsDraft[kind] = { type: now[kind].type, colors: (now[kind].colors || []).map((c) => ({ name: c.name, value: hexOf(c.value).toLowerCase() })) };
+  lightsDone = () => { owner.lights = lightsDraft; save(); };
+  $('lights-title').textContent = 'Light settings · ' + title;
+  $('lights').hidden = false;
+  renderLights();
+}
+function renderLights() {
+  const body = $('lights-body');
+  body.textContent = '';
+  for (const [kind, label] of LIGHT_KINDS) {
+    const cfg = lightsDraft[kind], block = document.createElement('div');
+    block.className = 'lights-kind';
+    const head = document.createElement('div');
+    head.className = 'line';
+    const name = document.createElement('span');
+    name.className = 'lbl mini-lbl'; name.textContent = label;
+    const type = document.createElement('select');
+    for (const [id, text] of LIGHT_TYPES) type.add(new Option(text, id, false, id === cfg.type));
+    type.addEventListener('change', () => { cfg.type = type.value; renderLights(); });
+    head.appendChild(name); head.appendChild(type); block.appendChild(head);
+    if (cfg.type === 'set') {
+      cfg.colors.forEach((color, i) => {
+        const row = document.createElement('div');
+        row.className = 'line lights-color';
+        const pick = document.createElement('input');
+        pick.type = 'color'; pick.className = 'color-pick'; pick.value = color.value;
+        pick.addEventListener('input', () => { color.value = pick.value; });
+        const text = document.createElement('input');
+        text.type = 'text'; text.value = color.name; text.maxLength = 24; text.placeholder = 'Color name';
+        text.addEventListener('input', () => { color.name = text.value; });
+        row.appendChild(pick); row.appendChild(text);
+        const drop = button(row, '', 'btn icon', () => { cfg.colors.splice(i, 1); renderLights(); });
+        drop.innerHTML = svgIcon('close'); drop.title = 'Remove this color';
+        block.appendChild(row);
+      });
+      const add = button(block, 'Add color', 'btn lights-add', () => { cfg.colors.push({ name: '', value: '#ffffff' }); renderLights(); });
+      add.insertAdjacentHTML('afterbegin', svgIcon('plus'));
+    } else {
+      const note = document.createElement('p');
+      note.className = 'hint lights-note';
+      note.textContent = { onoff: 'A simple On and Off pair.', rgb: 'A color picker: any color at all.', white: 'A slider from warm white (2700 K) to cool white (6500 K).' }[cfg.type];
+      block.appendChild(note);
+    }
+    body.appendChild(block);
+  }
+  const rest = document.createElement('p');
+  rest.className = 'hint lights-note';
+  rest.textContent = 'Spotlights are on or off. Face lights and side lights keep their own controls.';
+  body.appendChild(rest);
+}
+function buildLights() {
+  const close = () => { $('lights').hidden = true; lightsDraft = lightsDone = null; };
+  $('lights-close').innerHTML = svgIcon('close');
+  $('lights-close').addEventListener('click', close);
+  $('lights').addEventListener('click', (e) => { if (e.target === $('lights')) close(); });
+  $('lights-save').addEventListener('click', () => {
+    for (const [kind] of LIGHT_KINDS) {
+      const cfg = lightsDraft[kind];
+      cfg.colors = cfg.colors.map((c, i) => ({ name: c.name.trim() || `Color ${i + 1}`, value: c.value }));
+      if (cfg.type === 'set' && !cfg.colors.length) return toast('A color set needs at least one color.', 3000);
+    }
+    lightsDone();
+    close();
+    toast('Light settings saved.', 2500);
+  });
+}
+
 // A small plan of a template's stage for its card.
 function templatePreview(layout) {
   const leds = layout.leds.map((l) => `<rect class="tp-led" x="${l.x - 17}" y="${l.y - 9}" width="34" height="18" rx="9"/>`).join('');
@@ -3337,9 +3486,12 @@ function renderTemplates() {
         field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
       });
     }
+    if (tpl !== SCRATCH && !tpl.builtin) {
+      act('sliders', 'Light settings', () => editLights(tpl.name, tpl, saveTemplates));
+    }
     if (tpl !== SCRATCH) {
       act('copy', 'Duplicate', () => {
-        templates.unshift({ id: 't' + newId(), name: tpl.name + ' copy', layout: copyLayout(tpl.layout), created: Date.now() });
+        templates.unshift({ id: 't' + newId(), name: tpl.name + ' copy', layout: copyLayout(tpl.layout), lights: tpl.lights && clone(tpl.lights), created: Date.now() });
         saveTemplates(); renderTemplates();
       });
     }
@@ -3496,6 +3648,8 @@ function buildHome() {
     b.innerHTML = svgIcon('view' + b.dataset.homeView);
     b.addEventListener('click', () => { prefs.homeView = b.dataset.homeView; store.set('kdt-lighting-prefs-v1', prefs); renderHome(); });
   });
+  buildLights();
+  $('home-lights').addEventListener('click', () => editLights(currentProject().name, currentProject(), saveProjects));
   $('home-layout').addEventListener('click', () => {
     const project = currentProject();
     if (!project.items.length) return toast('Add an item first: the layout editor opens on one of the project\'s items.', 3500);
