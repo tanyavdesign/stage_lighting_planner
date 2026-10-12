@@ -439,6 +439,16 @@ body.watch .view, body.watch .view[data-view="front"] { flex: 1 1 0; }
   .grip { display: none; }
 }
 
+/* ---------- Layout editor ---------- */
+#layout-panel { display: none; }
+body.layout-mode #layout-panel { display: block; }
+body.layout-mode #mods > .group { display: none; }
+body.layout-mode .plan .fx[data-kind] { cursor: move; }
+body.layout-mode .history { display: none; }
+.plan .led.picked, .plan .spot.picked { stroke: var(--accent); stroke-width: 5; }
+#layout-panel .line { flex-wrap: wrap; }
+#layout-panel input[type="number"] { width: 80px; }
+
 /* ---------- Project list (home screen) ---------- */
 #home { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; }
 body.at-home > main, body.at-home > .dock { visibility: hidden; }

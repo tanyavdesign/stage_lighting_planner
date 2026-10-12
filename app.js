@@ -53,16 +53,44 @@ const hex2rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 25
 const RGB = {};
 for (const name in COLORS) RGB[name] = hex2rgb(COLORS[name]);
 
-const LEDS = [];
-LED_ROWS.forEach((r, row) => LED_X.forEach((x, col) => {
-  const idx = row * 9 + col, [x3, z3] = to3(x, r.y);
-  LEDS.push({ id: 'F' + (r.first - col), x, y: r.y, x3, z3, row, col, idx, s1: rand(idx + 1), s2: rand(idx + 101), s3: rand(idx + 201) });
-}));
-const SPOTS = [];
-SPOT_ROWS.forEach((r, row) => SPOT_X.forEach((x, col) => {
-  const [x3, z3] = to3(x, r.y);
-  SPOTS.push({ id: String(r.first - col), x, y: r.y, x3, z3, row });
-}));
+// LEDs and spotlights come from the project's layout: a list of { id, x, y } for each.
+// The template below is the KDT TB UCC stage; a project can move, add and remove them.
+function templateLayout() {
+  const leds = [], spots = [];
+  LED_ROWS.forEach((r) => LED_X.forEach((x, col) => leds.push({ id: 'F' + (r.first - col), x, y: r.y })));
+  SPOT_ROWS.forEach((r) => SPOT_X.forEach((x, col) => spots.push({ id: String(r.first - col), x, y: r.y })));
+  return { leds, spots };
+}
+// Sort fixtures into rows (back to front) and columns (left to right) by where they sit.
+// Fixtures within about a third of a metre of depth of each other count as one row.
+// Effects, quick picks and aiming all work from these rows and columns.
+function inRows(items) {
+  const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x), rows = [];
+  for (const item of sorted) {
+    const row = rows[rows.length - 1];
+    if (row && item.y - row[0].y <= 30) row.push(item); else rows.push([item]);
+  }
+  rows.forEach((row) => row.sort((a, b) => a.x - b.x));
+  return rows;
+}
+const LEDS = [], SPOTS = [], LED_ROW_Y = [];       // filled by useLayout once the project is known
+let ledRows = 0, spotRows = 0;
+function useLayout(layout) {
+  LEDS.length = SPOTS.length = LED_ROW_Y.length = 0;
+  const leds = inRows(layout.leds), spots = inRows(layout.spots);
+  ledRows = leds.length; spotRows = spots.length;
+  leds.forEach((items, row) => {
+    LED_ROW_Y.push(items.reduce((sum, it) => sum + it.y, 0) / items.length);
+    items.forEach((it, col) => {
+      const idx = LEDS.length, [x3, z3] = to3(it.x, it.y);
+      LEDS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, col, idx, s1: rand(idx + 1), s2: rand(idx + 101), s3: rand(idx + 201) });
+    });
+  });
+  spots.forEach((items, row) => items.forEach((it) => {
+    const [x3, z3] = to3(it.x, it.y);
+    SPOTS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row });
+  }));
+}
 const SIDE_Z = SIDE_Y.map((y) => to3(0, y)[1]);
 const PEOPLE = PEOPLE_AT.map(([x, y]) => { const [x3, z3] = to3(x, y); return { x3, z3 }; });
 const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
@@ -113,7 +141,8 @@ const blankLook = () => ({
 // Which project is open is remembered per browser tab, so the app starts on the project
 // list and a reload stays inside the project you were in.
 const TEMPLATE = 'KDT TB UCC Layout';        // the only stage layout so far
-const LOOK_KEY = 'kdt-lighting-v1', SHOW_KEY = 'kdt-lighting-show-v1', PROJECTS_KEY = 'slp-projects-v1';
+const LOOK_KEY = 'kdt-lighting-v1', SHOW_KEY = 'kdt-lighting-show-v1', LAYOUT_KEY = 'slp-layout-v1', PROJECTS_KEY = 'slp-projects-v1';
+const PER_PROJECT = [LOOK_KEY, SHOW_KEY, LAYOUT_KEY];
 const raw = {
   get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (e) { return fallback; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ } },
@@ -144,11 +173,11 @@ const saveProjects = () => raw.set(PROJECTS_KEY, projects);
 // project (and nowhere when the project list is showing); anything else is app-wide.
 const store = {
   get(key, fallback) {
-    if (key !== LOOK_KEY && key !== SHOW_KEY) return raw.get(key, fallback);
+    if (!PER_PROJECT.includes(key)) return raw.get(key, fallback);
     return currentId ? raw.get(projectKey(key, currentId), fallback) : fallback;
   },
   set(key, value) {
-    if (key !== LOOK_KEY && key !== SHOW_KEY) return raw.set(key, value);
+    if (!PER_PROJECT.includes(key)) return raw.set(key, value);
     if (!currentId) return;
     raw.set(projectKey(key, currentId), value);
     const project = currentProject();
@@ -182,6 +211,10 @@ const audioStore = {
   get(id) { return this.run('readonly', (s) => s.get(id)).catch(() => null); },
   del(id) { return this.run('readwrite', (s) => s.delete(id)).catch(() => {}); },
 };
+
+// The project's own layout if it has been customised, otherwise the template.
+let layout = store.get(LAYOUT_KEY, null) || templateLayout();
+useLayout(layout);
 
 let state = Object.assign(blankLook(), store.get(LOOK_KEY, {}));
 let show = Object.assign({ cues: [], trackName: '' }, store.get(SHOW_KEY, {}));
@@ -510,6 +543,38 @@ function tapFixture(g) {
   if (h.onDouble && now - h.last < 350) { h.last = 0; h.onDouble(); } else { h.last = now; h.onTap(); }
 }
 
+// Draw the LEDs and spotlights (and their labels and aim lines) into their layer.
+// Called once normally, and again after every change while the layout is being edited.
+function drawFixtures(leds, spots, editing) {
+  const layer = planEls.fixtureLayer;
+  layer.textContent = '';
+  planEls.leds = {}; planEls.aims = {}; planEls.spots = {};
+  const text = (x, y, value) => el('text', { x, y, 'text-anchor': 'middle' }, value, layer);
+  const tag = (shape, kind, id) => {             // lets the layout editor find what was pressed
+    shape.parentNode.dataset.kind = kind; shape.parentNode.dataset.id = id;
+    if (editing && editing.kind === kind && editing.id === id) shape.classList.add('picked');
+    return shape;
+  };
+  const aims = el('g', {}, null, layer);
+  const firstRowY = Math.min(...leds.map((l) => l.y));
+  for (const led of leds) {
+    planEls.aims[led.id] = el('line', { x1: led.x, y1: led.y, x2: led.x, y2: led.y, class: 'aim' }, null, aims);
+    planEls.leds[led.id] = tag(fixture(
+      ['rect', { x: led.x - 35, y: led.y - 19, width: 70, height: 38 }],
+      ['rect', { x: led.x - 23, y: led.y - 13, width: 46, height: 26, rx: 13, class: 'led' }],
+      () => { toggleIn(selection, led.id); syncUI(); }, null, layer), 'led', led.id);
+    text(led.x, led.y - firstRowY <= 30 ? led.y - 19 : led.y + 29, led.id);    // back row labels sit above
+  }
+  for (const s of spots) {
+    planEls.spots[s.id] = tag(fixture(
+      ['circle', { cx: s.x, cy: s.y, r: 23 }],
+      ['circle', { cx: s.x, cy: s.y, r: 17, class: 'spot' }],
+      () => { toggleIn(selSpots, s.id); syncUI(); },
+      () => { selSpots.delete(s.id); state.spots[s.id] = !state.spots[s.id]; commit(); }, layer), 'spot', s.id);
+    text(s.x, s.y + 34, s.id);
+  }
+}
+
 function buildPlan() {
   el('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
   for (const c of [0, 1, 2, 3]) el('line', { x1: ZONES.x + ZONES.w * c, y1: 244, x2: ZONES.x + ZONES.w * c, y2: 816, class: 'grid' });
@@ -546,23 +611,8 @@ function buildPlan() {
         () => { selSides.delete(key); state.sidePos[side][i] = !state.sidePos[side][i]; commit(); }));
     });
   }
-  const aims = el('g', {});
-  for (const led of LEDS) {
-    planEls.aims[led.id] = el('line', { x1: led.x, y1: led.y, x2: led.x, y2: led.y, class: 'aim' }, null, aims);
-    planEls.leds[led.id] = fixture(
-      ['rect', { x: led.x - 35, y: led.y - 19, width: 70, height: 38 }],
-      ['rect', { x: led.x - 23, y: led.y - 13, width: 46, height: 26, rx: 13, class: 'led' }],
-      () => { toggleIn(selection, led.id); syncUI(); });
-    label(led.x, led.row === 0 ? led.y - 19 : led.y + 29, led.id);
-  }
-  for (const s of SPOTS) {
-    planEls.spots[s.id] = fixture(
-      ['circle', { cx: s.x, cy: s.y, r: 23 }],
-      ['circle', { cx: s.x, cy: s.y, r: 17, class: 'spot' }],
-      () => { toggleIn(selSpots, s.id); syncUI(); },
-      () => { selSpots.delete(s.id); state.spots[s.id] = !state.spots[s.id]; commit(); });
-    label(s.x, s.y + 34, s.id);
-  }
+  planEls.fixtureLayer = el('g', {});
+  drawFixtures(LEDS, SPOTS);
   for (const x of FACE_X) {
     planEls.face.push(fixture(
       ['rect', { x: x - 22, y: FACE_Y - 30, width: 44, height: 60 }],
@@ -606,6 +656,7 @@ svg.addEventListener('pointerdown', (e) => {
     return;
   }
   if (pointers.size > 2) return;
+  if (layoutMode) return layoutPress(e);
   drag = { fx: e.target.closest('.fx'), x: e.clientX, y: e.clientY, start: svgPoint(e), rect: null };
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
 });
@@ -617,6 +668,7 @@ svg.addEventListener('pointermove', (e) => {
     suppressTapsUntil = performance.now() + 400;     // lifting fingers after a pinch is not a tap
     return;
   }
+  if (layoutMode) return layoutDrag(e);
   if (!drag || aiming) return;
   if (!drag.rect && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
   if (!drag.rect) drag.rect = el('rect', { class: 'box' });
@@ -629,6 +681,7 @@ svg.addEventListener('pointermove', (e) => {
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
+  if (layoutMode) { moving = null; return; }
   if (!drag) return;
   const d = drag;
   drag = null;
@@ -696,6 +749,13 @@ function buildControls() {
   }));
 
   // Quick picks above the plan, e.g. "led:all", "spot:1" (a row) or "side:all".
+  // one button per row of LEDs and of spotlights, however many rows the layout has
+  const rowNames = (n) => (n === 3 ? ['Back', 'Mid', 'Front'] : n === 2 ? ['Back', 'Front'] : Array.from({ length: n }, (_, i) => 'Row ' + (i + 1)));
+  for (const [kind, box, rows] of [['led', $('led-picks'), ledRows], ['spot', $('spot-picks'), spotRows]]) {
+    box.textContent = '';
+    button(box, 'All', 'btn', () => {}).dataset.pick = kind + ':all';
+    if (rows > 1 && rows <= 6) rowNames(rows).forEach((name, i) => { button(box, name, 'btn', () => {}).dataset.pick = `${kind}:${i}`; });
+  }
   each('[data-pick]', (b) => b.addEventListener('click', () => {
     const [kind, which] = b.dataset.pick.split(':');
     const match = (item) => which === 'all' || item.row === +which;
@@ -746,6 +806,19 @@ function buildControls() {
   $('theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); });
   $('watch').addEventListener('click', () => setWatch(!document.body.classList.contains('watch')));
   $('plan-reset').addEventListener('click', resetView);
+  $('edit-layout').addEventListener('click', enterLayout);
+  $('layout-add-led').addEventListener('click', () => layoutAdd('led'));
+  $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
+  $('layout-delete').addEventListener('click', layoutDelete);
+  $('layout-number').addEventListener('change', layoutRenumber);
+  $('layout-done').addEventListener('click', layoutDone);
+  $('layout-cancel').addEventListener('click', () => location.reload());
+  $('layout-template').addEventListener('click', () => {
+    const template = templateLayout(), had = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
+    const keep = (list) => list.map((it) => (had.has(it.id) ? Object.assign({ was: it.id }, it) : it));
+    work = { leds: keep(template.leds), spots: keep(template.spots), picked: null };
+    redrawLayout();
+  });
   $('undo').addEventListener('click', () => stepHistory(history.undo, history.redo));
   $('redo').addEventListener('click', () => stepHistory(history.redo, history.undo));
   mqPhone.addEventListener('change', resetView);
@@ -762,8 +835,10 @@ function buildControls() {
 
   document.addEventListener('keydown', (e) => {
     const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
+    if (layoutMode && e.key !== 'Escape') return;       // shortcuts are for lighting, not layout editing
     if (e.key === 'Escape') {
       if (!$('menu').hidden) $('menu').hidden = true;
+      else if (layoutMode) { work.picked = null; redrawLayout(); }
       else if (aiming) { aiming = false; syncUI(); }
       else if (document.body.classList.contains('watch')) setWatch(false);
       else { clearSelection(); syncUI(); }
@@ -780,6 +855,105 @@ function buildControls() {
       if (cue) deleteCue(cue);
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Layout editor: move, add, renumber and delete LEDs and spotlights.
+// Changes are made on a working copy; Done saves it to the project and reloads, so
+// every view is rebuilt from the new layout. Cancel reloads without saving.
+// ---------------------------------------------------------------------------
+let layoutMode = false, work = null, moving = null;
+const BOUNDS = { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: STAGE.y1 - 24 };
+const numberOf = (id) => +String(id).replace(/^F/, '');
+const pickedItem = () => work.picked && work[work.picked.kind + 's'].find((it) => it.id === work.picked.id);
+
+function enterLayout() {
+  layoutMode = true;
+  clearSelection(); aiming = false;
+  // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
+  work = { leds: layout.leds.map((it) => Object.assign({ was: it.id }, it)), spots: layout.spots.map((it) => Object.assign({ was: it.id }, it)), picked: null };
+  document.body.classList.add('layout-mode');
+  $('deselect').hidden = true;
+  redrawLayout();
+}
+function redrawLayout() {
+  drawFixtures(work.leds, work.spots, work.picked);
+  const item = pickedItem();
+  $('layout-picked').hidden = !item;
+  $('layout-none').hidden = !!item;
+  if (item) {
+    $('layout-kind').textContent = work.picked.kind === 'led' ? 'LED' : 'Spotlight';
+    if (document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
+  }
+  $('layout-count').textContent = `${work.leds.length} LEDs, ${work.spots.length} spotlights`;
+}
+function layoutPress(e) {
+  const g = e.target.closest('.fx[data-kind]');
+  work.picked = g ? { kind: g.dataset.kind, id: g.dataset.id } : null;
+  const item = pickedItem();
+  moving = item ? { item, start: svgPoint(e), x: item.x, y: item.y } : null;
+  try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+  redrawLayout();
+}
+function layoutDrag(e) {
+  if (!moving) return;
+  const p = svgPoint(e), snap = (v) => Math.round(v / 5) * 5;
+  moving.item.x = Math.max(BOUNDS.x0, Math.min(BOUNDS.x1, snap(moving.x + p.x - moving.start.x)));
+  moving.item.y = Math.max(BOUNDS.y0, Math.min(BOUNDS.y1, snap(moving.y + p.y - moving.start.y)));
+  redrawLayout();
+}
+function layoutAdd(kind) {
+  const list = work[kind + 's'], n = Math.max(0, ...list.map((it) => numberOf(it.id))) + 1;
+  const id = kind === 'led' ? 'F' + n : String(n);
+  // drop it near the middle of the stage, nudged along so new ones do not stack up
+  const spare = list.filter((it) => !it.was).length;
+  list.push({ id, x: STAGE.cx - 60 + (spare % 5) * 30, y: STAGE.cy + (kind === 'led' ? -40 : 40) });
+  work.picked = { kind, id };
+  redrawLayout();
+}
+function layoutDelete() {
+  if (!work.picked) return;
+  const key = work.picked.kind + 's';
+  work[key] = work[key].filter((it) => it.id !== work.picked.id);
+  work.picked = null;
+  redrawLayout();
+}
+function layoutRenumber() {
+  const item = pickedItem(), n = Math.floor(+$('layout-number').value);
+  if (!item || !(n >= 1)) return redrawLayout();
+  const id = work.picked.kind === 'led' ? 'F' + n : String(n);
+  if (id !== item.id && work[work.picked.kind + 's'].some((it) => it.id === id)) {
+    toast(`${id} is already used in this layout`, 3000);
+    $('layout-number').value = numberOf(item.id);
+    return;
+  }
+  item.id = id; work.picked.id = id;
+  redrawLayout();
+}
+// Carry a look over to the edited layout: deleted fixtures drop out, renumbered ones follow.
+function relook(look, renamed, alive) {
+  const move = (map) => {
+    const out = {};
+    for (const id in map || {}) { const now = id in renamed ? renamed[id] : id; if (alive.has(now)) out[now] = map[id]; }
+    return out;
+  };
+  look.leds = move(look.leds); look.aim = move(look.aim); look.spots = move(look.spots);
+  return look;
+}
+function layoutDone() {
+  const renamed = {}, alive = new Set();
+  const before = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
+  for (const it of [...work.leds, ...work.spots]) { alive.add(it.id); if (it.was) renamed[it.was] = it.id; }
+  for (const id of before) if (!(id in renamed)) renamed[id] = '';        // deleted: maps to nothing
+  const plain = (list) => list.map(({ id, x, y }) => ({ id, x, y }));
+  layout = { leds: plain(work.leds), spots: plain(work.spots) };
+  layoutMode = false;                       // let the saves below go through normally
+  relook(state, renamed, alive);
+  show.cues.forEach((cue) => relook(cue.look, renamed, alive));
+  store.set(LAYOUT_KEY, layout);
+  store.set(LOOK_KEY, state);
+  saveShow();
+  location.reload();
 }
 
 function setWatch(on) {
@@ -851,6 +1025,7 @@ function applyPrefs() {
 
 // Colour the stage plan for a look. `bare` leaves out the selection outlines.
 function paintPlan(look, bare) {
+  if (layoutMode) return;                  // the plan is showing the layout being edited
   const targets = aimTargets(look);
   for (const led of LEDS) {
     const n = planEls.leds[led.id], c = look.leds[led.id], zone = look.aim[led.id];
@@ -1207,7 +1382,7 @@ function buildThree() {
   floor.rotation.x = -Math.PI / 2;
   add(new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.6, 6.4), solid(0x15151a)), 0, -0.3, 0);
   const cyclo = add(new THREE.Mesh(new THREE.PlaneGeometry(7.6, 4.6), solid(0x0c0c11)), 0, 2.3, -3.15);
-  for (const r of LED_ROWS) add(new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.06, 0.06), solid(0x222228)), 0, RIG_H + 0.1, to3(0, r.y)[1]);
+  for (const y of LED_ROW_Y) add(new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.06, 0.06), solid(0x222228)), 0, RIG_H + 0.1, to3(0, y)[1]);
 
   const leds = LEDS.map((led) => {
     const pivot = add(new THREE.Group(), led.x3, RIG_H, led.z3);
@@ -1743,7 +1918,7 @@ function fileStem() {
 }
 
 function exportShow() {
-  const blob = new Blob([JSON.stringify({ version: 1, projectName: show.projectName || '', look: state, cues: show.cues, trackName: show.trackName }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ version: 1, projectName: show.projectName || '', template: TEMPLATE, layout, look: state, cues: show.cues, trackName: show.trackName }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = fileStem() + ' - lighting show.json';
   a.click();
@@ -1763,6 +1938,12 @@ async function importShow(file) {
     state = Object.assign(blankLook(), data.look || {});
     store.set('kdt-lighting-v1', state);
     syncUI();
+    if (data.layout && Array.isArray(data.layout.leds) && JSON.stringify(data.layout) !== JSON.stringify(layout)) {
+      // the show was made on a different layout: take it too, and rebuild every view from it
+      store.set(LAYOUT_KEY, data.layout);
+      saveShow();
+      return location.reload();
+    }
     cuesChanged();
     toast(`Imported ${file.name}. Undo with Cmd+Z.`, 3500);
   } catch (e) {
@@ -2245,6 +2426,7 @@ function createProject(name, data) {      // data: an exported show to start fro
   const cues = data && Array.isArray(data.cues) ? data.cues : [];
   raw.set(projectKey(LOOK_KEY, id), (data && data.look) || blankLook());
   raw.set(projectKey(SHOW_KEY, id), { cues, trackName: '' });
+  if (data && data.layout && Array.isArray(data.layout.leds)) raw.set(projectKey(LAYOUT_KEY, id), data.layout);
   projects.unshift({ id, name: name || 'Untitled project', template: TEMPLATE, created: Date.now(), updated: Date.now(), cues: cues.length });
   saveProjects();
   return id;
@@ -2253,6 +2435,8 @@ async function duplicateProject(project) {
   const id = newId();
   raw.set(projectKey(LOOK_KEY, id), raw.get(projectKey(LOOK_KEY, project.id), {}));
   raw.set(projectKey(SHOW_KEY, id), raw.get(projectKey(SHOW_KEY, project.id), {}));
+  const custom = raw.get(projectKey(LAYOUT_KEY, project.id), null);
+  if (custom) raw.set(projectKey(LAYOUT_KEY, id), custom);
   projects.unshift(Object.assign({}, project, { id, name: project.name + ' copy', created: Date.now(), updated: Date.now() }));
   saveProjects();
   const track = await audioStore.get(project.id);
@@ -2262,6 +2446,7 @@ async function duplicateProject(project) {
 function deleteProject(project) {
   raw.del(projectKey(LOOK_KEY, project.id));
   raw.del(projectKey(SHOW_KEY, project.id));
+  raw.del(projectKey(LAYOUT_KEY, project.id));
   audioStore.del(project.id);
   projects = projects.filter((p) => p.id !== project.id);
   saveProjects();

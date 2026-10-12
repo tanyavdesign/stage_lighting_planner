@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121106">
+<link rel="stylesheet" href="style.css?v=202610121112">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -49,6 +49,7 @@
       <div id="menu" class="menu" hidden>
         <input id="project-name" class="menu-note" type="text" placeholder="Project name" title="Project name (used for exported files)" autocomplete="off">
         <button id="go-home">All projects</button>
+        <button id="edit-layout">Edit layout</button>
         <button id="watch">Watch</button>
         <button id="people">Hide people</button>
         <button id="theme">Dark mode</button>
@@ -90,6 +91,37 @@
   <div class="grip" data-grip="plan" title="Drag to resize"></div>
 
   <aside class="panel side" id="mods">
+    <div id="layout-panel">
+      <div class="group">
+        <div class="sec-head"><h3>Edit layout</h3><span id="layout-count" class="count"></span></div>
+        <p class="hint note">Drag a light on the plan to move it. The previews update when you press Done.</p>
+        <div class="line">
+          <span class="lbl">Add</span>
+          <div class="seg">
+            <button class="btn" id="layout-add-led">LED</button>
+            <button class="btn" id="layout-add-spot">Spotlight</button>
+          </div>
+        </div>
+      </div>
+      <div class="group">
+        <p class="hint" id="layout-none">Tap a light on the plan to renumber or delete it.</p>
+        <div id="layout-picked" hidden>
+          <div class="sec-head"><h3 id="layout-kind">LED</h3></div>
+          <div class="line">
+            <span class="lbl">Number</span>
+            <input id="layout-number" type="number" min="1" step="1">
+            <button class="btn" id="layout-delete">Delete</button>
+          </div>
+        </div>
+      </div>
+      <div class="group">
+        <div class="line">
+          <button class="btn primary" id="layout-done">Done</button>
+          <button class="btn" id="layout-cancel">Cancel</button>
+          <button class="btn" id="layout-template">Reset to template</button>
+        </div>
+      </div>
+    </div>
     <div class="group" id="sec-cue" hidden>
       <div id="cue-edit" class="cue-edit"></div>
     </div>
@@ -98,12 +130,7 @@
       <div class="sec-head"><h3>LEDs</h3><span id="led-count" class="count"></span></div>
       <div class="line">
         <span class="lbl">Select</span>
-        <div class="seg">
-          <button class="btn" data-pick="led:all">All</button>
-          <button class="btn" data-pick="led:0">Back</button>
-          <button class="btn" data-pick="led:1">Mid</button>
-          <button class="btn" data-pick="led:2">Front</button>
-        </div>
+        <div class="seg" id="led-picks"></div>
       </div>
       <div id="sel-leds" hidden>
         <div class="line top">
@@ -130,12 +157,7 @@
       <div class="sec-head"><h3>Spotlights</h3><span id="spot-count" class="count"></span></div>
       <div class="line">
         <span class="lbl">Select</span>
-        <div class="seg">
-          <button class="btn" data-pick="spot:all">All</button>
-          <button class="btn" data-pick="spot:0">Back</button>
-          <button class="btn" data-pick="spot:1">Mid</button>
-          <button class="btn" data-pick="spot:2">Front</button>
-        </div>
+        <div class="seg" id="spot-picks"></div>
       </div>
       <div id="sel-spots" hidden>
         <div class="line">
@@ -206,6 +228,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121106"></script>
+<script src="app.js?v=202610121112"></script>
 </body>
 </html>
