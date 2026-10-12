@@ -4,7 +4,7 @@
 // soon as there is a connection; the saved copy is only used when there is none. Files
 // from elsewhere (the 3D library, the font) rarely change, so their saved copy is used
 // straight away and refreshed in the background.
-const CACHE = 'stage-lighting-v74';
+const CACHE = 'stage-lighting-v75';
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon.svg',
