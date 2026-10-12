@@ -670,7 +670,11 @@ body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .recent .project-name { cursor: pointer; text-decoration: none; }
 /* drag this to put the item somewhere else in the order */
 .grip-handle { cursor: grab; touch-action: none; }
-.project.dragging { opacity: .55; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.grip-handle:active { cursor: grabbing; }
+.project.dragging { z-index: 5; pointer-events: none; opacity: .92; box-shadow: var(--float); cursor: grabbing; }
+.project.drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.project.drop-target > * { opacity: .45; }
+body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 /* recently edited items: small rows to jump straight back in */
 .recent-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .recent { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }

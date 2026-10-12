@@ -3033,26 +3033,47 @@ function renderHome() {
       // Items keep the order you give them: drag the handle onto another card to move this one there.
       const grip = act('grip', 'Drag to reorder', () => {});
       grip.classList.add('grip-handle');
+      // The card lifts and follows the pointer; the card it is over is outlined, and on release it
+      // takes that card's place. Nothing is moved in the page until then, so the drag cannot break off.
       grip.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         try { grip.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+        const page = $('home'), from = { x: e.clientX, y: e.clientY, scroll: page.scrollTop };
+        let target = null, last = e;
         card.classList.add('dragging');
-        const cards = () => [...list.querySelectorAll('.project[data-id]')];
-        const move = (ev) => {
-          const under = document.elementFromPoint(ev.clientX, ev.clientY);
-          const target = under && under.closest('.project[data-id]');
-          if (!target || target === card) return;
-          if (cards().indexOf(target) > cards().indexOf(card)) target.after(card); else target.before(card);
+        document.body.classList.add('reordering');
+        const follow = () => {
+          card.style.transform = `translate(${last.clientX - from.x}px, ${last.clientY - from.y + page.scrollTop - from.scroll}px) scale(1.02)`;
+          const under = document.elementFromPoint(last.clientX, last.clientY);        // the lifted card lets the pointer through
+          const over = under && under.closest('.project[data-id]');
+          if (over === target) return;
+          if (target) target.classList.remove('drop-target');
+          target = over && over !== card ? over : null;
+          if (target) target.classList.add('drop-target');
         };
-        const end = () => {
+        // near the top or bottom edge the page scrolls, so a long list can be crossed in one drag
+        const edge = setInterval(() => {
+          const y = last.clientY, step = y < 70 ? -14 : y > innerHeight - 70 ? 14 : 0;
+          if (step) { page.scrollTop += step; follow(); }
+        }, 16);
+        const move = (ev) => { last = ev; follow(); };
+        const end = (ev) => {
+          clearInterval(edge);
           grip.removeEventListener('pointermove', move);
-          const order = cards().map((c) => c.dataset.id);
-          project.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-          saveProjects(); renderHome();
+          grip.removeEventListener('pointerup', end);
+          grip.removeEventListener('pointercancel', end);
+          document.body.classList.remove('reordering');
+          if (target && ev.type === 'pointerup') {
+            const at = project.items.indexOf(thing), to = project.items.findIndex((it) => it.id === target.dataset.id);
+            project.items.splice(at, 1);
+            project.items.splice(to, 0, thing);
+            saveProjects();
+          }
+          renderHome();
         };
         grip.addEventListener('pointermove', move);
-        grip.addEventListener('pointerup', end, { once: true });
-        grip.addEventListener('pointercancel', end, { once: true });
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
       });
     }
     act('copy', 'Duplicate', () => (project ? duplicateItem(project, thing) : duplicateProject(thing)));
