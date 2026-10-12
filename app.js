@@ -266,6 +266,7 @@ const ICONS = {
   prev: '<path d="M4 3.5v9M12 3.5 6 8l6 4.5z"/>',
   next: '<path d="M12 3.5v9M4 3.5 10 8l-6 4.5z"/>',
   plus: '<path d="M8 3v10M3 8h10"/>',
+  minus: '<path d="M3 8h10"/>',
   note: '<path d="M6.5 11.5v-8l6-1.2v8"/><circle cx="4.7" cy="11.5" r="1.8"/><circle cx="10.7" cy="10.3" r="1.8"/>',
   pencil: '<path d="M10.8 2.8l2.4 2.4-7.6 7.6-3 .6.6-3zM9.3 4.3l2.4 2.4"/>',
   copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4A1.5 1.5 0 0 0 9 2.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/>',
@@ -3073,9 +3074,46 @@ function buildHome() {
   });
   $('home-back').innerHTML = svgIcon('back');
   $('home-back').addEventListener('click', () => setOpen(null, null));
-  $('new-item').addEventListener('click', async () => {
-    const project = currentProject(), item = await addItem(project);
-    setOpen(project.id, item.id);
+  // New items: choose how many, name any of them, and they are all made in one go.
+  const itemsDialog = $('items-new'), count = $('items-count'), names = $('items-names');
+  const closeItems = () => { itemsDialog.hidden = true; };
+  const howMany = () => Math.max(1, Math.min(30, Math.floor(+count.value) || 1));
+  const nameFields = () => {
+    const n = howMany(), base = currentProject().items.length;
+    while (names.children.length > n) names.lastChild.remove();
+    while (names.children.length < n) {
+      const field = document.createElement('input');
+      field.type = 'text'; field.maxLength = 60; field.autocomplete = 'off';
+      field.placeholder = `Item ${base + names.children.length + 1}`;
+      names.appendChild(field);
+    }
+    $('items-create').textContent = n === 1 ? 'Create item' : `Create ${n} items`;
+  };
+  const setCount = (n) => { count.value = Math.max(1, Math.min(30, n)); nameFields(); };
+  $('items-close').innerHTML = svgIcon('close');
+  $('items-less').innerHTML = svgIcon('minus');
+  $('items-more').innerHTML = svgIcon('plus');
+  $('items-less').addEventListener('click', () => setCount(howMany() - 1));
+  $('items-more').addEventListener('click', () => setCount(howMany() + 1));
+  count.addEventListener('input', nameFields);
+  count.addEventListener('change', () => setCount(howMany()));
+  $('items-close').addEventListener('click', closeItems);
+  itemsDialog.addEventListener('click', (e) => { if (e.target === itemsDialog) closeItems(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeItems(); });
+  $('new-item').addEventListener('click', () => {
+    names.textContent = '';
+    setCount(1);
+    itemsDialog.hidden = false;
+    names.firstChild.focus();
+  });
+  $('items-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const project = currentProject(), made = [];
+    for (const field of [...names.children]) made.push(await addItem(project, field.value.trim()));
+    if (made.length === 1) return setOpen(project.id, made[0].id);        // a single item opens straight away
+    closeItems();
+    renderHome();
+    toast(`Added ${made.length} items.`, 3000);
   });
   $('pick-all').addEventListener('click', () => {
     const things = currentProject() ? currentProject().items : projects;
