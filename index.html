@@ -29,14 +29,24 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121306">
+<link rel="stylesheet" href="style.css?v=202610121309">
 </head>
 <body data-view="front">
 <div id="home" hidden>
   <div class="home-inner">
     <div class="home-head">
       <button id="home-back" class="btn icon" aria-label="All projects" title="All projects" hidden></button>
-      <img id="home-logo" src="icons/icon.svg" width="24" height="24" alt="">
+      <div id="home-logo" class="home-menu">
+        <button id="home-more" class="logo-btn" aria-label="App menu" title="App menu"><img src="icons/icon.svg" width="32" height="32" alt=""></button>
+        <div id="home-menu" class="menu" hidden>
+          <button id="home-theme">Light mode</button>
+          <button id="home-templates">Templates</button>
+          <hr>
+          <button id="home-backup">Download all projects</button>
+          <button id="home-reload">Reload to update</button>
+          <div id="home-version" class="menu-foot"></div>
+        </div>
+      </div>
       <h1 id="home-title" hidden></h1>
       <div class="spacer"></div>
       <label class="btn">Import<input id="home-import" type="file" multiple hidden></label>
@@ -83,7 +93,7 @@
         <button class="tpl-tab" data-tpl-tab="mine">My templates</button>
       </div>
       <div class="tpl-main">
-        <div class="tpl-head"><h2>New project</h2><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
+        <div class="tpl-head"><h2 id="tpl-title">New project</h2><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
         <div class="tpl-scroll">
           <div class="tpl-details">
             <label class="tpl-field tpl-field-name"><span>Project name</span>
@@ -325,6 +335,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121306"></script>
+<script src="app.js?v=202610121309"></script>
 </body>
 </html>

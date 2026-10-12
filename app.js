@@ -2991,13 +2991,13 @@ const countText = (layout) => `${layout.leds.length} LED${layout.leds.length ===
 
 // New project: pick the stage to start on. The same window is where saved templates are
 // renamed, copied and deleted.
-let tplTab = 'all', tplPicked = null;
+let tplTab = 'all', tplPicked = null, tplManage = false;      // tplManage: opened from the app menu, only to look after templates
 function renderTemplates() {
   const grid = $('tpl-grid');
   grid.textContent = '';
   each('[data-tpl-tab]', (b) => b.classList.toggle('active', b.dataset.tplTab === tplTab));
   const shown = [
-    ...(tplTab === 'all' ? [SCRATCH] : []),
+    ...(tplTab === 'all' && !tplManage ? [SCRATCH] : []),
     ...(tplTab !== 'mine' ? [BUILTIN] : []),
     ...(tplTab !== 'builtin' ? templates : []),
   ];
@@ -3064,6 +3064,7 @@ function renderTemplates() {
   }
 }
 async function newFromTemplate() {
+  if (tplManage) return;
   if (!tplPicked) return toast('Pick a template, or Start from scratch.', 2500);
   const project = createProject($('new-name').value.trim(), tplPicked);
   const made = [];
@@ -3076,7 +3077,30 @@ function buildHome() {
   const dialog = $('tpl');
   const close = () => { dialog.hidden = true; };
   $('tpl-close').innerHTML = svgIcon('close');
-  $('new-project').addEventListener('click', () => { tplPicked = null; dialog.hidden = false; renderTemplates(); $('new-name').value = ''; });
+  const openTemplates = (manage) => {
+    tplManage = manage; tplPicked = null;
+    dialog.querySelector('.tpl').classList.toggle('manage', manage);
+    $('tpl-title').textContent = manage ? 'Templates' : 'New project';
+    dialog.hidden = false;
+    renderTemplates();
+    $('new-name').value = '';
+  };
+  $('new-project').addEventListener('click', () => openTemplates(false));
+  // The app menu behind the icon: things that are about the app, not one project.
+  const homeMenu = $('home-menu');
+  const themeLabel = () => { $('home-theme').textContent = prefs.theme === 'dark' ? 'Light mode' : 'Dark mode'; };
+  themeLabel();
+  $('home-more').addEventListener('click', (e) => { e.stopPropagation(); homeMenu.hidden = !homeMenu.hidden; });
+  document.addEventListener('click', () => { homeMenu.hidden = true; });
+  $('home-theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; applyPrefs(); themeLabel(); });
+  $('home-templates').addEventListener('click', () => openTemplates(true));
+  $('home-backup').addEventListener('click', () => (projects.length ? downloadFiles(projects) : toast('There are no projects to download yet.', 2500)));
+  $('home-reload').addEventListener('click', async () => {
+    try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) { /* offline, or no saved copy */ }
+    location.reload();
+  });
+  const built = (document.querySelector('script[src*="app.js"]').src.match(/v=(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)/) || []).slice(1);
+  $('home-version').textContent = built.length ? `Version ${built[0]}.${built[1]}.${built[2]} ${built[3]}:${built[4]}` : '';
   $('tpl-close').addEventListener('click', close);
   dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !/^INPUT$/.test(e.target.tagName)) close(); });

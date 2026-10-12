@@ -604,7 +604,16 @@ body.layout-mode .history { display: none; }
 body.at-home > main, body.at-home > .dock { visibility: hidden; }
 .home-inner { max-width: 1040px; margin: 0 auto; padding: 24px 16px 40px; padding-top: max(24px, env(safe-area-inset-top)); }
 .home-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.home-head img { border-radius: 6px; }
+/* the app icon is a button: it opens the app menu */
+.home-menu { position: relative; flex: 0 0 auto; }
+.logo-btn { display: block; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: none; cursor: pointer; }
+.logo-btn img { display: block; width: 32px; height: 32px; border-radius: 8px; }
+.logo-btn:hover, .logo-btn:focus-visible { outline: 2px solid var(--line); outline-offset: 2px; }
+.home-menu .menu { left: 0; top: calc(100% + 6px); }
+.menu-foot { padding: 8px 8px 2px; color: #9a9a9a; }
+/* opened from the app menu, the template window only looks after templates */
+.tpl.manage .tpl-details, .tpl.manage .tpl-foot, .tpl.manage .tpl-pickhead h3 { display: none; }
+.tpl.manage .tpl-pickhead { justify-content: flex-end; }
 .home-head h1 { font-size: 18px; font-weight: 600; margin: 0; }
 .home-head .spacer { flex: 1; }
 .home-head .btn { height: 32px; padding: 0 12px; }
