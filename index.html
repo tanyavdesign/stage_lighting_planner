@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610130003">
+<link rel="stylesheet" href="style.css?v=202610130006">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -289,17 +289,10 @@
               <span class="lbl" id="layout-number-lbl">Number</span>
               <input id="layout-number" type="number" min="1" step="1">
             </div>
-            <div class="line high-only"><span class="lbl">Name</span><input id="obj-name" type="text" maxlength="40" autocomplete="off" placeholder="Name"></div>
-            <div class="line nums">
-              <label class="num" title="Metres Right of the Stage Centre"><span>X</span><input id="pos-x" type="number" step="0.05"></label>
-              <label class="num" title="Metres Forward of the Stage Centre"><span>Y</span><input id="pos-y" type="number" step="0.05"></label>
-              <label class="num high-only" title="Metres Above the Stage Floor"><span>Z</span><input id="obj-z" type="number" step="0.05"></label>
-            </div>
             <div class="line nums obj-only">
               <label class="num"><span>Width</span><input id="obj-w" type="number" step="0.05"></label>
               <label class="num"><span>Depth</span><input id="obj-d" type="number" step="0.05"></label>
               <label class="num"><span>Height</span><input id="obj-h" type="number" step="0.05"></label>
-              <label class="num" title="Degrees, Clockwise Seen From Above"><span>Turn</span><input id="obj-rot" type="number" step="5"></label>
             </div>
             <div class="line" id="obj-media">
               <span class="lbl">Shows</span>
@@ -308,18 +301,40 @@
               <button class="btn" id="media-clear" title="Take the Picture or Video Off This Screen">Remove</button>
               <input id="media-file" type="file" accept="image/*,video/*" hidden>
             </div>
-            <div class="line nums lit-only">
-              <label class="num" title="Which Way It Points: Degrees Clockwise From Upstage"><span>Pan</span><input id="fix-pan" type="number" step="5"></label>
-              <label class="num" title="Degrees Away From Straight Down (90 Is Level)"><span>Tilt</span><input id="fix-tilt" type="number" min="0" max="180" step="5"></label>
-              <label class="num" title="How Wide the Beam Is, in Degrees"><span>Beam</span><input id="fix-beam" type="number" min="1" max="120" step="1"></label>
-              <label class="num" title="The Edge of Its Pool: 0 Is a Hard Edge, 100 Fades Away Softly"><span>Softness</span><input id="fix-soft" type="number" min="0" max="100" step="10"></label>
+            <div class="line high-only" title="Metres Above the Stage Floor">
+              <span class="lbl" id="z-lbl">Height</span>
+              <input id="obj-z" type="number" step="0.1"><span class="slide-value">m</span>
             </div>
-            <div class="line lit-only"><button class="btn" id="fix-moves" title="A Light That Moves Can Pan, Tilt and Zoom to a New Place in Every Cue">Moves</button></div>
+            <div class="line lit-only" title="How Big Its Pool of Light Is">
+              <span class="lbl">Size</span>
+              <input id="fix-beam" type="range" min="2" max="120" step="1" class="white-slide"><span class="slide-value" id="fix-beam-v"></span>
+            </div>
+            <div class="line soft-only" title="The Edge of Its Pool: From a Hard Edge to Fading Away">
+              <span class="lbl">Softness</span>
+              <input id="fix-soft" type="range" min="0" max="100" step="5" class="white-slide"><span class="slide-value" id="fix-soft-v"></span>
+            </div>
+            <div class="line lit-only" id="fix-moves-line" title="A Light That Moves Can Pan, Tilt and Zoom to a New Place in Every Cue">
+              <span class="lbl">Moves</span>
+              <button class="btn" id="fix-moves">Off</button>
+            </div>
             <p class="hint note lit-only" id="fix-mount"></p>
-            <div class="line nums lit-only">
-              <label class="num" title="DMX Universe"><span>Universe</span><input id="fix-uni" type="number" min="1" max="64" step="1"></label>
-              <label class="num" title="DMX Start Address, 1 to 512"><span>Address</span><input id="fix-addr" type="number" min="1" max="512" step="1"></label>
-              <label class="num" title="How Many DMX Channels It Uses. Type the Real Fixture's Count"><span>Channels</span><input id="fix-ch" type="number" min="1" max="64" step="1"></label>
+            <button class="row-btn sub" id="more-toggle"><span>More Settings</span><span data-icon="chevron"></span></button>
+            <div id="more-fields" hidden>
+              <div class="line high-only"><span class="lbl">Name</span><input id="obj-name" type="text" maxlength="40" autocomplete="off" placeholder="Name"></div>
+              <div class="line nums">
+                <label class="num" title="Metres Right of the Stage Centre"><span>X</span><input id="pos-x" type="number" step="0.05"></label>
+                <label class="num" title="Metres Forward of the Stage Centre"><span>Y</span><input id="pos-y" type="number" step="0.05"></label>
+                <label class="num obj-only" title="Degrees, Clockwise Seen From Above"><span>Turn</span><input id="obj-rot" type="number" step="5"></label>
+              </div>
+              <div class="line nums lit-only">
+                <label class="num" title="Which Way It Points: Degrees Clockwise From Upstage"><span>Pan</span><input id="fix-pan" type="number" step="5"></label>
+                <label class="num" title="Degrees Away From Straight Down (90 Is Level)"><span>Tilt</span><input id="fix-tilt" type="number" min="0" max="180" step="5"></label>
+              </div>
+              <div class="line nums lit-only">
+                <label class="num" title="DMX Universe"><span>Universe</span><input id="fix-uni" type="number" min="1" max="64" step="1"></label>
+                <label class="num" title="DMX Start Address, 1 to 512"><span>Address</span><input id="fix-addr" type="number" min="1" max="512" step="1"></label>
+                <label class="num" title="How Many DMX Channels It Uses. Type the Real Fixture's Count"><span>Channels</span><input id="fix-ch" type="number" min="1" max="64" step="1"></label>
+              </div>
             </div>
           </div>
           <div class="line">
@@ -339,7 +354,7 @@
                 <button class="btn icon" data-align="bottom" data-icon="alignbottom" title="Align Bottoms"></button>
               </div>
             </div>
-            <div class="line">
+            <div class="line" id="layout-space">
               <span class="lbl">Space</span>
               <div class="seg tools">
                 <button class="btn icon" data-spread="x" data-icon="spreadx" title="Space Evenly Across (3 or More)"></button>
@@ -543,6 +558,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610130003"></script>
+<script src="app.js?v=202610130006"></script>
 </body>
 </html>

@@ -633,6 +633,12 @@ body.layout-mode .history { display: none; }
 .row-btn svg { width: 16px; height: 16px; transition: transform .15s; }
 .row-btn.open svg { transform: rotate(180deg); }
 #stage-fields { margin-top: 8px; }
+.row-btn.sub { font-weight: 400; color: var(--muted); margin-top: 10px; }
+.row-btn.sub span:first-child { flex: 1; }
+#more-fields { margin-top: 4px; }
+#layout-panel #obj-z { width: 72px; }
+#layout-panel .slide-value { flex: 0 0 44px; }
+#fix-moves.active { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
 /* typed measurements: a small label over each number */
 #layout-panel .nums { gap: 8px; align-items: flex-end; }
 #layout-panel .num { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }

@@ -346,12 +346,12 @@ function useLayout(layout) {
     LED_ROW_Y.push(items.reduce((sum, it) => sum + it.y, 0) / items.length);
     items.forEach((it, col) => {
       const idx = LEDS.length, [x3, z3] = to3(it.x, it.y);
-      LEDS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, col, idx, s1: rand(idx + 1), s2: rand(idx + 101), s3: rand(idx + 201) });
+      LEDS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, col, idx, soft: (it.soft != null ? it.soft : 100) / 100, s1: rand(idx + 1), s2: rand(idx + 101), s3: rand(idx + 201) });
     });
   });
   spots.forEach((items, row) => items.forEach((it) => {
     const [x3, z3] = to3(it.x, it.y);
-    SPOTS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row });
+    SPOTS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, soft: (it.soft != null ? it.soft : 100) / 100 });
   }));
   const metres = (it) => { const [x3, z3] = to3(it.x, it.y); return { id: it.id, x: it.x, y: it.y, x3, z3 }; };
   FACES.length = 0;
@@ -492,7 +492,7 @@ let templates = raw.get(TEMPLATES_KEY, []);
 const saveTemplates = () => raw.set(TEMPLATES_KEY, templates);
 const findTemplate = (id) => (id === SCRATCH.id ? SCRATCH : templates.find((t) => t.id === id) || BUILTIN);
 function copyLayout(layout) {
-  const plain = (list) => list.map(({ id, x, y }) => ({ id, x, y }));
+  const plain = (list) => list.map(({ id, x, y, soft }) => (soft != null ? { id, x, y, soft } : { id, x, y }));       // soft: how soft its pool's edge is, when it was set
   const out = { leds: plain(layout.leds), spots: plain(layout.spots) };
   if (layout.faces) out.faces = plain(layout.faces);
   if (layout.sides) out.sides = plain(layout.sides);
@@ -1582,6 +1582,10 @@ function buildControls() {
     redrawLayout();
   });
   typed('fix-soft', 0, 100, placed((item, v) => { item.soft = Math.round(v); }));
+  // the words beside the sliders follow while they are dragged
+  $('fix-soft').addEventListener('input', () => { $('fix-soft-v').textContent = softWord(+$('fix-soft').value); });
+  $('fix-beam').addEventListener('input', () => { const item = pickedItem(); if (item) $('fix-beam-v').textContent = poolSize(item, +$('fix-beam').value); });
+  $('more-toggle').addEventListener('click', () => { $('more-fields').hidden = !$('more-fields').hidden; $('more-toggle').classList.toggle('open', !$('more-fields').hidden); });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
   typed('fix-tilt', 0, 180, placed((item, v) => { item.tilt = v; }));
   typed('fix-beam', 1, 120, placed((item, v) => { item.beam = v; }));
@@ -1734,6 +1738,9 @@ const LAYERS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens']];
 const hiddenLayers = new Set();
 const layerOf = (kind, item) => (kind !== 'object' ? 'light' : assetOf(item).group === 'screen' ? 'screen' : 'stage');
 const seen = (kind) => work[kind + 's'].filter((item) => !hiddenLayers.has(layerOf(kind, item)));
+// What the panel says beside its sliders: how wide the pool is on the floor, and how soft.
+const poolSize = (light, beam) => { const t = (light.tilt || 0) * Math.PI / 180, wide = 2 * heightOf(light) / Math.max(0.2, Math.cos(t)) * Math.tan(Math.min(60, beam / 2) * Math.PI / 180); return `${Math.round(wide * 10) / 10} m`; };
+const softWord = (v) => (v <= 15 ? 'Sharp' : v >= 85 ? 'Soft' : v + '%');
 // With snapping on, lights and objects land on a 5 cm grid and turn in steps of 15 degrees.
 let snapOn = true;
 const snapTo = (v) => (snapOn ? Math.round(v / 5) * 5 : Math.round(v));
@@ -1773,7 +1780,9 @@ function redrawLayout() {
   const item = pickedItem(), many = work.sel.length;
   $('layout-sel').hidden = !many;
   $('layout-single').hidden = !item;
-  $('layout-align').hidden = many < 2;
+  $('layout-align').hidden = !many;
+  $('layout-space').hidden = many < 3;
+  each('[data-align]', (b) => { b.title = b.title.replace(/ on the Stage$/, '') + (many === 1 ? ' on the Stage' : ''); });
   each('[data-spread]', (b) => { b.disabled = many < 3; });
   $('layout-paste').disabled = !layoutClip();
   if (many > 1) $('layout-kind').textContent = `${many} Selected`;
@@ -1788,13 +1797,18 @@ function redrawLayout() {
     const fx = fixtureOf(ofKind), lit = work.picked.kind === 'custom';
     each('#layout-picked .obj-only', (n) => { n.hidden = !object; });
     each('#layout-picked .lit-only', (n) => { n.hidden = !lit; });
+    const softable = lit || work.picked.kind === 'led' || work.picked.kind === 'spot';
+    each('#layout-picked .soft-only', (n) => { n.hidden = !softable; });
+    $('z-lbl').textContent = lit ? 'Height' : 'Off Floor';
+    if (softable) { fill('fix-soft', item.soft != null ? item.soft : fx && fx.soft != null ? fx.soft : 100); $('fix-soft-v').textContent = softWord(+$('fix-soft').value); }
     each('#layout-picked .high-only', (n) => { n.hidden = !object && !lit; });
     if (lit) {
       fill('obj-name', item.name || ''); fill('obj-z', metres(heightOf(item)));
-      $('fix-moves').hidden = !fx;
-      $('fix-moves').classList.toggle('active', item.moves != null ? !!item.moves : !!(fx && fx.moving));
-      fill('fix-soft', item.soft != null ? item.soft : fx && fx.soft != null ? fx.soft : 100);
+      const moves = item.moves != null ? !!item.moves : !!(fx && fx.moving);
+      $('fix-moves').classList.toggle('active', moves); $('fix-moves').textContent = moves ? 'On' : 'Off';
       fill('fix-pan', item.pan || 0); fill('fix-tilt', item.tilt || 0); fill('fix-beam', item.beam || (fx ? fx.beam : 30));
+      $('fix-beam-v').textContent = poolSize(item, +$('fix-beam').value);
+      $('fix-moves-line').hidden = !fx;
       fill('fix-uni', item.uni || ''); fill('fix-addr', item.addr || ''); fill('fix-ch', channelsOf(item, work.kinds));
       const on = item.on && work.objects.find((o) => o.id === item.on);
       const rig = fx && work.objects.some((o) => assetOf(o).joins);          // only layouts that still have truss or stands can mount
@@ -1879,7 +1893,7 @@ function layoutDrag(e) {
     const lead = moving.lead.item, still = KINDS_OF_LIGHT.flatMap((kind) => seen(kind)).filter((it) => !moving.items.some((m) => m.item === it));
     for (const axis of ['x', 'y']) {
       let best = null;
-      for (const at of [axis === 'x' ? STAGE.cx : STAGE.cy, ...still.map((it) => it[axis])]) if (Math.abs(at - lead[axis]) <= 9 && (best == null || Math.abs(at - lead[axis]) < Math.abs(best - lead[axis]))) best = at;
+      for (const at of [axis === 'x' ? STAGE.cx : STAGE.cy, ...still.map((it) => it[axis])]) if (Math.abs(at - lead[axis]) <= Math.max(9, view.w / (svg.clientWidth || 800) * 10) && (best == null || Math.abs(at - lead[axis]) < Math.abs(best - lead[axis]))) best = at;
       if (best == null) continue;
       const by = best - lead[axis];
       for (const m of moving.items) m.item[axis] += by;
@@ -1955,6 +1969,7 @@ function layoutClip() {
 const clipOf = () => selected().map(({ kind, item }) => {
   const one = { kind, x: item.x, y: item.y, of: item.kind };
   if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h, media: item.media };
+  if ((kind === 'led' || kind === 'spot') && item.soft != null) one.more = { soft: item.soft };
   if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'ch', 'moves', 'soft']) if (item[key] != null) one.more[key] = item[key]; }
   return one;
 });
@@ -1990,9 +2005,10 @@ function layoutDuplicate() {
 // Line the selected lights up on one edge or through the middle, or space them evenly.
 function layoutAlign(how) {
   const all = selected();
-  if (all.length < 2) return;
+  if (!all.length) return;
   layoutKeep();
-  const xs = all.map((one) => one.item.x), ys = all.map((one) => one.item.y);
+  // several line up with each other; one on its own lines up with the stage: its edges or its middle
+  const alone = all.length === 1, xs = alone ? [STAGE.x0 + 50, STAGE.x1 - 50] : all.map((one) => one.item.x), ys = alone ? [STAGE.y0 + 50, STAGE.y1 - 50] : all.map((one) => one.item.y);
   const to = { left: Math.min(...xs), right: Math.max(...xs), centre: (Math.min(...xs) + Math.max(...xs)) / 2, top: Math.min(...ys), bottom: Math.max(...ys), middle: (Math.min(...ys) + Math.max(...ys)) / 2 }[how];
   const across = how === 'left' || how === 'right' || how === 'centre';
   for (const { kind, item } of all) Object.assign(item, hold(kind, across ? Math.round(to) : item.x, across ? item.y : Math.round(to)));
@@ -2048,7 +2064,7 @@ function layoutAdd(kind, ofKind) {
   else if (kind === 'side') list.push({ id, x: sx(SIDE_X.L), y: STAGE.cy - 60 + nudge });               // in the left wing; drag across for the right
   else if (kind === 'face') list.push({ id, x: STAGE.cx - 60 + nudge, y: sy(FACE_Y) });
   else if (kind === 'custom') {
-    const f = fixtureOf(work.kinds.find((k) => k.id === ofKind)), item = { id, kind: ofKind, x: STAGE.cx - 60 + nudge, y: STAGE.cy };
+    const f = fixtureOf(work.kinds.find((k) => k.id === ofKind)), item = { id, kind: ofKind, x: STAGE.cx + nudge, y: STAGE.cy };
     if (f) Object.assign(item, { z: f.z, pan: f.pan, tilt: f.tilt, beam: f.beam }, f.off === 'front' ? { y: STAGE.y1 + 200 } : f.off === 'back' ? { y: STAGE.y0 + 60 } : {});
     list.push(item);
   }
@@ -2974,6 +2990,11 @@ function buildThree() {
     geo.translate(0, -length / 2, 0);
     return new THREE.Mesh(geo, beamMaterial());
   }
+  function hardPool(radius) {              // the same pool with a crisp edge; the two are mixed by how soft the light is
+    const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 40), glow(hardTex));
+    m.rotation.x = -Math.PI / 2;
+    return m;
+  }
   function pool(radius) {
     const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), glow(poolTex));
     m.rotation.x = -Math.PI / 2;
@@ -3036,19 +3057,18 @@ function buildThree() {
   const leds = LEDS.map((led) => {
     const pivot = add(new THREE.Group(), led.x3, RIG_H, led.z3);
     const cone = beam(0.12, 1.5, RIG_H); pivot.add(cone);
-    return { led, pivot, cone, lens: lens(led.x3, RIG_H, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3), wall: add(wallSpot(1), led.x3, 2, CYC.z + 0.03) };
+    return { led, pivot, cone, lens: lens(led.x3, RIG_H, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3), hard: add(hardPool(2.7), led.x3, 0.0105, led.z3), wall: add(wallSpot(1), led.x3, 2, CYC.z + 0.03) };
   });
   const spots = SPOTS.map((s) => ({
     cone: add(beam(0.1, 1.2, RIG_H), s.x3, RIG_H, s.z3),
     lens: lens(s.x3, RIG_H, s.z3),
-    pool: add(pool(1.6), s.x3, 0.012, s.z3),
+    pool: add(pool(1.6), s.x3, 0.012, s.z3), hard: add(hardPool(1.6), s.x3, 0.0125, s.z3), soft: s.soft,
   }));
   const customs = CUSTOMS.map((s) => {
     const h = heightOf(s), fx = s.fx, bar = fx && (fx.shape === 'batten' || fx.shape === 'strobe');
     const cone = add(beam(0.04, 1, 1), s.x3, h, s.z3);                    // sized and turned every frame, from its pan, tilt and beam
     const spot = add(pool(1), s.x3, 0.013, s.z3);
-    const hard = add(new THREE.Mesh(new THREE.CircleGeometry(1, 40), glow(hardTex)), s.x3, 0.0135, s.z3);
-    hard.rotation.x = -Math.PI / 2;
+    const hard = add(hardPool(1), s.x3, 0.0135, s.z3);
     let body = null;
     if (fx) {                                                             // a body for the fixture, turned with it
       body = add(new THREE.Group(), s.x3, h, s.z3);
@@ -3135,7 +3155,7 @@ function buildThree() {
     for (const f of leds) {
       const o = f.led.idx * L, r = D[o], g = D[o + 1], b = D[o + 2];
       const on = r + g + b > 0.01;
-      f.cone.visible = f.pool.visible = on;
+      f.cone.visible = f.pool.visible = f.hard.visible = on;
       f.wall.visible = false;
       setLens(f.lens, r, g, b);
       if (!on) continue;
@@ -3150,7 +3170,7 @@ function buildThree() {
       f.cone.material.uniforms.color.value.setRGB(r * TOP / 2, g * TOP / 2, b * TOP / 2);
       f.cone.material.uniforms.low.value = land / TOP;
       if (hit) {
-        f.pool.visible = false;
+        f.pool.visible = f.hard.visible = false;
         f.wall.visible = true;
         f.wall.position.set(hit.x, hit.y, CYC.z + 0.03);
         f.wall.scale.set(hit.radius * hit.stretch * wide, hit.radius * wide, 1);
@@ -3161,14 +3181,18 @@ function buildThree() {
       }
       f.pool.position.set(tx, 0.01, tz);
       f.pool.scale.setScalar(wide);
-      f.pool.material.color.setRGB(r * land, g * land, b * land);
+      const soft = f.led.soft;
+      f.hard.position.set(tx, 0.0105, tz); f.hard.scale.setScalar(wide);
+      f.pool.material.color.setRGB(r * land * soft, g * land * soft, b * land * soft);
+      f.hard.material.color.setRGB(r * land * 1.6 * (1 - soft), g * land * 1.6 * (1 - soft), b * land * 1.6 * (1 - soft));
     }
     spots.forEach((s, i) => {
       const lvl = D[O_SPOT + i];
-      s.cone.visible = s.pool.visible = lvl > 0.01;
+      s.cone.visible = s.pool.visible = s.hard.visible = lvl > 0.01;
       setLens(s.lens, lvl * SPOT_C[0], lvl * SPOT_C[1], lvl * SPOT_C[2]);
       s.cone.material.uniforms.color.value.setRGB(SPOT_C[0] * lvl * 0.15, SPOT_C[1] * lvl * 0.15, SPOT_C[2] * lvl * 0.15);
-      s.pool.material.color.setRGB(SPOT_C[0] * lvl * 0.12, SPOT_C[1] * lvl * 0.12, SPOT_C[2] * lvl * 0.12);
+      s.pool.material.color.setRGB(SPOT_C[0] * lvl * 0.12 * s.soft, SPOT_C[1] * lvl * 0.12 * s.soft, SPOT_C[2] * lvl * 0.12 * s.soft);
+      s.hard.material.color.setRGB(SPOT_C[0] * lvl * 0.2 * (1 - s.soft), SPOT_C[1] * lvl * 0.2 * (1 - s.soft), SPOT_C[2] * lvl * 0.2 * (1 - s.soft));
     });
     customs.forEach((s, i) => {
       const r = D[O_CUS + i * 3], g = D[O_CUS + i * 3 + 1], b = D[O_CUS + i * 3 + 2];
