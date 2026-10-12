@@ -1444,7 +1444,7 @@ function buildControls() {
         if (!kind) work.kinds.push(kind = { id: 'k' + newId(), name: f.name, shape: f.shape, fixture: f.type });
         layoutAdd('custom', kind.id);
       });
-      b.innerHTML = `<b>${f.name}</b><span>${f.beam}° Beam${f.moving ? ' · Moves' : ''}</span>`;
+      b.innerHTML = `<b>${f.name}</b>${f.moving ? '<span>Moves</span>' : ''}`;
       b.title = `Add a ${f.name}`;
     }
     for (const a of ASSETS.filter((one) => one.group === libGroup)) {
