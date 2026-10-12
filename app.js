@@ -2985,7 +2985,7 @@ function renderHome() {
   each('[data-home-view]', (b) => b.classList.toggle('active', b.dataset.homeView === view));
   $('home-layout').hidden = !project;
   $('home-back').hidden = $('new-item-wrap').hidden = !project;
-  $('home-logo').hidden = $('home-pills').hidden = !!project;
+  $('home-logo').hidden = $('new-project').hidden = $('draft-new').hidden = !!project;
   $('import-arrow').hidden = !!project;
   $('home-title').textContent = project ? project.name : '';       // the project list has no title, only the small icon
   $('home-title').hidden = !project;
@@ -3336,7 +3336,6 @@ function buildHome() {
     e.target.value = '';
     if (files.length) importFiles(files, importAs);
   });
-  each('[data-pill]', (el) => { el.innerHTML = svgIcon(el.dataset.pill); });
   $('home-back').innerHTML = svgIcon('back');
   $('home-back').addEventListener('click', () => setOpen(null, null));
   $('new-item').addEventListener('click', async () => {
