@@ -1714,13 +1714,19 @@ function sizeWave() {
 
 // The timeline can be zoomed in: `zoom` 1 shows the whole track, `start` is the time at
 // its left edge. Pinch or scroll over it to zoom, swipe sideways with two fingers to move.
-const wview = { zoom: 1, start: 0, hold: 0, lastT: 0 };
+//
+// On phones the playhead stays in the middle and the track slides under it: drag the
+// track to move through it. A ruler along the top shows the time.
+const wview = { zoom: 1, start: 0, hold: 0, lastT: 0, auto: true };
+const centred = () => mqPhone.matches;
+const waveTop = () => (centred() ? 15 : 0);     // room for the ruler
 const waveSpan = () => duration() / wview.zoom;
 const waveX = (t, width) => (t - wview.start) / waveSpan() * width;
 function setWaveView(zoom, start) {
   const dur = duration();
   wview.zoom = Math.max(1, Math.min(Math.max(1, dur / 2), zoom));     // closest: two seconds across
   wview.start = Math.max(0, Math.min(dur - dur / wview.zoom, start));
+  if (centred()) wview.start = currentTime() - waveSpan() / 2;
 }
 // Zoom by `factor`, keeping the time under the pointer where it is; then slide by `pan` pixels.
 function zoomWave(factor, clientX, pan) {
@@ -1728,29 +1734,49 @@ function zoomWave(factor, clientX, pan) {
   const at = wview.start + f * waveSpan();
   const zoom = Math.max(1, Math.min(Math.max(1, duration() / 2), wview.zoom * factor));
   const span = duration() / zoom;
+  wview.auto = false;
+  if (centred() && pan) seek(currentTime() + pan / r.width * span);
   setWaveView(zoom, at - f * span + (pan || 0) / r.width * span);
   wview.hold = performance.now() + 1500;        // leave the view alone for a moment
 }
 
 function drawWave(T, active) {
   const dark = prefs.theme === 'dark', H = waveH, dur = duration(), x = (t) => waveX(t, waveW);
+  const mid = centred(), top = waveTop();
+  if (wview.auto) wview.zoom = mid ? dur / 20 : 1;        // until zoomed by hand: 20 seconds across on a phone
   setWaveView(wview.zoom, wview.start);         // the track may have changed length
   // zoomed in: keep the playhead in sight when it moves, unless the view was just moved by hand
-  if (wview.zoom > 1 && T !== wview.lastT && !wavePinch && performance.now() > wview.hold) {
+  if (!mid && wview.zoom > 1 && T !== wview.lastT && !wavePinch && performance.now() > wview.hold) {
     const span = waveSpan();
     if (T < wview.start || T > wview.start + span) setWaveView(wview.zoom, T - span * (player.playing ? 0.05 : 0.5));
   }
   wview.lastT = T;
-  wctx.fillStyle = dark ? '#383838' : '#f5f5f5'; wctx.fillRect(0, 0, waveW, H);
+  const field = dark ? '#383838' : '#f5f5f5';
+  if (mid) {                                    // only the track itself is filled; a ruler runs above it
+    wctx.fillStyle = dark ? '#2c2c2c' : '#ffffff'; wctx.fillRect(0, 0, waveW, H);
+    const x0 = Math.max(0, x(0)), x1 = Math.min(waveW, x(dur));
+    wctx.fillStyle = field; wctx.fillRect(x0, top, x1 - x0, H - top);
+    const step = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300].find((sec) => sec * waveW / waveSpan() >= 56) || 600;
+    wctx.font = '500 10px Inter, sans-serif'; wctx.textAlign = 'center';
+    for (let t = Math.ceil(Math.max(0, wview.start) / step) * step; t <= Math.min(dur, wview.start + waveSpan()); t += step) {
+      wctx.fillStyle = dark ? '#9a9a9a' : '#8c8c8c';
+      wctx.fillText(t < 60 ? (t % 1 ? t.toFixed(1) : t) + 's' : Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0'), x(t), 10);
+      wctx.fillStyle = dark ? '#5c5c5c' : '#c8c8c8';
+      wctx.fillRect(x(t + step / 2) - 0.5, 5, 1, 4);
+    }
+  } else {
+    wctx.fillStyle = field; wctx.fillRect(0, 0, waveW, H);
+  }
   if (player.peaks) {
     wctx.fillStyle = dark ? '#6b6b6b' : '#c4c4c4';
     const N = player.peaks.length, perPx = waveSpan() / waveW / dur * N, first = wview.start / dur * N;
     for (let px = 0; px < waveW; px += 2) {
       const from = Math.floor(first + px * perPx), to = Math.max(from + 1, Math.floor(first + (px + 2) * perPx));
+      if (from < 0 || from >= N) continue;      // before the start or past the end of the track
       let peak = 0;
       for (let i = from; i < to && i < N; i++) if (player.peaks[i] > peak) peak = player.peaks[i];
-      const h = Math.max(1, peak * (H - 8));
-      wctx.fillRect(px, (H - h) / 2, 1.4, h);
+      const h = Math.max(1, peak * (H - top - 8));
+      wctx.fillRect(px, top + (H - top - h) / 2, 1.4, h);
     }
   }
   const live = dark ? '#ffffff' : '#1e1e1e';
@@ -1759,18 +1785,24 @@ function drawWave(T, active) {
     const cx = x(cue.time);
     if (!cue.instant && cue.fade > 0) {          // shaded stretch shows how long the fade lasts
       wctx.fillStyle = dark ? 'rgba(13,153,255,.22)' : 'rgba(13,153,255,.16)';
-      wctx.fillRect(cx, 0, x(cue.time + cue.fade) - cx, H);
+      wctx.fillRect(cx, top, x(cue.time + cue.fade) - cx, H - top);
     }
     wctx.fillStyle = cue.id === selectedCue ? '#0d99ff' : i === active ? live : (dark ? '#9a9a9a' : '#8c8c8c');
-    wctx.fillRect(cx - 1, 0, 2, H);
-    wctx.fillRect(cx - 1, 0, 15, 13);
+    wctx.fillRect(cx - 1, top, 2, H - top);
+    wctx.fillRect(cx - 1, top, 15, 13);
     if (cue.note) { wctx.beginPath(); wctx.arc(cx + 7, H - 7, 3.5, 0, 6.3); wctx.fill(); }   // has a note
     wctx.fillStyle = dark && cue.id !== selectedCue ? '#1e1e1e' : '#fff';
-    wctx.fillText(i + 1, cx + 2, 10);
+    wctx.fillText(i + 1, cx + 2, top + 10);
   });
-  wctx.fillStyle = '#f24822';
-  wctx.fillRect(x(T) - 1, 0, 2, H);
-  if (wview.zoom > 1) {                          // a thin bar along the bottom: which part is showing
+  if (mid) {                                    // fixed in the middle, rounded at the top
+    wctx.fillStyle = live;
+    wctx.fillRect(waveW / 2 - 1.5, 3, 3, H - 3);
+    wctx.beginPath(); wctx.arc(waveW / 2, 3, 1.5, 0, 6.3); wctx.fill();
+  } else {
+    wctx.fillStyle = '#f24822';
+    wctx.fillRect(x(T) - 1, 0, 2, H);
+  }
+  if (!mid && wview.zoom > 1) {                          // a thin bar along the bottom: which part is showing
     wctx.fillStyle = dark ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.1)';
     wctx.fillRect(0, H - 3, waveW, 3);
     wctx.fillStyle = dark ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.45)';
@@ -1783,15 +1815,15 @@ const waveTime = (e) => {
   return wview.start + clamp01((e.clientX - r.left) / r.width) * waveSpan();
 };
 function cueAt(e) {
-  const r = wave.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const r = wave.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top - waveTop();
   for (let i = show.cues.length - 1; i >= 0; i--) {
     const cx = waveX(show.cues[i].time, r.width);
-    if (Math.abs(px - cx) <= 4 || (py <= 14 && px >= cx - 2 && px <= cx + 15)) return show.cues[i];
+    if (Math.abs(px - cx) <= 4 || (py >= 0 && py <= 14 && px >= cx - 2 && px <= cx + 15)) return show.cues[i];
   }
   return null;
 }
 // Press on a cue marker to select it, drag it to move it; anywhere else scrubs.
-let cueDrag = null, wavePinch = null, scrubFrom = 0;
+let cueDrag = null, wavePinch = null, scrubFrom = 0, slide = null;
 const waveTouches = new Map();
 const pinchState = () => {
   const [a, b] = [...waveTouches.values()];
@@ -1802,13 +1834,17 @@ wave.addEventListener('pointerdown', (e) => {
   waveTouches.set(e.pointerId, e.clientX);
   if (waveTouches.size === 2) {                 // second finger: zoom instead of scrubbing
     if (scrubbing) { scrubbing = false; seek(scrubFrom); }      // undo the jump the first finger made
-    cueDrag = null;
+    cueDrag = slide = null;
     wavePinch = pinchState();
     return;
   }
   const cue = cueAt(e);
   if (cue) { cueDrag = { cue, x: e.clientX, moved: false }; selectCue(cue.id); }
-  else { scrubFrom = currentTime(); scrubbing = true; seek(waveTime(e)); }
+  else {
+    scrubFrom = currentTime(); scrubbing = true;
+    if (centred()) slide = { x: e.clientX, moved: false };      // phone: drag the track under the playhead
+    else seek(waveTime(e));
+  }
 });
 wave.addEventListener('pointermove', (e) => {
   if (waveTouches.has(e.pointerId)) waveTouches.set(e.pointerId, e.clientX);
@@ -1819,14 +1855,18 @@ wave.addEventListener('pointermove', (e) => {
     return;
   }
   wave.style.cursor = cueDrag || cueAt(e) ? 'ew-resize' : 'pointer';
-  if (scrubbing) seek(waveTime(e));
+  if (scrubbing && slide) {
+    const dx = e.clientX - slide.x;
+    if (Math.abs(dx) > 3) slide.moved = true;
+    if (slide.moved) seek(scrubFrom - dx / wave.getBoundingClientRect().width * waveSpan());
+  } else if (scrubbing) seek(waveTime(e));
   if (!cueDrag) return;
   if (!cueDrag.moved && Math.abs(e.clientX - cueDrag.x) < 4) return;
   cueDrag.moved = true;
   // within a few pixels of the playhead, the cue snaps onto it
   const r = wave.getBoundingClientRect(), T = currentTime();
   const near = Math.abs(e.clientX - (r.left + waveX(T, r.width))) <= 8;
-  cueDrag.cue.time = Math.round((near ? T : waveTime(e)) * 100) / 100;
+  cueDrag.cue.time = Math.round(Math.max(0, Math.min(duration(), near ? T : waveTime(e))) * 100) / 100;
   sortCues();
 });
 function endWave(e) {
@@ -1835,6 +1875,8 @@ function endWave(e) {
     if (!waveTouches.size) wavePinch = null;
     return;
   }
+  if (slide && !slide.moved && e.type === 'pointerup') seek(waveTime(e));     // a tap jumps there
+  slide = null;
   scrubbing = false;
   if (!cueDrag) return;
   const { cue, moved } = cueDrag;
