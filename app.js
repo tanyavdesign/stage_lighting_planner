@@ -3024,7 +3024,6 @@ function renderTemplates() {
     ...(tplTab !== 'builtin' ? templates : []),
   ];
   if (tplPicked && !shown.includes(tplPicked)) tplPicked = null;
-  $('tpl-picked').textContent = tplPicked ? (tplPicked === SCRATCH ? 'Starting from scratch' : 'Template: ' + tplPicked.name) : 'Pick a stage to start on';
   for (const tpl of shown) {
     const card = document.createElement('div');
     card.className = 'tpl-card' + (tpl === tplPicked ? ' picked' : '');
