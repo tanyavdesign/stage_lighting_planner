@@ -214,7 +214,7 @@ if (!currentId || !currentProject().items.some((it) => it.id === currentItemId))
 const currentItem = () => (currentItemId ? currentProject().items.find((it) => it.id === currentItemId) : null);
 // Drafts: items that are not in a project yet. They are kept as a project of their own that
 // never shows in the project list; its items show on the home screen and can be moved out.
-const realProjects = () => projects.filter((p) => !p.drafts);
+const realProjects = () => projects.filter((p) => !p.drafts && !p.scratch);
 function draftsProject() {
   let drafts = projects.find((p) => p.drafts);
   if (!drafts) {
@@ -224,6 +224,17 @@ function draftsProject() {
   return drafts;
 }
 if (currentId && currentProject().drafts && !currentItemId) currentId = null;      // drafts have no page of their own
+// A layout is edited inside a throwaway project (`scratch`). One left over from an editing
+// session that was abandoned is cleared away.
+if (projects.some((p) => p.scratch) && !(currentId && currentProject().scratch && currentItemId)) {
+  for (const p of projects.filter((q) => q.scratch)) {
+    raw.del(projectKey(LAYOUT_KEY, p.id));
+    for (const item of p.items) { raw.del(projectKey(LOOK_KEY, item.id)); raw.del(projectKey(SHOW_KEY, item.id)); }
+  }
+  projects = projects.filter((p) => !p.scratch);
+  raw.set(PROJECTS_KEY, projects);
+  if (currentId && !currentProject()) currentId = currentItemId = null;
+}
 const saveProjects = () => raw.set(PROJECTS_KEY, projects);
 
 // Stage templates: where the LEDs and spotlights sit when a project starts. One is built
@@ -321,6 +332,7 @@ const ICONS = {
   moveto: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5zM7 9h4M9.4 7.4 11 9l-1.6 1.6"/>',
   help: '<circle cx="8" cy="8" r="5.5"/><path d="M6.4 6.5a1.7 1.7 0 1 1 2.5 1.5c-.6.3-.9.7-.9 1.2M8 11.2h.01"/>',
   sliders: '<path d="M2.5 5h3.5M9.5 5h4M2.5 11h5M11 11h2.5"/><circle cx="7.7" cy="5" r="1.7"/><circle cx="9.3" cy="11" r="1.7"/>',
+  layout: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M5 6.3h1.6M9.4 6.3H11M5 9.7h1.6M9.4 9.7H11"/>',
   share: '<circle cx="4" cy="8" r="1.7"/><circle cx="11.5" cy="4" r="1.7"/><circle cx="11.5" cy="12" r="1.7"/><path d="M5.5 7.2 10 4.8M5.5 8.8 10 11.2"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
@@ -985,11 +997,11 @@ function buildControls() {
   // Keep the layout being edited as a template for new projects.
   $('layout-save-tpl').addEventListener('click', () => {
     const field = $('layout-tpl-name'), name = field.value.trim();
-    if (!name) { field.focus(); return toast('Give the template a name first.', 2500); }
+    if (!name) { field.focus(); return toast('Give the layout a name first.', 2500); }
     templates.unshift({ id: 't' + newId(), name, layout: copyLayout(work), lights: currentProject().lights && clone(currentProject().lights), created: Date.now() });
     saveTemplates();
     field.value = '';
-    toast(`Saved "${name}" to My templates.`, 3000);
+    toast(`Saved "${name}" to My layouts.`, 3000);
   });
   // Put this layout back into the template the project was made from (and publish it, if it is shared from here).
   const ownTemplate = () => templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -999,7 +1011,7 @@ function buildControls() {
     tpl.layout = copyLayout(work);
     if (currentProject().lights) tpl.lights = clone(currentProject().lights);
     saveTemplates();
-    toast(`Updated the template ${tpl.name}.`, 2500);
+    toast(`Updated the layout ${tpl.name}.`, 2500);
     await republish(tpl);
   });
   $('undo').addEventListener('click', () => stepHistory(history.undo, history.redo));
@@ -1065,6 +1077,7 @@ function enterLayout() {
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   work = { leds: layout.leds.map((it) => Object.assign({ was: it.id }, it)), spots: layout.spots.map((it) => Object.assign({ was: it.id }, it)), picked: null };
   document.body.classList.add('layout-mode');
+  document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
   $('layout-update-tpl').hidden = !own;
   if (own) $('layout-update-tpl').textContent = `Update “${own.name}”` + (own.share ? ' and publish' : '');
@@ -1155,13 +1168,42 @@ function layoutDone() {
     if (look) raw.set(projectKey(LOOK_KEY, item.id), relook(look, renamed, alive));
     if (part && Array.isArray(part.cues)) { part.cues.forEach((cue) => relook(cue.look, renamed, alive)); raw.set(projectKey(SHOW_KEY, item.id), part); }
   }
-  leaveLayout();
+  leaveLayout(true);
 }
 // Opened from the project page, the layout editor goes back there; otherwise the item reloads.
-function leaveLayout() {
-  let fromProject = false;
-  try { fromProject = !!sessionStorage.getItem('slp-layout'); sessionStorage.removeItem('slp-layout'); } catch (e) { /* no session storage */ }
-  if (fromProject) setOpen(currentId, null); else location.reload();
+async function leaveLayout(saved) {
+  let from = '';
+  try { from = sessionStorage.getItem('slp-layout') || ''; sessionStorage.removeItem('slp-layout'); } catch (e) { /* no session storage */ }
+  if (from.startsWith('tpl:')) {
+    // a layout was being edited by itself: hand the result to it, clear the throwaway project, go back to Layouts
+    const tpl = templates.find((t) => t.id === from.slice(4)), scratch = currentProject();
+    if (saved === true && tpl) {
+      tpl.layout = copyLayout(layout);
+      saveTemplates();
+      await republish(tpl);
+    }
+    scratch.items.forEach(dropItem);
+    raw.del(projectKey(LAYOUT_KEY, scratch.id));
+    projects = projects.filter((p) => p !== scratch);
+    saveProjects();
+    try { sessionStorage.setItem('slp-show-layouts', '1'); } catch (e) { /* no session storage */ }
+    return setOpen(null, null);
+  }
+  if (from) setOpen(currentId, null); else location.reload();
+}
+// Edit a layout by itself, from the Layouts window: it opens in the layout editor.
+function editTemplateLayout(tpl) {
+  const id = 'layout-edit', itemId = 'layout-edit-item', now = Date.now();
+  raw.set(projectKey(LAYOUT_KEY, id), copyLayout(tpl.layout));
+  raw.set(projectKey(LOOK_KEY, itemId), blankLook());
+  raw.set(projectKey(SHOW_KEY, itemId), { cues: [], trackName: '' });
+  const scratch = { id, scratch: true, name: tpl.name, template: tpl.name, templateId: tpl.id, created: now, updated: now, cues: 0, items: [{ id: itemId, name: 'Layout', cues: 0, updated: now }] };
+  if (tpl.lights) scratch.lights = clone(tpl.lights);
+  projects = projects.filter((p) => !p.scratch);
+  projects.push(scratch);
+  saveProjects();
+  try { sessionStorage.setItem('slp-layout', 'tpl:' + tpl.id); } catch (e) { /* no session storage */ }
+  setOpen(id, itemId);
 }
 
 // Phone: the preview alone, full screen and in landscape. Where the browser allows it the
@@ -1204,7 +1246,7 @@ function setWatch(on) {
 const TOURS = {
   manager: [
     ['#new-project', 'Projects', 'A project is one show. It holds the stage and every item (dance) in it. Start one here and choose how many items it begins with.'],
-    ['#home-more', 'Stage templates', 'A template is a stage: where the lights hang. Open this menu and choose Templates to look after them. Save a new one from a project with Edit stage layout.'],
+    ['#home-more', 'Stage layouts', 'A layout is a stage: where the lights hang. Open this menu and choose Layouts to make, edit and share them. A layout can be shared with a code that others type in.'],
     ['#import-btn', 'Import and download', 'Bring in project or item files that others send you. Every card has a download button; tick several cards to download them together.'],
     ['#drafts', 'Drafts', 'Items made or imported without a project wait here. The folder button on a draft moves it into a project.'],
     ['#project-list', 'Inside a project', 'Open a project to see its items. Drag the six-dot handle to put them in running order, and use the arrows on a picture to flip through that item\'s cues.'],
@@ -2868,7 +2910,10 @@ function saveThumbnail() {
     saveProjects();
   } catch (e) { /* keep the old picture */ }
 }
-function goHome() { saveThumbnail(); setOpen(currentProject().drafts ? null : currentId, null); }     // back to this project's items (a draft goes home)
+function goHome() {
+  if (currentProject().scratch) return leaveLayout(false);            // leaving a layout being edited: nothing is kept
+  saveThumbnail(); setOpen(currentProject().drafts ? null : currentId, null);
+}     // back to this project's items (a draft goes home)
 function goProjects() { saveThumbnail(); setOpen(null, null); }
 
 // stage: the template to start on. from: a file being imported, which brings its own layout.
@@ -3359,7 +3404,7 @@ function renderHome() {
     addDraft.innerHTML = svgIcon('plus') + '<span>New item</span>';
   }
   // On the project list: the items worked on last, across all projects, to pick up where you left off.
-  const recent = project ? [] : projects.flatMap((p) => p.items.map((item) => ({ p, item })))
+  const recent = project ? [] : projects.filter((p) => !p.scratch).flatMap((p) => p.items.map((item) => ({ p, item })))
     .sort((a, b) => (b.item.updated || 0) - (a.item.updated || 0)).slice(0, 4);
   $('recent').hidden = recent.length < 2;
   $('recent-list').textContent = '';
@@ -3678,6 +3723,7 @@ function renderTemplates() {
       });
     }
     if (tpl !== SCRATCH && !follows) {
+      act('layout', 'Edit layout', () => editTemplateLayout(tpl));
       act('sliders', 'Light settings', () => editLights(tpl.name, tpl, saveTemplates));
     }
     if (tpl !== SCRATCH) act('share', tpl.share ? 'Shared with a code' : 'Share with a code', () => openShare(tpl));
@@ -3711,13 +3757,13 @@ function renderTemplates() {
   if (tplTab === 'mine' && !templates.some((t) => !t.share)) {
     const none = document.createElement('p');
     none.className = 'hint tpl-none';
-    none.textContent = 'No templates of your own yet. Open a project, press Edit stage layout, arrange the lights, then press Save as template.';
+    none.textContent = 'No layouts of your own yet. Press New layout to draw one, or import one with a code.';
     grid.appendChild(none);
   }
 }
 async function newFromTemplate() {
   if (tplManage) return;
-  if (!tplPicked) return toast('Pick a template, or Start from scratch.', 2500);
+  if (!tplPicked) return toast('Pick a layout, or Start from scratch.', 2500);
   const project = createProject($('new-name').value.trim(), tplPicked);
   const made = [];
   for (const field of [...$('items-names').children]) made.push(await addItem(project, field.value.trim()));
@@ -3732,12 +3778,21 @@ function buildHome() {
   const openTemplates = (manage) => {
     tplManage = manage; tplPicked = null;
     dialog.querySelector('.tpl').classList.toggle('manage', manage);
-    $('tpl-title').textContent = manage ? 'Templates' : 'New project';
+    $('tpl-title').textContent = manage ? 'Layouts' : 'New project';
     dialog.hidden = false;
     renderTemplates();
     $('new-name').value = '';
   };
   $('new-project').addEventListener('click', () => openTemplates(false));
+  $('tpl-new').addEventListener('click', () => {
+    const tpl = { id: 't' + newId(), name: 'Untitled layout', layout: { leds: [], spots: [] }, created: Date.now() };
+    templates.unshift(tpl);
+    saveTemplates();
+    editTemplateLayout(tpl);
+  });
+  let backToLayouts = false;
+  try { backToLayouts = !!sessionStorage.getItem('slp-show-layouts'); sessionStorage.removeItem('slp-show-layouts'); } catch (e) { /* no session storage */ }
+  if (backToLayouts && !currentId) openTemplates(true);
   // The app menu behind the icon: things that are about the app, not one project.
   const homeMenu = $('home-menu');
   const themeLabel = () => { $('home-theme').innerHTML = prefs.theme === 'dark' ? svgIcon('sun') + 'Light mode' : svgIcon('moon') + 'Dark mode'; };
@@ -3748,7 +3803,7 @@ function buildHome() {
   $('home-theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; prefs.themeChosen = true; applyPrefs(); themeLabel(); });
   $('home-templates').addEventListener('click', () => openTemplates(true));
   $('home-backup').addEventListener('click', () => {
-    const all = projects.filter((p) => !p.drafts || p.items.length);       // drafts go along as a project called Drafts
+    const all = projects.filter((p) => !p.scratch && (!p.drafts || p.items.length));       // drafts go along as a project called Drafts
     if (all.length) downloadFiles(all); else toast('There is nothing to download yet.', 2500);
   });
   $('home-reload').addEventListener('click', async () => {

@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121447">
+<link rel="stylesheet" href="style.css?v=202610121449">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -42,7 +42,7 @@
         <button id="home-more" class="logo-btn" aria-label="App menu" title="App menu"><img src="icons/icon.svg" width="32" height="32" alt=""></button>
         <div id="home-menu" class="menu" hidden>
           <button id="home-theme">Light mode</button>
-          <button id="home-templates">Templates</button>
+          <button id="home-templates">Layouts</button>
           <hr>
           <button id="home-backup">Download all projects</button>
           <button id="home-reload">Reload to update</button>
@@ -118,10 +118,10 @@
   <div id="tpl" class="tpl-back" hidden>
     <div class="tpl" role="dialog" aria-label="New project">
       <div class="tpl-side">
-        <h2>Templates</h2>
-        <button class="tpl-tab" data-tpl-tab="all">All templates</button>
+        <h2>Layouts</h2>
+        <button class="tpl-tab" data-tpl-tab="all">All layouts</button>
         <button class="tpl-tab" data-tpl-tab="shared">Shared by code</button>
-        <button class="tpl-tab" data-tpl-tab="mine">My templates</button>
+        <button class="tpl-tab" data-tpl-tab="mine">My layouts</button>
       </div>
       <div class="tpl-main">
         <div class="tpl-head"><h2 id="tpl-title">New project</h2><button id="tpl-create" class="btn primary" type="button">Create project</button><button id="tpl-close" class="btn icon" aria-label="Close" title="Close"></button></div>
@@ -143,9 +143,10 @@
           <div class="tpl-codeline">
             <input id="tpl-code" type="text" placeholder="Layout code, for example kdt-ucc-theatre-lighting-plot" autocomplete="off" autocapitalize="none" spellcheck="false">
             <button id="tpl-code-go" class="btn" type="button">Import layout</button>
+            <button id="tpl-new" class="btn" type="button">New layout</button>
           </div>
           <div class="tpl-pickhead">
-            <h3>Stage template</h3>
+            <h3>Stage layout</h3>
             <div class="seg tpl-tabs">
               <button type="button" class="btn" data-tpl-tab="all">All</button>
               <button type="button" class="btn" data-tpl-tab="shared">Shared</button>
@@ -270,17 +271,17 @@
         <div class="line">
           <button class="btn primary" id="layout-done">Done</button>
           <button class="btn" id="layout-cancel">Cancel</button>
-          <button class="btn" id="layout-template">Reset to template</button>
+          <button class="btn" id="layout-template">Reset to saved layout</button>
         </div>
       </div>
-      <div class="group">
-        <div class="sec-head"><h3>Save as template</h3></div>
+      <div class="group" id="layout-keep">
+        <div class="sec-head"><h3>Save as a layout</h3></div>
         <p class="hint note">Keep this layout to start new projects from.</p>
         <div class="line">
-          <input id="layout-tpl-name" type="text" placeholder="Template name" maxlength="60" autocomplete="off">
+          <input id="layout-tpl-name" type="text" placeholder="Layout name" maxlength="60" autocomplete="off">
           <button class="btn" id="layout-save-tpl">Save</button>
         </div>
-        <div class="line"><button class="btn" id="layout-update-tpl" hidden>Update template</button></div>
+        <div class="line"><button class="btn" id="layout-update-tpl" hidden>Update layout</button></div>
       </div>
     </div>
     <div class="group" id="sec-cue" hidden>
@@ -419,6 +420,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121447"></script>
+<script src="app.js?v=202610121449"></script>
 </body>
 </html>

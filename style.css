@@ -759,7 +759,8 @@ body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing
 .tp-led { fill: var(--accent); }
 .tp-spot { fill: var(--panel); stroke: var(--muted); stroke-width: 4; }
 .tpl-row { display: flex; align-items: center; gap: 2px; min-height: 34px; }
-.tpl-info { flex: 1; min-width: 0; }
+.tpl-row { flex-wrap: wrap; }
+.tpl-info { flex: 1 1 100%; min-width: 0; }       /* name and details on their own line, buttons underneath */
 .tpl-info .rename { width: 100%; }
 .tpl-name { font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tpl-row .btn.armed { width: auto; padding: 0 10px; background: #f24822; color: #fff; }
@@ -819,6 +820,10 @@ body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing
 .white-tag { min-width: 52px; font-variant-numeric: tabular-nums; }
 
 /* ---------- Layouts shared with a code ---------- */
+/* a layout edited by itself has nothing to reset to and nothing to save a copy as */
+body.tpl-edit #layout-template, body.tpl-edit #layout-keep, body.tpl-edit #layout-update-tpl, body.tpl-edit .dock, body.tpl-edit .view-col, body.tpl-edit .grip[data-grip="view"] { display: none; }
+@media (min-width: 900px) { body.tpl-edit main { grid-template-columns: min(var(--side-w, 300px), 45%) 1px minmax(0, 1fr); grid-template-areas: "bar gs plan" "side gs plan"; } body.tpl-edit #toggle-right { display: none; } }
+@media (max-width: 899px) { .tpl-codeline { flex-wrap: wrap; } .tpl-codeline input { flex-basis: 100%; } .tpl-codeline .btn { flex: 1; } }
 #share { z-index: 60; padding: 16px; }
 #share input[type="text"] { flex: 1; min-width: 0; height: 32px; }
 #share .btn { height: 32px; padding: 0 12px; }
