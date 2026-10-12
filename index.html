@@ -16,9 +16,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121057">
+<link rel="stylesheet" href="style.css?v=202610121106">
 </head>
 <body data-view="front">
+<div id="home" hidden>
+  <div class="home-inner">
+    <div class="home-head">
+      <img src="icons/icon.svg" width="44" height="44" alt="">
+      <h1>Stage Lighting Planner</h1>
+      <div class="spacer"></div>
+      <label class="btn">Import<input id="home-import" type="file" accept=".json,application/json" hidden></label>
+      <button id="new-project" class="btn primary">New project</button>
+    </div>
+    <form id="new-form" class="new-form" hidden>
+      <label>Name <input id="new-name" type="text" placeholder="Project name" maxlength="60" autocomplete="off"></label>
+      <label>Template <select id="new-template"><option>KDT TB UCC Layout</option></select></label>
+      <button class="btn primary" type="submit">Create</button>
+      <button class="btn" type="button" id="new-cancel">Cancel</button>
+    </form>
+    <h2 class="home-title">Projects</h2>
+    <div id="project-list" class="project-list"></div>
+    <p id="home-empty" class="hint" hidden>No projects yet. Press New project to start one.</p>
+  </div>
+</div>
+
 <main>
   <section class="view-col" id="views">
     <div class="menu-wrap">
@@ -27,6 +48,7 @@
       </button>
       <div id="menu" class="menu" hidden>
         <input id="project-name" class="menu-note" type="text" placeholder="Project name" title="Project name (used for exported files)" autocomplete="off">
+        <button id="go-home">All projects</button>
         <button id="watch">Watch</button>
         <button id="people">Hide people</button>
         <button id="theme">Dark mode</button>
@@ -184,6 +206,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121057"></script>
+<script src="app.js?v=202610121106"></script>
 </body>
 </html>

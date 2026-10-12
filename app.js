@@ -108,12 +108,84 @@ const blankLook = () => ({
   sidePos: { L: [false, false, false, false, false], R: [false, false, false, false, false] },
   cyclo: 'none', effect: 'none', bpm: 120,
 });
-const store = {
+// Projects. Everything is kept on this device. The list of projects is one entry in
+// local storage; each project's lights and cues are stored under keys that carry its id.
+// Which project is open is remembered per browser tab, so the app starts on the project
+// list and a reload stays inside the project you were in.
+const TEMPLATE = 'KDT TB UCC Layout';        // the only stage layout so far
+const LOOK_KEY = 'kdt-lighting-v1', SHOW_KEY = 'kdt-lighting-show-v1', PROJECTS_KEY = 'slp-projects-v1';
+const raw = {
   get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (e) { return fallback; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ } },
+  del(key) { try { localStorage.removeItem(key); } catch (e) { /* storage unavailable */ } },
 };
-let state = Object.assign(blankLook(), store.get('kdt-lighting-v1', {}));
-let show = Object.assign({ cues: [], trackName: '' }, store.get('kdt-lighting-show-v1', {}));
+const newId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const projectKey = (key, id) => `${key}:${id}`;
+let projects = raw.get(PROJECTS_KEY, null);
+if (!projects) {
+  // First run of the projects version: a show made before it becomes the first project.
+  projects = [];
+  const oldLook = raw.get(LOOK_KEY, null), oldShow = raw.get(SHOW_KEY, null);
+  if (oldLook || (oldShow && oldShow.cues && oldShow.cues.length)) {
+    const id = newId();
+    raw.set(projectKey(LOOK_KEY, id), oldLook || {});
+    raw.set(projectKey(SHOW_KEY, id), oldShow || {});
+    projects.push({ id, name: (oldShow && oldShow.projectName) || 'My first project', template: TEMPLATE, created: Date.now(), updated: Date.now(), cues: oldShow && oldShow.cues ? oldShow.cues.length : 0 });
+  }
+  raw.set(PROJECTS_KEY, projects);
+}
+let currentId = null;
+try { currentId = sessionStorage.getItem('slp-open'); } catch (e) { /* no session storage */ }
+if (!projects.some((p) => p.id === currentId)) currentId = null;
+const currentProject = () => projects.find((p) => p.id === currentId);
+const saveProjects = () => raw.set(PROJECTS_KEY, projects);
+
+// The rest of the app reads and writes through `store`. Project data goes to the open
+// project (and nowhere when the project list is showing); anything else is app-wide.
+const store = {
+  get(key, fallback) {
+    if (key !== LOOK_KEY && key !== SHOW_KEY) return raw.get(key, fallback);
+    return currentId ? raw.get(projectKey(key, currentId), fallback) : fallback;
+  },
+  set(key, value) {
+    if (key !== LOOK_KEY && key !== SHOW_KEY) return raw.set(key, value);
+    if (!currentId) return;
+    raw.set(projectKey(key, currentId), value);
+    const project = currentProject();
+    project.updated = Date.now();
+    project.cues = show.cues.length;
+    saveProjects();
+  },
+};
+
+// Soundtracks are too big for local storage, so each project's audio file lives in the
+// browser's database instead and is loaded again when the project opens.
+const audioStore = {
+  db: null,
+  open() {
+    return this.db || (this.db = new Promise((resolve, reject) => {
+      const request = indexedDB.open('slp-audio', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('tracks');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    }));
+  },
+  async run(mode, work) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('tracks', mode), request = work(tx.objectStore('tracks'));
+      tx.oncomplete = () => resolve(request && request.result);
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  put(id, file) { return this.run('readwrite', (s) => s.put(file, id)).catch(() => {}); },
+  get(id) { return this.run('readonly', (s) => s.get(id)).catch(() => null); },
+  del(id) { return this.run('readwrite', (s) => s.delete(id)).catch(() => {}); },
+};
+
+let state = Object.assign(blankLook(), store.get(LOOK_KEY, {}));
+let show = Object.assign({ cues: [], trackName: '' }, store.get(SHOW_KEY, {}));
+if (currentProject()) show.projectName = currentProject().name;      // the project list holds the name
 const prefs = Object.assign(
   { people: true, theme: window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' },
   store.get('kdt-lighting-prefs-v1', {}));
@@ -1391,8 +1463,11 @@ function wavePeaks(buf) {
   return peaks;
 }
 
-async function loadTrack(file) {
+// `restored` is true when the track is the project's saved one being loaded on open,
+// as opposed to a file the user has just picked.
+async function loadTrack(file, restored) {
   setPlaying(false);
+  if (!restored && currentId) audioStore.put(currentId, file);
   if (player.url) URL.revokeObjectURL(player.url);
   player.url = URL.createObjectURL(file);
   player.audio = new Audio(player.url);
@@ -1400,7 +1475,7 @@ async function loadTrack(file) {
   player.peaks = null;
   show.trackName = file.name; saveShow();
   $('load-track').title = `Track: ${file.name} (tap to load another)`;
-  toast(`Analyzing ${file.name}...`);
+  if (!restored) toast(`Analyzing ${file.name}...`);
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     const ac = new AC();
@@ -1410,10 +1485,11 @@ async function loadTrack(file) {
     const bpm = detectBpm(buf);
     if (bpm) { show.songBpm = show.detectedBpm = bpm; saveShow(); }
     // never overwrite a cue's tempo, or an effect that keeps its own
+    if (restored) return;
     if (bpm && !show.cues.length && !EFFECT_BPM[state.effect]) { state.bpm = bpm; commit(); }
     toast(bpm ? `${file.name}: detected ${bpm} BPM` : `${file.name}: no clear beat found`, 3500);
   } catch (e) {
-    toast(`${file.name}: could not analyze this file`, 3500);
+    if (!restored) toast(`${file.name}: could not analyze this file`, 3500);
   }
 }
 
@@ -1679,6 +1755,10 @@ async function importShow(file) {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.cues)) throw new Error('no cues');
     show = { cues: data.cues, trackName: data.trackName || '', projectName: data.projectName || '' };
+    if (currentProject()) {              // an imported show keeps this project's name unless it brings its own
+      show.projectName = show.projectName || currentProject().name;
+      currentProject().name = show.projectName;
+    }
     $('project-name').value = show.projectName;
     state = Object.assign(blankLook(), data.look || {});
     store.set('kdt-lighting-v1', state);
@@ -1853,7 +1933,10 @@ function drawPage(c, page, mapImg, shotImg) {
   // header
   c.fillStyle = '#202124'; c.textAlign = 'left'; font(46, 600);
   c.fillText(page.title, EDGE, EDGE + 44);
+  const titleW = c.measureText(page.title).width;
   c.fillStyle = '#5f6368'; c.textAlign = 'right'; font(23);
+  // the stage template goes in the header too, unless a long cue name leaves no room for it
+  if (c.measureText(page.metaLong).width + titleW + 260 < PAGE_W - 2 * EDGE) page.meta = page.metaLong;
   c.fillText(page.meta, PAGE_W - EDGE, EDGE + 40);
   const links = [];                              // areas to click on this page
   if (page.overview) {                           // "Overview" sits left of the page details and links back
@@ -1978,7 +2061,7 @@ function drawOverview(c, rows, pageNo, pageCount) {
   c.fillStyle = '#202124'; c.textAlign = 'left'; pdfFont(c, 46, 600);
   c.fillText('Cue overview', EDGE, EDGE + 44);
   c.fillStyle = '#5f6368'; c.textAlign = 'right'; pdfFont(c, 23);
-  c.fillText((show.projectName ? show.projectName + '   |   ' : '') + `overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
+  c.fillText((show.projectName ? show.projectName + '   |   ' : '') + TEMPLATE + `   |   overview ${pageNo} of ${pageCount}`, PAGE_W - EDGE, EDGE + 40);
   c.fillStyle = '#9aa0a6'; c.fillRect(EDGE, EDGE + 70, PAGE_W - 2 * EDGE, 2);
 
   c.textAlign = 'left'; c.fillStyle = '#5f6368'; pdfFont(c, 19, 600);
@@ -2083,6 +2166,7 @@ async function exportPdf() {
         like: similar[i] && { index: similar[i].index, title: likeTitle(i), lines: similar[i].lines },
         title: show.cues.length ? cueLabel(cue) : cue.name,
         meta: (show.projectName ? show.projectName + '   |   ' : '') + (show.cues.length ? `${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
+        metaLong: (show.projectName ? show.projectName + '   |   ' : '') + TEMPLATE + (show.cues.length ? `   |   ${fmt(cue.time)}   |   ${cue.instant ? 'Instant' : `Fade ${cue.fade} s`}   |   page ${i + 1} of ${cues.length}` : ''),
         map: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(planSvgText(cue.look)),
         shot: front.toDataURL('image/jpeg', 0.92),
       };
@@ -2132,6 +2216,142 @@ async function exportPdf() {
   setTimeout(() => toast(''), 3500);
 }
 
+// ---------------------------------------------------------------------------
+// Project list (the home screen)
+// ---------------------------------------------------------------------------
+function openProject(id) {
+  try { sessionStorage.setItem('slp-open', id); } catch (e) { /* no session storage */ }
+  location.reload();                     // start clean with that project's data
+}
+// A small picture of the front view, shown on the project's card.
+function saveThumbnail() {
+  const project = currentProject();
+  if (!project) return;
+  try {
+    const small = document.createElement('canvas');
+    small.width = 320; small.height = 188;
+    small.getContext('2d').drawImage(front, 0, 0, 320, 188);
+    project.thumb = small.toDataURL('image/jpeg', 0.7);
+    saveProjects();
+  } catch (e) { /* keep the old picture */ }
+}
+function goHome() {
+  saveThumbnail();
+  try { sessionStorage.removeItem('slp-open'); } catch (e) { /* no session storage */ }
+  location.reload();
+}
+function createProject(name, data) {      // data: an exported show to start from, or nothing
+  const id = newId();
+  const cues = data && Array.isArray(data.cues) ? data.cues : [];
+  raw.set(projectKey(LOOK_KEY, id), (data && data.look) || blankLook());
+  raw.set(projectKey(SHOW_KEY, id), { cues, trackName: '' });
+  projects.unshift({ id, name: name || 'Untitled project', template: TEMPLATE, created: Date.now(), updated: Date.now(), cues: cues.length });
+  saveProjects();
+  return id;
+}
+async function duplicateProject(project) {
+  const id = newId();
+  raw.set(projectKey(LOOK_KEY, id), raw.get(projectKey(LOOK_KEY, project.id), {}));
+  raw.set(projectKey(SHOW_KEY, id), raw.get(projectKey(SHOW_KEY, project.id), {}));
+  projects.unshift(Object.assign({}, project, { id, name: project.name + ' copy', created: Date.now(), updated: Date.now() }));
+  saveProjects();
+  const track = await audioStore.get(project.id);
+  if (track) await audioStore.put(id, track);
+  renderHome();
+}
+function deleteProject(project) {
+  raw.del(projectKey(LOOK_KEY, project.id));
+  raw.del(projectKey(SHOW_KEY, project.id));
+  audioStore.del(project.id);
+  projects = projects.filter((p) => p.id !== project.id);
+  saveProjects();
+  renderHome();
+}
+const when = (ms) => {
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days < 1) return 'today';
+  if (days < 2) return 'yesterday';
+  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+function renderHome() {
+  const list = $('project-list');
+  list.textContent = '';
+  $('home-empty').hidden = projects.length > 0;
+  const icon = (path) => `<svg viewBox="0 0 16 16"><path d="${path}"/></svg>`;
+  for (const project of [...projects].sort((a, b) => b.updated - a.updated)) {
+    const card = document.createElement('div');
+    card.className = 'project';
+    const open = document.createElement('button');
+    open.className = 'project-open';
+    open.title = 'Open ' + project.name;
+    if (project.thumb) { const img = new Image(); img.src = project.thumb; img.alt = ''; open.appendChild(img); }
+    else { const blank = document.createElement('div'); blank.className = 'no-thumb'; blank.textContent = 'No preview yet'; open.appendChild(blank); }
+    open.addEventListener('click', () => openProject(project.id));
+    card.appendChild(open);
+
+    const info = document.createElement('div');
+    info.className = 'project-info';
+    const name = document.createElement('div');
+    name.className = 'project-name'; name.textContent = project.name;
+    const meta = document.createElement('div');
+    meta.className = 'hint';
+    meta.textContent = `${project.template} · ${project.cues || 0} cue${project.cues === 1 ? '' : 's'} · edited ${when(project.updated)}`;
+    info.appendChild(name); info.appendChild(meta);
+    card.appendChild(info);
+
+    const actions = document.createElement('div');
+    actions.className = 'project-actions';
+    const act = (path, label, onClick) => {
+      const b = button(actions, '', 'btn icon', onClick);
+      b.innerHTML = icon(path); b.title = label; b.setAttribute('aria-label', label);
+      return b;
+    };
+    act('M11.6 1.8 14.2 4.4 5.4 13.2 2 14l.8-3.4zM10.5 4.3 4.1 10.7l-.4 1.6 1.6-.4 6.4-6.4z', 'Rename', () => {
+      const field = document.createElement('input');
+      field.type = 'text'; field.value = project.name; field.maxLength = 60; field.className = 'rename';
+      name.replaceWith(field);
+      field.focus(); field.select();
+      const done = () => { project.name = field.value.trim() || project.name; saveProjects(); renderHome(); };
+      field.addEventListener('blur', done);
+      field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
+    });
+    act('M5 1.5h8.5V11H12V3H5zM2.5 4.5h8v10h-8zM4 6v7h5V6z', 'Duplicate', () => duplicateProject(project));
+    // Deleting takes two taps: the first arms the button, the second within a few seconds deletes.
+    const del = act('M6 1.5h4l.6 1.2H14v1.5H2V2.7h3.4zM3.2 5.4h9.6l-.7 9.1H3.9zM6 7v5.8h1.2V7zm2.8 0v5.8H10V7z', 'Delete', () => {
+      if (del.classList.contains('armed')) return deleteProject(project);
+      del.classList.add('armed'); del.textContent = 'Delete?';
+      setTimeout(() => { if (del.isConnected) renderHome(); }, 3500);
+    });
+    card.appendChild(actions);
+    list.appendChild(card);
+  }
+}
+
+function buildHome() {
+  const form = $('new-form');
+  $('new-project').addEventListener('click', () => { form.hidden = false; $('new-name').focus(); });
+  $('new-cancel').addEventListener('click', () => { form.hidden = true; });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    openProject(createProject($('new-name').value.trim()));
+  });
+  $('home-import').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!Array.isArray(data.cues)) throw new Error('not a show');
+      createProject(data.projectName || file.name.replace(/\.[^.]+$/, ''), data);
+      renderHome();
+    } catch (err) {
+      toast(`${file.name} is not a lighting show export.`, 3500);
+    }
+  });
+  renderHome();
+}
+
 function buildShow() {
   $('play').addEventListener('click', () => setPlaying(!player.playing));
   $('add-cue').addEventListener('click', addCue);
@@ -2141,11 +2361,19 @@ function buildShow() {
   $('export').addEventListener('click', exportShow);
   $('export-pdf').addEventListener('click', exportPdf);
   $('import').addEventListener('change', (e) => { if (e.target.files[0]) importShow(e.target.files[0]); e.target.value = ''; });
-  if (show.trackName) $('load-track').title = `Last track: ${show.trackName} (tap to load it again)`;
+  if (show.trackName) $('load-track').title = `Track: ${show.trackName}`;
+  $('go-home').addEventListener('click', goHome);
+  window.addEventListener('pagehide', saveThumbnail);
+  if (currentId) audioStore.get(currentId).then((file) => { if (file) loadTrack(file, true); });
   // The project's name sits at the top of the menu and names the exported files.
   const project = $('project-name');
   project.value = show.projectName || '';
-  project.addEventListener('change', () => { show.projectName = project.value.trim(); saveShow(); });
+  project.addEventListener('change', () => {
+    show.projectName = project.value.trim() || 'Untitled project';
+    project.value = show.projectName;
+    if (currentProject()) currentProject().name = show.projectName;
+    saveShow();
+  });
   project.addEventListener('keydown', (e) => { if (e.key === 'Enter') project.blur(); });
   renderCues();
 }
@@ -2156,6 +2384,10 @@ function buildShow() {
 buildPlan();
 buildControls();
 buildShow();
+const atHome = !currentId;                 // no project open: show the project list
+document.body.classList.toggle('at-home', atHome);
+$('home').hidden = !atHome;
+if (atHome) buildHome();
 setupGrips();
 try { buildThree(); } catch (e) { /* no WebGL here: the rest of the app still works */ }
 applyPrefs();
@@ -2171,6 +2403,7 @@ compute(state, 0, shown);
 
 let lastMs = 0, wall = 0, timeText = '', nextText = '';
 function frame(ms) {
+  if (atHome) return;                      // nothing to draw behind the project list
   const dt = Math.min(0.1, (ms - lastMs) / 1000 || 0);
   lastMs = ms; wall += dt;
   if (player.playing && !player.audio) {
