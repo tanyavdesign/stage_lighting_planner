@@ -298,11 +298,9 @@ const prefs = Object.assign({ people: true, theme: 'dark' }, store.get('kdt-ligh
 if (!prefs.themeChosen) prefs.theme = 'dark';
 // The app no longer comes with a stage of its own. A device that already has projects keeps
 // the KDT layout as an ordinary template (same id, so those projects still point at it).
-if (!prefs.seededKdt) {
-  if (projects.some((p) => !p.drafts) && !templates.some((t) => t.id === BUILTIN.id)) {
-    templates.unshift({ id: BUILTIN.id, name: TEMPLATE, layout: templateLayout(), created: Date.now() });
-    saveTemplates();
-  }
+if (!prefs.seededKdt && projects.some((p) => !p.drafts && p.templateId === BUILTIN.id) && !templates.some((t) => t.id === BUILTIN.id)) {
+  templates.unshift({ id: BUILTIN.id, name: TEMPLATE, layout: templateLayout(), created: Date.now() });
+  saveTemplates();
   prefs.seededKdt = true;
   store.set('kdt-lighting-prefs-v1', prefs);
 }
@@ -3393,6 +3391,7 @@ function renderHome() {
 //   template.share = { code, version, key? }     key: only on the publisher's device
 // ---------------------------------------------------------------------------
 const CLOUD = 'https://firestore.googleapis.com/v1/projects/cueo-lab/databases/(default)/documents/layouts/';
+const KDT_CODE = 'kdt-ucc-theatre-lighting-plot';
 const cleanCode = (text) => String(text).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 async function sha256(text) {
   const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
@@ -3455,6 +3454,16 @@ async function importCode(raw) {
   toast('Looking for that layout...');
   try {
     const got = await cloudGet(code);
+    if (!got && code === KDT_CODE) {
+      // Nobody has published the KDT stage yet: the first device to ask for it by its code gets
+      // the original layout as its own template and becomes its publisher.
+      let tpl = templates.find((t) => t.id === BUILTIN.id && !t.share);
+      if (!tpl) { tpl = { id: templates.some((t) => t.id === BUILTIN.id) ? 't' + newId() : BUILTIN.id, name: TEMPLATE, layout: templateLayout(), created: Date.now() }; templates.unshift(tpl); }
+      saveTemplates();
+      const result = await cloudPut(tpl, code);
+      renderTemplates();
+      return toast(result === 'ok' ? `${TEMPLATE} is now published as ${code}, from this device.` : `Could not publish ${code}.`, 5000);
+    }
     if (!got) return toast(`No layout has the code ${code}.`, 3500);
     templates.unshift({ id: 't' + newId(), name: got.name, layout: got.layout, lights: got.lights, share: { code, version: got.version }, created: Date.now() });
     saveTemplates();
