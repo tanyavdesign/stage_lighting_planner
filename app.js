@@ -223,6 +223,26 @@ const prefs = Object.assign(
   { people: true, theme: window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' },
   store.get('kdt-lighting-prefs-v1', {}));
 const selection = new Set();
+
+// Line icons, drawn on a 16 x 16 grid with a thin stroke
+const ICONS = {
+  menu: '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>',
+  play: '<path d="M5 3.2v9.6L12.5 8z"/>',
+  pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
+  prev: '<path d="M4 3.5v9M12 3.5 6 8l6 4.5z"/>',
+  next: '<path d="M12 3.5v9M4 3.5 10 8l-6 4.5z"/>',
+  plus: '<path d="M8 3v10M3 8h10"/>',
+  note: '<path d="M6.5 11.5v-8l6-1.2v8"/><circle cx="4.7" cy="11.5" r="1.8"/><circle cx="10.7" cy="10.3" r="1.8"/>',
+  pencil: '<path d="M10.8 2.8l2.4 2.4-7.6 7.6-3 .6.6-3zM9.3 4.3l2.4 2.4"/>',
+  copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4A1.5 1.5 0 0 0 9 2.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/>',
+  trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5M6.8 7v4M9.2 7v4"/>',
+  comment: '<path d="M2.5 3.5h11V11h-6l-3 2.5V11h-2z"/>',
+  undo: '<path d="M6 3.5l-3 3 3 3M3 6.5h6.5a3 3 0 0 1 0 6h-2"/>',
+  redo: '<path d="M10 3.5l3 3-3 3M13 6.5H6.5a3 3 0 0 0 0 6h2"/>',
+  panelLeft: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/>',
+  panelRight: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M9.5 3v10"/>',
+};
+const svgIcon = (name) => `<svg viewBox="0 0 16 16">${ICONS[name]}</svg>`;
 const BLANK = blankLook();
 
 // `follow` is true while the cue timeline drives the lights; a manual edit turns it
@@ -833,6 +853,11 @@ function buildControls() {
   $('menu').addEventListener('change', (e) => { if (e.target.type === 'file') $('menu').hidden = true; });
   document.addEventListener('click', () => { $('menu').hidden = true; });
 
+  // Hide or show the side panels (desktop)
+  each('[data-icon]', (el) => el.insertAdjacentHTML('afterbegin', svgIcon(el.dataset.icon)));
+  $('toggle-left').addEventListener('click', () => { prefs.hideLeft = !prefs.hideLeft; applyPrefs(); });
+  $('toggle-right').addEventListener('click', () => { prefs.hideRight = !prefs.hideRight; applyPrefs(); });
+
   document.addEventListener('keydown', (e) => {
     const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
     if (layoutMode && e.key !== 'Escape') return;       // shortcuts are for lighting, not layout editing
@@ -842,6 +867,10 @@ function buildControls() {
       else if (aiming) { aiming = false; syncUI(); }
       else if (document.body.classList.contains('watch')) setWatch(false);
       else { clearSelection(); syncUI(); }
+    } else if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+      e.preventDefault();                       // hide or show both side panels
+      prefs.hideLeft = prefs.hideRight = !(prefs.hideLeft && prefs.hideRight);
+      applyPrefs();
     } else if (typing) {
       return;                                   // leave text fields their own keys
     } else if (e.key === ' ') {
@@ -1020,6 +1049,8 @@ function applyPrefs() {
   document.documentElement.dataset.theme = prefs.theme;
   $('theme').textContent = prefs.theme === 'dark' ? 'Light mode' : 'Dark mode';
   $('people').textContent = prefs.people ? 'Hide people' : 'Show people';
+  document.body.classList.toggle('no-left', !!prefs.hideLeft);
+  document.body.classList.toggle('no-right', !!prefs.hideRight);
   store.set('kdt-lighting-prefs-v1', prefs);
 }
 
@@ -1553,8 +1584,8 @@ function duration() {
   return Math.max(60, lastCue + 10);
 }
 
-const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>';
-const ICON_PAUSE = '<svg viewBox="0 0 16 16"><path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z"/></svg>';
+const ICON_PLAY = svgIcon('play');
+const ICON_PAUSE = svgIcon('pause');
 function setPlaying(on) {
   if (on && currentTime() >= duration() - 0.05) seek(0);
   player.playing = on;
@@ -1683,31 +1714,31 @@ function sizeWave() {
 
 function drawWave(T, active) {
   const dark = prefs.theme === 'dark', H = waveH, dur = duration(), x = (t) => t / dur * waveW;
-  wctx.fillStyle = dark ? '#26282c' : '#f1f3f4'; wctx.fillRect(0, 0, waveW, H);
+  wctx.fillStyle = dark ? '#383838' : '#f5f5f5'; wctx.fillRect(0, 0, waveW, H);
   if (player.peaks) {
-    wctx.fillStyle = dark ? '#5f6368' : '#bdc1c6';
+    wctx.fillStyle = dark ? '#6b6b6b' : '#c4c4c4';
     const N = player.peaks.length;
     for (let px = 0; px < waveW; px += 2) {
       const h = Math.max(1, player.peaks[Math.floor(px / waveW * N)] * (H - 8));
       wctx.fillRect(px, (H - h) / 2, 1.4, h);
     }
   }
-  const green = dark ? '#81c995' : '#188038';
+  const live = dark ? '#ffffff' : '#1e1e1e';
   wctx.font = '600 10px Inter, sans-serif'; wctx.textAlign = 'left';
   show.cues.forEach((cue, i) => {
     const cx = x(cue.time);
     if (!cue.instant && cue.fade > 0) {          // shaded stretch shows how long the fade lasts
-      wctx.fillStyle = dark ? 'rgba(129,201,149,.18)' : 'rgba(24,128,56,.14)';
+      wctx.fillStyle = dark ? 'rgba(13,153,255,.22)' : 'rgba(13,153,255,.16)';
       wctx.fillRect(cx, 0, x(cue.fade), H);
     }
-    wctx.fillStyle = cue.id === selectedCue ? (dark ? '#8ab4f8' : '#1a73e8') : i === active ? green : (dark ? '#9aa0a6' : '#5f6368');
+    wctx.fillStyle = cue.id === selectedCue ? '#0d99ff' : i === active ? live : (dark ? '#9a9a9a' : '#8c8c8c');
     wctx.fillRect(cx - 1, 0, 2, H);
     wctx.fillRect(cx - 1, 0, 15, 13);
     if (cue.note) { wctx.beginPath(); wctx.arc(cx + 7, H - 7, 3.5, 0, 6.3); wctx.fill(); }   // has a note
-    wctx.fillStyle = dark ? '#202124' : '#fff';
+    wctx.fillStyle = dark && cue.id !== selectedCue ? '#1e1e1e' : '#fff';
     wctx.fillText(i + 1, cx + 2, 10);
   });
-  wctx.fillStyle = '#d93025';
+  wctx.fillStyle = '#f24822';
   wctx.fillRect(x(T) - 1, 0, 2, H);
 }
 
@@ -1815,9 +1846,9 @@ function renderCues() {
   const cue = show.cues.find((c) => c.id === selectedCue);
   $('sec-cue').hidden = !cue;
   if (!cue) return;
-  const iconButton = (svgPath, label, onClick, cls) => {
+  const iconButton = (name, label, onClick, cls) => {
     const b = button(box, '', 'btn icon' + (cls ? ' ' + cls : ''), onClick);
-    b.innerHTML = `<svg viewBox="0 0 16 16"><path d="${svgPath}"/></svg>`;
+    b.innerHTML = svgIcon(name);
     b.title = label; b.setAttribute('aria-label', label);
     return b;
   };
@@ -1842,7 +1873,7 @@ function renderCues() {
   } else {
     tag.textContent = cueLabel(cue);
     tag.title = cueLabel(cue);
-    iconButton('M11.6 1.8 14.2 4.4 5.4 13.2 2 14l.8-3.4zM10.5 4.3 4.1 10.7l-.4 1.6 1.6-.4 6.4-6.4z', 'Rename cue', () => { nameEditing = true; renderCues(); }, 'bare');
+    iconButton('pencil', 'Rename cue', () => { nameEditing = true; renderCues(); }, 'bare');
   }
 
   input(box, 'text', 't', fmt(cue.time), (n) => {
@@ -1864,11 +1895,11 @@ function renderCues() {
   });
   box.appendChild(mode);
 
-  iconButton('M5 1.5h8.5V11H12V3H5zM2.5 4.5h8v10h-8zM4 6v7h5V6z', 'Duplicate cue', () => duplicateCue(cue));
-  iconButton('M6 1.5h4l.6 1.2H14v1.5H2V2.7h3.4zM3.2 5.4h9.6l-.7 9.1H3.9zM6 7v5.8h1.2V7zm2.8 0v5.8H10V7z', 'Delete cue', () => deleteCue(cue));
+  iconButton('copy', 'Duplicate cue', () => duplicateCue(cue));
+  iconButton('trash', 'Delete cue', () => deleteCue(cue));
   // Optional comment for this cue; it goes on the cue's page in the PDF.
   const showNote = !!cue.note || noteOpen;
-  iconButton('M2 2.5h12v8.2H7.2L4 13.6v-2.9H2zM3.6 4.1v5h2v1.3l1.5-1.3h5.3v-5z', showNote ? 'Hide empty note' : 'Add note',
+  iconButton('comment', showNote ? 'Hide empty note' : 'Add note',
     () => { noteOpen = !noteOpen; renderCues(); }, showNote ? 'active' : '');
   if (showNote) {
     const note = document.createElement('textarea');
@@ -1934,7 +1965,7 @@ async function importShow(file) {
       show.projectName = show.projectName || currentProject().name;
       currentProject().name = show.projectName;
     }
-    $('project-name').value = show.projectName;
+    $('project-name').value = $('bar-name').textContent = show.projectName;
     state = Object.assign(blankLook(), data.look || {});
     store.set('kdt-lighting-v1', state);
     syncUI();
@@ -2463,7 +2494,6 @@ function renderHome() {
   const list = $('project-list');
   list.textContent = '';
   $('home-empty').hidden = projects.length > 0;
-  const icon = (path) => `<svg viewBox="0 0 16 16"><path d="${path}"/></svg>`;
   for (const project of [...projects].sort((a, b) => b.updated - a.updated)) {
     const card = document.createElement('div');
     card.className = 'project';
@@ -2489,10 +2519,10 @@ function renderHome() {
     actions.className = 'project-actions';
     const act = (path, label, onClick) => {
       const b = button(actions, '', 'btn icon', onClick);
-      b.innerHTML = icon(path); b.title = label; b.setAttribute('aria-label', label);
+      b.innerHTML = svgIcon(path); b.title = label; b.setAttribute('aria-label', label);
       return b;
     };
-    act('M11.6 1.8 14.2 4.4 5.4 13.2 2 14l.8-3.4zM10.5 4.3 4.1 10.7l-.4 1.6 1.6-.4 6.4-6.4z', 'Rename', () => {
+    act('pencil', 'Rename', () => {
       const field = document.createElement('input');
       field.type = 'text'; field.value = project.name; field.maxLength = 60; field.className = 'rename';
       name.replaceWith(field);
@@ -2501,9 +2531,9 @@ function renderHome() {
       field.addEventListener('blur', done);
       field.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') field.blur(); });
     });
-    act('M5 1.5h8.5V11H12V3H5zM2.5 4.5h8v10h-8zM4 6v7h5V6z', 'Duplicate', () => duplicateProject(project));
+    act('copy', 'Duplicate', () => duplicateProject(project));
     // Deleting takes two taps: the first arms the button, the second within a few seconds deletes.
-    const del = act('M6 1.5h4l.6 1.2H14v1.5H2V2.7h3.4zM3.2 5.4h9.6l-.7 9.1H3.9zM6 7v5.8h1.2V7zm2.8 0v5.8H10V7z', 'Delete', () => {
+    const del = act('trash', 'Delete', () => {
       if (del.classList.contains('armed')) return deleteProject(project);
       del.classList.add('armed'); del.textContent = 'Delete?';
       setTimeout(() => { if (del.isConnected) renderHome(); }, 3500);
@@ -2552,10 +2582,10 @@ function buildShow() {
   if (currentId) audioStore.get(currentId).then((file) => { if (file) loadTrack(file, true); });
   // The project's name sits at the top of the menu and names the exported files.
   const project = $('project-name');
-  project.value = show.projectName || '';
+  project.value = $('bar-name').textContent = show.projectName || '';
   project.addEventListener('change', () => {
     show.projectName = project.value.trim() || 'Untitled project';
-    project.value = show.projectName;
+    project.value = $('bar-name').textContent = show.projectName;
     if (currentProject()) currentProject().name = show.projectName;
     saveShow();
   });

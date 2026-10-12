@@ -6,7 +6,7 @@
 <title>Stage Lighting Planner</title>
 <meta name="description" content="Plan stage lighting cues on a stage plan with a live front view and 3D preview.">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#17181b">
+<meta name="theme-color" content="#1e1e1e">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,8 +15,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121112">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=202610121134">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -41,11 +41,9 @@
 </div>
 
 <main>
-  <section class="view-col" id="views">
+  <div class="bar" id="bar">
     <div class="menu-wrap">
-      <button id="more" class="btn icon" aria-label="Menu" title="Menu">
-        <svg viewBox="0 0 16 16"><path d="M2 3.5h12v1.6H2zM2 7.2h12v1.6H2zM2 10.9h12v1.6H2z"/></svg>
-      </button>
+      <button id="more" class="btn icon" data-icon="menu" aria-label="Menu" title="Menu"></button>
       <div id="menu" class="menu" hidden>
         <input id="project-name" class="menu-note" type="text" placeholder="Project name" title="Project name (used for exported files)" autocomplete="off">
         <button id="go-home">All projects</button>
@@ -59,6 +57,12 @@
         <button id="reset">Clear lights</button>
       </div>
     </div>
+    <span id="bar-name" class="bar-name"></span>
+    <button id="toggle-left" class="btn icon" data-icon="panelLeft" aria-label="Hide or show the controls" title="Hide or show the controls"></button>
+  </div>
+  <button id="toggle-right" class="btn icon" data-icon="panelRight" aria-label="Hide or show the previews" title="Hide or show the previews"></button>
+
+  <section class="view-col" id="views">
     <div class="seg view-switch">
       <button class="btn small" data-view-pick="front">Front</button>
       <button class="btn small" data-view-pick="three">3D</button>
@@ -82,8 +86,8 @@
       <button id="deselect" class="btn small chip" hidden>Deselect</button>
       <button id="plan-reset" class="btn small chip" hidden>Reset zoom</button>
       <div class="history">
-        <button id="undo" class="btn icon" title="Undo (Cmd+Z)" aria-label="Undo"><svg viewBox="0 0 16 16"><path d="M6.5 3 2.5 7l4 4V8.5h3a2.5 2.5 0 0 1 0 5H7v1.6h2.5a4.1 4.1 0 0 0 0-8.2h-3z"/></svg></button>
-        <button id="redo" class="btn icon" title="Redo (Cmd+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 16 16" style="transform:scaleX(-1)"><path d="M6.5 3 2.5 7l4 4V8.5h3a2.5 2.5 0 0 1 0 5H7v1.6h2.5a4.1 4.1 0 0 0 0-8.2h-3z"/></svg></button>
+        <button id="undo" class="btn icon" data-icon="undo" title="Undo (Cmd+Z)" aria-label="Undo"></button>
+        <button id="redo" class="btn icon" data-icon="redo" title="Redo (Cmd+Shift+Z)" aria-label="Redo"></button>
       </div>
     </div>
   </section>
@@ -211,12 +215,11 @@
 
 <footer class="dock">
   <div class="transport">
-    <button id="play" class="btn icon" title="Play or pause (space)"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg></button>
-    <button id="prev-cue" class="btn icon" title="Previous cue"><svg viewBox="0 0 16 16"><path d="M3 3h1.8v10H3zM13 3v10L5.5 8z"/></svg></button>
-    <button id="next-cue" class="btn icon" title="Next cue"><svg viewBox="0 0 16 16"><path d="M11.2 3H13v10h-1.8zM3 3v10l7.5-5z"/></svg></button>
-    <button id="add-cue" class="btn icon primary" title="Add a cue here"><svg viewBox="0 0 16 16"><path d="M7.1 2.5h1.8v4.6h4.6v1.8H8.9v4.6H7.1V8.9H2.5V7.1h4.6z"/></svg></button>
-    <label class="btn icon" id="load-track" title="Load a track" aria-label="Load a track">
-      <svg viewBox="0 0 16 16"><path d="M9 2v8.3a2.6 2.6 0 1 0 1.6 2.4V5h3V2z"/></svg>
+    <button id="play" class="btn icon" data-icon="play" title="Play or pause (space)"></button>
+    <button id="prev-cue" class="btn icon" data-icon="prev" title="Previous cue"></button>
+    <button id="next-cue" class="btn icon" data-icon="next" title="Next cue"></button>
+    <button id="add-cue" class="btn icon primary" data-icon="plus" title="Add a cue here"></button>
+    <label class="btn icon" id="load-track" data-icon="note" title="Load a track" aria-label="Load a track">
       <input id="track-file" type="file" accept="audio/*" hidden>
     </label>
     <span id="time" class="time">0:00.0 / 1:00.0</span>
@@ -228,6 +231,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121112"></script>
+<script src="app.js?v=202610121134"></script>
 </body>
 </html>
