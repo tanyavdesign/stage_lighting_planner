@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121348">
+<link rel="stylesheet" href="style.css?v=202610121354">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -51,22 +51,26 @@
       </div>
       <h1 id="home-title" hidden></h1>
       <div class="spacer"></div>
-      <label class="btn">Import<input id="home-import" type="file" multiple hidden></label>
-      <button id="new-project" class="btn primary">New project</button>
+      <div class="split import-wrap">
+        <button id="import-btn" class="btn">Import<span id="import-arrow" class="btn-arrow"></span></button>
+        <input id="home-import" type="file" multiple hidden>
+        <div id="import-menu" class="menu" hidden>
+          <button data-import="item">Item</button>
+          <button data-import="project">Project</button>
+        </div>
+      </div>
       <div id="new-item-wrap" class="split" hidden>
         <button id="new-item" class="btn primary">New item</button>
         <button id="new-item-more" class="btn primary icon" aria-label="More ways to add items" title="More ways to add items"></button>
         <div id="new-item-menu" class="menu" hidden><button id="new-item-many">Add several items…</button></div>
       </div>
     </div>
+    <div id="home-pills" class="pills">
+      <button id="new-project" class="pill"><span class="pill-icon pill-blue" data-pill="folder"></span>New project</button>
+      <button id="draft-new" class="pill"><span class="pill-icon pill-purple" data-pill="note"></span>New item</button>
+    </div>
     <div id="drafts">
-      <div class="home-sub">
-        <h2 class="home-title">Drafts</h2>
-        <span class="hint draft-hint">Items not in a project yet</span>
-        <div class="spacer"></div>
-        <label class="btn">Import item<input id="draft-import" type="file" multiple hidden></label>
-        <button id="draft-new" class="btn">New item</button>
-      </div>
+      <div class="home-sub"><h2 class="home-title">Drafts</h2></div>
       <div id="draft-list" class="project-list"></div>
     </div>
     <div class="home-sub">
@@ -353,6 +357,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121348"></script>
+<script src="app.js?v=202610121354"></script>
 </body>
 </html>

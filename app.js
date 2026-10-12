@@ -273,6 +273,7 @@ const ICONS = {
   moveon: '<path d="M3 8h9.5M9 4.2 12.8 8 9 11.8"/>',
   grip: '<path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" stroke-width="2"/>',
   refresh: '<path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.8v2.6h-2.6"/>',
+  folder: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5z"/>',
   moveto: '<path d="M2.5 4.5v7.5h11V6H8L6.5 4.5zM7 9h4M9.4 7.4 11 9l-1.6 1.6"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
@@ -2888,7 +2889,9 @@ async function readArchive(zip, out) {
   }
 }
 // Bring files in. On the project list each becomes a project; inside a project their items join it.
-async function importFiles(fileList) {
+// On the home screen `as` says what the files should become: 'item' puts every item in Drafts,
+// 'project' makes a project from each file. Inside a project the items always join it.
+async function importFiles(fileList, as) {
   const project = currentProject(), bad = [];
   let items = 0, made = 0;
   toast('Importing...');
@@ -2896,13 +2899,18 @@ async function importFiles(fileList) {
     try {
       const got = await readFile(file);
       for (const p of got.projects) {
-        const into = project || createProject(p.name, null, p);
+        const into = project || (as === 'item' ? draftsProject() : createProject(p.name, null, p));
         for (const rec of p.items) await addItem(into, rec.data.name, rec);
-        if (project) items += p.items.length; else made++;
+        if (project || as === 'item') items += p.items.length; else made++;
       }
-      for (const rec of got.items) {              // on the home screen a lone item lands in Drafts
-        await addItem(project || draftsProject(), rec.data.name, rec);
-        items++;
+      for (const rec of got.items) {
+        if (!project && as === 'project') {       // a lone item asked for as a project gets one of its own
+          await addItem(createProject(rec.data.project || rec.data.name, null, rec.data), rec.data.name, rec);
+          made++;
+        } else {
+          await addItem(project || draftsProject(), rec.data.name, rec);
+          items++;
+        }
       }
     } catch (e) { bad.push(file.name); }
   }
@@ -2977,13 +2985,15 @@ function renderHome() {
   each('[data-home-view]', (b) => b.classList.toggle('active', b.dataset.homeView === view));
   $('home-layout').hidden = !project;
   $('home-back').hidden = $('new-item-wrap').hidden = !project;
-  $('home-logo').hidden = $('new-project').hidden = !!project;
+  $('home-logo').hidden = $('home-pills').hidden = !!project;
+  $('import-arrow').hidden = !!project;
   $('home-title').textContent = project ? project.name : '';       // the project list has no title, only the small icon
   $('home-title').hidden = !project;
   $('home-heading').textContent = project ? `Items · ${project.template}` : 'Projects';
   $('home-empty').hidden = true;                 // the dashed card below says it instead
   $('home-empty').textContent = project ? 'No items yet. Press New item to add one.' : 'No projects yet. Press New project to start one.';
-  for (const id of [...picked]) if (!things.some((t) => t.id === id)) picked.delete(id);
+  const loose = !project && projects.find((p) => p.drafts) ? projects.find((p) => p.drafts).items : [];       // drafts can be ticked too
+  for (const id of [...picked]) if (![...things, ...loose].some((t) => t.id === id)) picked.delete(id);
   $('pick-all').hidden = !things.length;
   $('pick-all').textContent = picked.size === things.length ? 'Select none' : 'Select all';
   $('pick-download').hidden = !picked.size;
@@ -3150,8 +3160,12 @@ function renderHome() {
   const drafts = projects.find((p) => p.drafts), draftList = $('draft-list');
   $('drafts').hidden = !!project;
   draftList.textContent = '';
-  draftList.className = 'project-list view-' + (view === 'list' ? 'list' : 'small');      // drafts stay compact so the projects are not pushed far down
+  draftList.className = 'project-list view-' + view;
   if (!project && drafts) for (const item of drafts.items) addCard(item, drafts, drafts.items, draftList);
+  if (!project) {
+    const addDraft = button(draftList, '', 'project new-card', () => $('draft-new').click());
+    addDraft.innerHTML = svgIcon('plus') + '<span>New item</span>';
+  }
   // On the project list: the items worked on last, across all projects, to pick up where you left off.
   const recent = project ? [] : projects.flatMap((p) => p.items.map((item) => ({ p, item })))
     .sort((a, b) => (b.item.updated || 0) - (a.item.updated || 0)).slice(0, 4);
@@ -3305,11 +3319,24 @@ function buildHome() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !/^INPUT$/.test(e.target.tagName)) close(); });
   each('[data-tpl-tab]', (b) => b.addEventListener('click', () => { tplTab = b.dataset.tplTab; renderTemplates(); }));
   $('tpl-create').addEventListener('click', newFromTemplate);
+  // Import: inside a project it opens the file picker; on the home screen it first asks item or project
+  let importAs = 'item';
+  const importMenu = $('import-menu');
+  $('import-arrow').innerHTML = svgIcon('chevron');
+  $('import-btn').addEventListener('click', (e) => {
+    if (currentProject()) return $('home-import').click();
+    e.stopPropagation();
+    importMenu.hidden = !importMenu.hidden;
+    keepOnScreen(importMenu);
+  });
+  each('[data-import]', (b) => b.addEventListener('click', () => { importAs = b.dataset.import; $('home-import').click(); }));
+  document.addEventListener('click', () => { importMenu.hidden = true; });
   $('home-import').addEventListener('change', (e) => {
     const files = [...e.target.files];
     e.target.value = '';
-    if (files.length) importFiles(files);
+    if (files.length) importFiles(files, importAs);
   });
+  each('[data-pill]', (el) => { el.innerHTML = svgIcon(el.dataset.pill); });
   $('home-back').innerHTML = svgIcon('back');
   $('home-back').addEventListener('click', () => setOpen(null, null));
   $('new-item').addEventListener('click', async () => {
@@ -3389,19 +3416,18 @@ function buildHome() {
     renderHome();
     toast(`Added ${item.name} to Drafts.`, 2000);
   });
-  $('draft-import').addEventListener('change', (e) => {
-    const files = [...e.target.files];
-    e.target.value = '';
-    if (files.length) importFiles(files);
-  });
   $('pick-all').addEventListener('click', () => {
     const things = currentProject() ? currentProject().items : realProjects();
     if (picked.size === things.length) picked.clear(); else things.forEach((t) => picked.add(t.id));
     renderHome();
   });
-  $('pick-download').addEventListener('click', () => {
+  $('pick-download').addEventListener('click', async () => {
     const things = currentProject() ? currentProject().items : realProjects();
-    downloadFiles(things.filter((t) => picked.has(t.id)));
+    const chosen = things.filter((t) => picked.has(t.id));
+    const drafts = currentProject() ? null : projects.find((p) => p.drafts);
+    const loose = drafts ? drafts.items.filter((t) => picked.has(t.id)) : [];
+    if (chosen.length) await downloadFiles(chosen);
+    if (loose.length) await downloadFiles(loose, drafts);
   });
   renderHome();
 }
