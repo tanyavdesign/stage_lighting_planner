@@ -3245,6 +3245,8 @@ function frame(ms) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+// everything is in place: show the page (it starts blank so a reload cannot flash the wrong screen)
+requestAnimationFrame(() => document.documentElement.classList.remove('booting'));
 
 // Installable app: keep a copy of the files on the device so it opens offline.
 // Only on the live site; a local preview should always show the files on disk.

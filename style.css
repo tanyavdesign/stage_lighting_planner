@@ -49,6 +49,8 @@
 }
 
 * { box-sizing: border-box; }
+html { background: var(--bg); }
+html.booting body > * { visibility: hidden; }      /* blank until the app knows which screen to show */
 [hidden] { display: none !important; }
 
 /* The app fills the screen and never scrolls as a page: work area on top, track bar
