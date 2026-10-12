@@ -903,7 +903,7 @@ function buildControls() {
   each('[data-tab-pick]', (b) => b.addEventListener('click', () => { document.body.dataset.tab = b.dataset.tabPick; syncUI(); }));
 
   // "More" menu
-  $('more').addEventListener('click', (e) => { e.stopPropagation(); $('menu').hidden = !$('menu').hidden; });
+  $('more').addEventListener('click', (e) => { e.stopPropagation(); $('menu').hidden = !$('menu').hidden; keepOnScreen($('menu')); });
   $('menu').addEventListener('click', (e) => { if (!e.target.closest('label, input, .menu-icons')) $('menu').hidden = true; e.stopPropagation(); });
   $('menu').addEventListener('change', (e) => { if (e.target.type === 'file') $('menu').hidden = true; });
   document.addEventListener('click', () => { $('menu').hidden = true; });
@@ -1085,6 +1085,15 @@ function setWatch(on) {
   $('menu').hidden = true;
 }
 
+// A menu that would run off the side of the screen is slid back in.
+function keepOnScreen(menu) {
+  menu.style.transform = '';
+  if (menu.hidden) return;
+  const r = menu.getBoundingClientRect(), edge = 8;
+  const dx = r.right > innerWidth - edge ? innerWidth - edge - r.right : r.left < edge ? edge - r.left : 0;
+  if (dx) menu.style.transform = `translateX(${Math.round(dx)}px)`;
+}
+
 // Draggable dividers. On phones the bars under the preview and the plan change their
 // heights. On desktop the same two bars sit between the columns and change the widths
 // of the previews and the controls, and a third splits the two previews.
@@ -1141,6 +1150,8 @@ function setupGrips() {
 
 function applyPrefs() {
   document.documentElement.dataset.theme = prefs.theme;
+  const bar = document.querySelector('meta[name="theme-color"]');        // the phone's status bar matches the page
+  if (bar) bar.content = prefs.theme === 'dark' ? '#1e1e1e' : '#f5f5f5';
   $('theme').innerHTML = svgIcon(prefs.theme === 'dark' ? 'sun' : 'moon');
   $('theme').title = prefs.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   $('people').classList.toggle('active', prefs.people);
@@ -1693,7 +1704,7 @@ function setPlaying(on) {
 function loadCue(idx) {            // copy a cue's look into the live look
   loadedIdx = idx;
   if (idx < 0) return;
-  state = clone(show.cues[idx].look);
+  state = Object.assign(blankLook(), clone(show.cues[idx].look));      // a look from an older or outside file may lack parts
   store.set('kdt-lighting-v1', state);
   syncUI();
   if (selectedCue !== show.cues[idx].id) {     // the Cue section follows the playhead
@@ -3223,7 +3234,7 @@ function buildHome() {
   const themeLabel = () => { $('home-theme').innerHTML = prefs.theme === 'dark' ? svgIcon('sun') + 'Light mode' : svgIcon('moon') + 'Dark mode'; };
   for (const [id, icon] of [['home-templates', 'viewtile'], ['home-backup', 'download'], ['home-reload', 'refresh']]) $(id).insertAdjacentHTML('afterbegin', svgIcon(icon));
   themeLabel();
-  $('home-more').addEventListener('click', (e) => { e.stopPropagation(); homeMenu.hidden = !homeMenu.hidden; });
+  $('home-more').addEventListener('click', (e) => { e.stopPropagation(); homeMenu.hidden = !homeMenu.hidden; keepOnScreen(homeMenu); });
   document.addEventListener('click', () => { homeMenu.hidden = true; });
   $('home-theme').addEventListener('click', () => { prefs.theme = prefs.theme === 'dark' ? 'light' : 'dark'; prefs.themeChosen = true; applyPrefs(); themeLabel(); });
   $('home-templates').addEventListener('click', () => openTemplates(true));
@@ -3294,7 +3305,7 @@ function buildHome() {
   const closeMany = () => { manyDialog.hidden = true; };
   $('new-item-more').innerHTML = svgIcon('chevron');
   $('many-close').innerHTML = svgIcon('close');
-  $('new-item-more').addEventListener('click', (e) => { e.stopPropagation(); manyMenu.hidden = !manyMenu.hidden; });
+  $('new-item-more').addEventListener('click', (e) => { e.stopPropagation(); manyMenu.hidden = !manyMenu.hidden; keepOnScreen(manyMenu); });
   document.addEventListener('click', () => { manyMenu.hidden = true; });
   $('new-item-many').addEventListener('click', () => { several.reset(2); manyDialog.hidden = false; });
   $('many-close').addEventListener('click', closeMany);
