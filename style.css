@@ -604,7 +604,14 @@ body.layout-mode #layout-panel { display: block; }
 body.layout-mode #mods > .group { display: none; }
 body.layout-mode .plan .fx[data-kind] { cursor: move; }
 body.layout-mode .history { display: none; }
-.plan .led.picked, .plan .spot.picked, .plan .side.picked, .plan .face.picked { stroke: var(--accent); stroke-width: 5; }
+.plan .led.picked, .plan .spot.picked, .plan .side.picked, .plan .face.picked, .plan .custom.picked { stroke: var(--accent); stroke-width: 5; }
+/* lights of a custom kind: an outlined shape that fills with its color when lit */
+.plan .custom { fill: var(--panel); stroke: var(--plan-label); stroke-width: 2; stroke-linejoin: round; }
+.plan .fx:hover > .custom { stroke: var(--muted); }
+.plan .custom.selected, .plan .fx:hover > .custom.selected { stroke: var(--blue); stroke-width: 4; }
+.kind-row input[type="text"] { flex: 1 1 80px; min-width: 60px; }
+.kind-row .select-btn { flex: 0 1 96px; }
+#layout-panel .sec-head .btn { height: 26px; padding: 0 8px; }
 #layout-panel .line { flex-wrap: wrap; }
 #layout-panel input[type="number"] { width: 80px; }
 #layout-panel input[type="text"] { flex: 1; min-width: 0; }
@@ -759,6 +766,7 @@ body.reordering { user-select: none; -webkit-user-select: none; cursor: grabbing
 .tp-led { fill: var(--accent); }
 .tp-spot { fill: var(--panel); stroke: var(--muted); stroke-width: 4; }
 .tp-other { fill: var(--fix-line); }
+.tp-custom { fill: none; stroke: var(--accent-text); stroke-width: 5; }
 .tpl-row { display: flex; align-items: center; gap: 2px; min-height: 34px; }
 .tpl-row { flex-wrap: wrap; }
 .tpl-info { flex: 1 1 100%; min-width: 0; }       /* name and details on their own line, buttons underneath */

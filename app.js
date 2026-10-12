@@ -72,7 +72,7 @@ const LIGHT_KINDS = [['led', 'LEDs'], ['spot', 'Spotlights'], ['face', 'Face Lig
 const LIGHT_TYPES = [['set', 'Color Set'], ['onoff', 'On / Off'], ['rgb', 'RGB Spectrum'], ['white', 'White Spectrum']];
 const SWITCHED = ['spot', 'face', 'side'];       // kinds that are only ever on or off (or dimmed); their one choice is the colour when on
 const WARM_HEX = '#fff1be';
-function lightsOf(owner) {
+function lightsOf(owner, kinds = []) {
   const named = (names) => names.map((name) => ({ name: name[0].toUpperCase() + name.slice(1), value: name }));
   const own = (owner && owner.lights) || {};
   const switched = (kind) => ({ type: 'onoff', on: (own[kind] && own[kind].on) || WARM_HEX });
@@ -80,6 +80,7 @@ function lightsOf(owner) {
     led: own.led || { type: 'set', colors: named(Object.keys(COLORS)) },
     spot: switched('spot'), face: switched('face'), side: switched('side'),
     cyclo: own.cyclo || { type: 'set', colors: named(CYCLO.filter((name) => name !== 'none')) },
+    ...Object.fromEntries(kinds.map((kind) => [kind.id, own[kind.id] || { type: 'onoff', on: WARM_HEX }])),
   };
 }
 // What to call a colour on the PDF: its name in the set, or what the picker or slider made.
@@ -109,6 +110,13 @@ function classicSides() {
   SIDES.forEach((side, s) => SIDE_Y.forEach((y, i) => out.push({ id: 'S' + (s * 5 + i + 1), x: SIDE_X[side], y })));
   return out;
 }
+// A layout can also define kinds of light of its own (a projector, a color bar...):
+//   layout.kinds   = [{ id, name, shape }]        shape: how it is drawn on the plan
+//   layout.customs = [{ id, kind, x, y }]         the lights of those kinds
+// How a kind is controlled is set with the other light settings, under its id.
+const SHAPES = [['circle', 'Circle'], ['square', 'Square'], ['bar', 'Bar'], ['triangle', 'Triangle']];
+const kindsOf = (layout) => layout.kinds || [];
+const customsOf = (layout) => layout.customs || [];
 const facesOf = (layout) => layout.faces || classicFaces();
 const sidesOf = (layout) => layout.sides || classicSides();
 // side lights by the wing they stand in (left or right of centre), from the back of the stage to the front
@@ -129,7 +137,7 @@ function inRows(items) {
   rows.forEach((row) => row.sort((a, b) => a.x - b.x));
   return rows;
 }
-const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], SIDE_LIGHTS = { L: [], R: [] };       // filled by useLayout once the project is known
+const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], CUSTOMS = [], KINDS = [], SIDE_LIGHTS = { L: [], R: [] };       // filled by useLayout once the project is known
 let ledRows = 0, spotRows = 0, FACE_Z = 0;
 function useLayout(layout) {
   LEDS.length = SPOTS.length = LED_ROW_Y.length = 0;
@@ -152,6 +160,9 @@ function useLayout(layout) {
   FACE_Z = FACES.length ? FACES.reduce((sum, f) => sum + f.z3, 0) / FACES.length : to3(0, FACE_Y)[1];
   const wings = bySide(sidesOf(layout));
   for (const side of SIDES) SIDE_LIGHTS[side] = wings[side].map(metres);
+  KINDS.length = CUSTOMS.length = 0;
+  KINDS.push(...kindsOf(layout));
+  for (const it of customsOf(layout)) if (KINDS.some((k) => k.id === it.kind)) CUSTOMS.push(Object.assign(metres(it), { kind: it.kind }));
 }
 const PEOPLE = PEOPLE_AT.map(([x, y]) => { const [x3, z3] = to3(x, y); return { x3, z3 }; });
 const CYC = { z: -3.15, halfW: 3.8, top: 4.6 };     // the cyclorama: how far upstage, half its width, its height
@@ -196,6 +207,7 @@ const blankLook = () => ({
   sideTypes: { sheen: false, mid: false, head: false },
   sidePos: { L: SIDE_LIGHTS.L.map(() => false), R: SIDE_LIGHTS.R.map(() => false) },
   cyclo: 'none', effect: 'none', bpm: 120,
+  custom: {},            // custom lights: id -> colour, missing when off
 });
 // Projects. Everything is kept on this device. The list of projects is one entry in
 // local storage; each project's lights and cues are stored under keys that carry its id.
@@ -275,6 +287,10 @@ function copyLayout(layout) {
   const out = { leds: plain(layout.leds), spots: plain(layout.spots) };
   if (layout.faces) out.faces = plain(layout.faces);
   if (layout.sides) out.sides = plain(layout.sides);
+  if (layout.kinds && layout.kinds.length) {
+    out.kinds = layout.kinds.map(({ id, name, shape }) => ({ id, name, shape }));
+    out.customs = (layout.customs || []).map(({ id, kind, x, y }) => ({ id, kind, x, y }));
+  }
   return out;
 }
 const templateName = () => (currentProject() && currentProject().template) || TEMPLATE;
@@ -449,7 +465,8 @@ function stepHistory(from, to) {
 const L = 6;
 const O_SPOT = LEDS.length * L, O_FACE = O_SPOT + SPOTS.length, O_TYPE = O_FACE + 1, O_POS = O_TYPE + 3, O_CYC = O_POS + SIDE_LIGHTS.L.length + SIDE_LIGHTS.R.length;
 const sideAt = (s, j) => O_POS + (s ? SIDE_LIGHTS.L.length : 0) + j;       // side s (0 left, 1 right), light j from the back
-const FRAME_N = O_CYC + 3;
+const O_CUS = O_CYC + 3;                       // then r, g, b for each custom light
+const FRAME_N = O_CUS + CUSTOMS.length * 3;
 
 // Random fade pulses: each LED runs its own offset timeline of segments, and each
 // segment is either a fade up and down or dark.
@@ -502,6 +519,10 @@ function compute(look, t, out) {
   SIDES.forEach((side, s) => SIDE_LIGHTS[side].forEach((light, j) => { out[sideAt(s, j)] = look.sidePos[side] && look.sidePos[side][j] ? 1 : 0; }));
   const c = look.cyclo === 'none' ? ZERO : rgbOf(look.cyclo);
   out[O_CYC] = c[0]; out[O_CYC + 1] = c[1]; out[O_CYC + 2] = c[2];
+  CUSTOMS.forEach((light, i) => {
+    const value = look.custom && look.custom[light.id], rgb = value ? rgbOf(value) : ZERO;
+    out[O_CUS + i * 3] = rgb[0]; out[O_CUS + i * 3 + 1] = rgb[1]; out[O_CUS + i * 3 + 2] = rgb[2];
+  });
 }
 
 const target = new Float32Array(FRAME_N), shown = new Float32Array(FRAME_N), scratch = new Float32Array(FRAME_N);
@@ -657,11 +678,11 @@ const label = (x, y, text, cls) => el('text', { x, y, 'text-anchor': 'middle', c
 const planEls = { leds: {}, aims: {}, spots: {}, face: [], side: { L: [], R: [] } };
 
 // Selection: `selection` holds LEDs; spotlights and side positions have their own sets.
-const selSpots = new Set(), selSides = new Set();
+const selSpots = new Set(), selSides = new Set(), selCustom = new Set();
 let aiming = false;        // true while the plan is waiting for a zone to be tapped
 let selCyclo = false;      // the cyclorama can be selected too, to bring up its colours
-const anySelected = () => selCyclo || selection.size + selSpots.size + selSides.size > 0;
-function clearSelection() { selection.clear(); selSpots.clear(); selSides.clear(); selCyclo = false; }
+const anySelected = () => selCyclo || selection.size + selSpots.size + selSides.size + selCustom.size > 0;
+function clearSelection() { selection.clear(); selSpots.clear(); selSides.clear(); selCustom.clear(); selCyclo = false; }
 const toggleIn = (set, key) => { set.has(key) ? set.delete(key) : set.add(key); };
 
 // The part of the drawing on screen. Phones crop to the stage so fixtures are as large
@@ -716,10 +737,10 @@ function tapFixture(g) {
 
 // Draw the LEDs and spotlights (and their labels and aim lines) into their layer.
 // Called once normally, and again after every change while the layout is being edited.
-function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_LIGHTS.R], faces = FACES) {
+function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_LIGHTS.R], faces = FACES, customs = CUSTOMS, kinds = KINDS) {
   const layer = planEls.fixtureLayer;
   layer.textContent = '';
-  planEls.leds = {}; planEls.aims = {}; planEls.spots = {}; planEls.face = []; planEls.side = { L: [], R: [] };
+  planEls.leds = {}; planEls.aims = {}; planEls.spots = {}; planEls.face = []; planEls.side = { L: [], R: [] }; planEls.custom = {};
   const text = (x, y, value) => el('text', { x, y, 'text-anchor': 'middle' }, value, layer);
   const tag = (shape, kind, id) => {             // lets the layout editor find what was pressed
     shape.parentNode.dataset.kind = kind; shape.parentNode.dataset.id = id;
@@ -762,6 +783,21 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
       ['rect', { x: x - 22, y: y - 30, width: 44, height: 60 }],
       ['rect', { x: x - 8, y: y - 19, width: 16, height: 38, rx: 8, class: 'face' }],
       () => { state.face = (state.face + 1) % 4; commit(); }, null, layer), 'face', light.id));
+  }
+  for (const light of customs) {
+    const kind = kinds.find((k) => k.id === light.kind);
+    if (!kind) continue;
+    const { x, y } = light;
+    const shape = {
+      circle: ['circle', { cx: x, cy: y, r: 18, class: 'custom' }],
+      square: ['rect', { x: x - 17, y: y - 17, width: 34, height: 34, rx: 5, class: 'custom' }],
+      bar: ['rect', { x: x - 36, y: y - 11, width: 72, height: 22, rx: 5, class: 'custom' }],
+      triangle: ['polygon', { points: `${x},${y - 20} ${x + 20},${y + 15} ${x - 20},${y + 15}`, class: 'custom' }],
+    }[kind.shape] || ['circle', { cx: x, cy: y, r: 18, class: 'custom' }];
+    planEls.custom[light.id] = tag(fixture(
+      ['rect', { x: x - 40, y: y - 26, width: 80, height: 52 }], shape,
+      () => { toggleIn(selCustom, light.id); syncUI(); }, null, layer), 'custom', light.id);
+    text(x, y + 38, light.id);
   }
 }
 
@@ -863,6 +899,7 @@ function endPointer(e) {
     for (const led of LEDS) if (inside(led.x, led.y)) selection.add(led.id);
     for (const s of SPOTS) if (inside(s.x, s.y)) selSpots.add(s.id);
     for (const side of SIDES) SIDE_LIGHTS[side].forEach((light, i) => { if (inside(light.x, light.y)) selSides.add(side + i); });
+    for (const light of CUSTOMS) if (inside(light.x, light.y)) selCustom.add(light.id);
     d.rect.remove();
   } else if (performance.now() < suppressTapsUntil) {
     return;
@@ -891,7 +928,7 @@ svg.addEventListener('wheel', (e) => {
 // Controls
 // ---------------------------------------------------------------------------
 const ui = { face: [], sideTypes: {}, cyclo: {} };
-const LIGHTS = lightsOf(currentProject());      // how this project's lights are controlled
+const LIGHTS = lightsOf(currentProject(), KINDS);      // how this project's lights are controlled
 // the colour of the spotlights, face lights and side lights when they are on
 const onRgb = (kind) => (LIGHTS[kind].on.toLowerCase() === WARM_HEX ? WARM : hex2rgb(LIGHTS[kind].on));
 const SPOT_C = onRgb('spot'), FACE_C = onRgb('face'), SIDE_C = onRgb('side');
@@ -991,6 +1028,42 @@ function buildControls() {
     ui.sideTypes[id] = button($('side-types'), name, 'btn', () => { state.sideTypes[id] = !state.sideTypes[id]; commit(); });
   }
   palette($('cyclo-colors'), LIGHTS.cyclo, (value) => { state.cyclo = value || 'none'; commit(); }, ui.cyclo);
+  // A section for each custom kind of light: pick them all, then give the selected ones (or,
+  // with none selected, all of that kind) a color.
+  for (const kind of KINDS) {
+    const section = document.createElement('div');
+    section.className = 'group'; section.id = 'sec-kind-' + kind.id;
+    const head = document.createElement('div');
+    head.className = 'sec-head';
+    const title = document.createElement('h3');
+    title.textContent = kind.name;
+    const count = document.createElement('span');
+    count.className = 'count';
+    head.appendChild(title); head.appendChild(count); section.appendChild(head);
+    const line = (label) => {
+      const row = document.createElement('div');
+      row.className = 'line' + (label === 'Color' ? ' top' : '');
+      const lbl = document.createElement('span');
+      lbl.className = 'lbl'; lbl.textContent = label;
+      row.appendChild(lbl); section.appendChild(row);
+      return row;
+    };
+    const mine = () => CUSTOMS.filter((light) => light.kind === kind.id);
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    button(seg, 'All', 'btn', () => { clearSelection(); mine().forEach((light) => selCustom.add(light.id)); syncUI(); });
+    line('Select').appendChild(seg);
+    const swatches = document.createElement('div');
+    swatches.className = 'swatches';
+    palette(swatches, LIGHTS[kind.id], (value) => {
+      if (!state.custom) state.custom = {};
+      const picked = mine().filter((light) => selCustom.has(light.id));
+      for (const light of picked.length ? picked : mine()) { if (value) state.custom[light.id] = value; else delete state.custom[light.id]; }
+      commit();
+    });
+    line('Color').appendChild(swatches);
+    $('mods').appendChild(section);
+  }
 
   const effect = $('effect');
   for (const [id, name] of EFFECTS) effect.add(new Option(name, id));
@@ -1027,6 +1100,11 @@ function buildControls() {
   $('layout-add-spot').addEventListener('click', () => layoutAdd('spot'));
   $('layout-add-side').addEventListener('click', () => layoutAdd('side'));
   $('layout-add-face').addEventListener('click', () => layoutAdd('face'));
+  $('layout-new-kind').addEventListener('click', () => {
+    const id = 'k' + newId();
+    work.kinds.push({ id, name: `Custom Light ${work.kinds.length + 1}`, shape: 'circle' });
+    layoutAdd('custom', id);
+  });
   $('layout-delete').addEventListener('click', layoutDelete);
   $('layout-number').addEventListener('change', layoutRenumber);
   $('layout-done').addEventListener('click', layoutDone);
@@ -1113,7 +1191,7 @@ function buildControls() {
 let layoutMode = false, work = null, moving = null;
 const BOUNDS = { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: STAGE.y1 - 24 };
 const numberOf = (id) => +String(id).replace(/^[A-Z]/, '');
-const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light' };
+const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light', custom: 'Custom Light' };
 const PLAN_BOUNDS = { x0: 290, x1: 1710, y0: 150, y1: 1090 };      // face and side lights stand off the stage
 const pickedItem = () => work.picked && work[work.picked.kind + 's'].find((it) => it.id === work.picked.id);
 
@@ -1122,7 +1200,7 @@ function enterLayout() {
   clearSelection(); aiming = false;
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
-  work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), picked: null };
+  work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)), picked: null };
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -1132,17 +1210,19 @@ function enterLayout() {
   redrawLayout();
 }
 function redrawLayout() {
-  drawFixtures(work.leds, work.spots, work.picked, work.sides, work.faces);
+  drawFixtures(work.leds, work.spots, work.picked, work.sides, work.faces, work.customs, work.kinds);
+  renderKinds();
   const item = pickedItem();
   $('layout-picked').hidden = !item;
   $('layout-none').hidden = !!item;
   if (item) {
     const numbered = work.picked.kind === 'led' || work.picked.kind === 'spot';       // only these carry a number people use
-    $('layout-kind').textContent = KIND_NAMES[work.picked.kind];
+    const ofKind = work.picked.kind === 'custom' && work.kinds.find((k) => k.id === item.kind);
+    $('layout-kind').textContent = ofKind ? ofKind.name : KIND_NAMES[work.picked.kind];
     $('layout-number').hidden = $('layout-number-lbl').hidden = !numbered;
     if (numbered && document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
   }
-  $('layout-count').textContent = `${work.leds.length} LED · ${work.spots.length} spot · ${work.faces.length} face · ${work.sides.length} side`;
+  $('layout-count').textContent = `${work.leds.length} LED · ${work.spots.length} spot · ${work.faces.length} face · ${work.sides.length} side` + (work.customs.length ? ` · ${work.customs.length} custom` : '');
 }
 function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]');
@@ -1155,18 +1235,19 @@ function layoutPress(e) {
 function layoutDrag(e) {
   if (!moving) return;
   const p = svgPoint(e), snap = (v) => Math.round(v / 5) * 5;
-  const within = work.picked.kind === 'led' || work.picked.kind === 'spot' ? BOUNDS : PLAN_BOUNDS;
+  const within = work.picked.kind === 'led' || work.picked.kind === 'spot' || work.picked.kind === 'custom' ? BOUNDS : PLAN_BOUNDS;
   moving.item.x = Math.max(within.x0, Math.min(within.x1, snap(moving.x + p.x - moving.start.x)));
   moving.item.y = Math.max(within.y0, Math.min(within.y1, snap(moving.y + p.y - moving.start.y)));
   redrawLayout();
 }
-function layoutAdd(kind) {
+function layoutAdd(kind, ofKind) {
   const list = work[kind + 's'], n = Math.max(0, ...list.map((it) => numberOf(it.id))) + 1;
-  const id = { led: 'F', spot: '', side: 'S', face: 'A' }[kind] + n;
+  const id = { led: 'F', spot: '', side: 'S', face: 'A', custom: 'C' }[kind] + n;
   // drop it somewhere sensible for its kind, nudged along so new ones do not stack up
   const spare = list.filter((it) => !it.was).length, nudge = (spare % 5) * 30;
   if (kind === 'side') list.push({ id, x: SIDE_X.L, y: STAGE.cy - 60 + nudge });               // in the left wing; drag across for the right
   else if (kind === 'face') list.push({ id, x: STAGE.cx - 60 + nudge, y: FACE_Y });
+  else if (kind === 'custom') list.push({ id, kind: ofKind, x: STAGE.cx - 60 + nudge, y: STAGE.cy });
   else list.push({ id, x: STAGE.cx - 60 + nudge, y: STAGE.cy + (kind === 'led' ? -40 : 40) });
   work.picked = { kind, id };
   redrawLayout();
@@ -1190,6 +1271,39 @@ function layoutRenumber() {
   item.id = id; work.picked.id = id;
   redrawLayout();
 }
+// The layout editor's list of custom kinds: name, shape, add one to the stage, remove the kind.
+function renderKinds() {
+  const box = $('layout-kinds');
+  if (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;      // a name is being typed
+  const now = JSON.stringify(work.kinds);
+  if (box.dataset.shown === now) return;          // nothing about the kinds changed (a light was only dragged)
+  box.dataset.shown = now;
+  box.textContent = '';
+  $('layout-kinds-none').hidden = work.kinds.length > 0;
+  for (const kind of work.kinds) {
+    const row = document.createElement('div');
+    row.className = 'line kind-row';
+    const name = document.createElement('input');
+    name.type = 'text'; name.value = kind.name; name.maxLength = 30; name.placeholder = 'Name';
+    name.addEventListener('input', () => { kind.name = name.value; });
+    name.addEventListener('blur', () => { kind.name = name.value.trim() || 'Custom Light'; redrawLayout(); });
+    const shape = document.createElement('select');
+    for (const [id, text] of SHAPES) shape.add(new Option(text, id, false, id === kind.shape));
+    shape.addEventListener('change', () => { kind.shape = shape.value; redrawLayout(); });
+    row.appendChild(name); row.appendChild(shape);
+    const add = button(row, '', 'btn icon', () => layoutAdd('custom', kind.id));
+    add.innerHTML = svgIcon('plus'); add.title = 'Add One to the Stage';
+    const drop = button(row, '', 'btn icon', () => {
+      work.kinds = work.kinds.filter((k) => k !== kind);
+      work.customs = work.customs.filter((light) => light.kind !== kind.id);
+      work.picked = null;
+      redrawLayout();
+    });
+    drop.innerHTML = svgIcon('trash'); drop.title = 'Remove This Kind and Its Lights';
+    box.appendChild(row);
+  }
+  $('layout-kinds-none').hidden = work.kinds.length > 0;
+}
 // Carry a look over to the edited layout: deleted fixtures drop out, renumbered ones follow.
 // `resides` does the same for the side lights, which a look lists by position rather than by name.
 function relook(look, renamed, alive, resides) {
@@ -1198,14 +1312,14 @@ function relook(look, renamed, alive, resides) {
     for (const id in map || {}) { const now = id in renamed ? renamed[id] : id; if (alive.has(now)) out[now] = map[id]; }
     return out;
   };
-  look.leds = move(look.leds); look.aim = move(look.aim); look.spots = move(look.spots);
+  look.leds = move(look.leds); look.aim = move(look.aim); look.spots = move(look.spots); look.custom = move(look.custom);
   if (resides) resides(look);
   return look;
 }
 function layoutDone() {
   const renamed = {}, alive = new Set();
-  const before = new Set([...layout.leds, ...layout.spots].map((it) => it.id));
-  for (const it of [...work.leds, ...work.spots]) { alive.add(it.id); if (it.was) renamed[it.was] = it.id; }
+  const before = new Set([...layout.leds, ...layout.spots, ...customsOf(layout)].map((it) => it.id));
+  for (const it of [...work.leds, ...work.spots, ...work.customs]) { alive.add(it.id); if (it.was) renamed[it.was] = it.id; }
   for (const id of before) if (!(id in renamed)) renamed[id] = '';        // deleted: maps to nothing
   // Side lights: which ones were on is remembered by light, then laid out in their new order.
   const was = { L: SIDE_LIGHTS.L.map((light) => light.id), R: SIDE_LIGHTS.R.map((light) => light.id) }, now = bySide(work.sides);
@@ -1558,6 +1672,13 @@ function paintPlan(look, bare) {
     planEls.spots[s.id].classList.toggle('selected', !bare && selSpots.has(s.id));
     planEls.spots[s.id].parentNode.classList.toggle('sel', !bare && selSpots.has(s.id));   // halo behind it
   }
+  for (const light of CUSTOMS) {
+    const n = planEls.custom[light.id], c = look.custom && look.custom[light.id];
+    if (!n) continue;
+    n.style.fill = c ? hexOf(c) : '';
+    n.style.filter = c ? `drop-shadow(0 0 6px ${hexOf(c)})` : '';
+    n.classList.toggle('selected', !bare && selCustom.has(light.id));
+  }
   for (const n of planEls.face) n.setAttribute('class', 'face f' + look.face);
   for (const side of SIDES) planEls.side[side].forEach((n, i) => {
     n.classList.toggle('on', !!(look.sidePos[side] && look.sidePos[side][i]));
@@ -1584,6 +1705,13 @@ function syncUI() {
   $('sec-sides').hidden = some && !selSides.size;
   $('sec-face').hidden = some;
   $('sec-cyclo').hidden = some && !selCyclo;
+  for (const kind of KINDS) {
+    const mine = CUSTOMS.filter((light) => light.kind === kind.id), picked = mine.filter((light) => selCustom.has(light.id)).length;
+    const section = $('sec-kind-' + kind.id);
+    if (!section) continue;
+    section.hidden = !mine.length || (some && !picked);
+    section.querySelector('.count').textContent = picked ? picked + ' selected' : '';
+  }
   $('sel-leds').hidden = !selection.size;
   $('sel-spots').hidden = !selSpots.size;
   $('sel-sides').hidden = !selSides.size;
@@ -1770,6 +1898,13 @@ function drawFront(D) {
     softBeam(x, rigY(s), 20 * s, x, y, 95 * s, SPOT_C[0], SPOT_C[1], SPOT_C[2], 0.4 * lvl, 0.08 * lvl);
     floorGlow(x, y, 62 * s, 9, SPOT_C[0], SPOT_C[1], SPOT_C[2], 0.1 * lvl);
   });
+  CUSTOMS.forEach((light, i) => {
+    const r = D[O_CUS + i * 3], g = D[O_CUS + i * 3 + 1], b = D[O_CUS + i * 3 + 2];
+    if (r + g + b < 0.01) return;
+    const s = depthScale(light.z3), x = frontX(light.x3, light.z3), y = floorY(light.z3);
+    softBeam(x, rigY(s), 20 * s, x, y, 105 * s, r, g, b, 0.4, 0.09);
+    floorGlow(x, y, 70 * s, 9, r, g, b, 0.11);
+  });
   SIDES.forEach((side, sIdx) => {
     let n = 0;
     SIDE_LIGHTS[side].forEach((light, j) => { n += D[sideAt(sIdx, j)]; });
@@ -1906,6 +2041,11 @@ function buildThree() {
     lens: lens(s.x3, RIG_H, s.z3),
     pool: add(pool(1.6), s.x3, 0.012, s.z3),
   }));
+  const customs = CUSTOMS.map((s) => ({
+    cone: add(beam(0.1, 1.3, RIG_H), s.x3, RIG_H, s.z3),
+    lens: lens(s.x3, RIG_H, s.z3),
+    pool: add(pool(1.8), s.x3, 0.013, s.z3),
+  }));
 
   const sides = [];
   SIDES.forEach((side, sIdx) => {
@@ -2017,6 +2157,13 @@ function buildThree() {
       setLens(s.lens, lvl * SPOT_C[0], lvl * SPOT_C[1], lvl * SPOT_C[2]);
       s.cone.material.uniforms.color.value.setRGB(SPOT_C[0] * lvl * 0.15, SPOT_C[1] * lvl * 0.15, SPOT_C[2] * lvl * 0.15);
       s.pool.material.color.setRGB(SPOT_C[0] * lvl * 0.12, SPOT_C[1] * lvl * 0.12, SPOT_C[2] * lvl * 0.12);
+    });
+    customs.forEach((s, i) => {
+      const r = D[O_CUS + i * 3], g = D[O_CUS + i * 3 + 1], b = D[O_CUS + i * 3 + 2];
+      s.cone.visible = s.pool.visible = r + g + b > 0.01;
+      setLens(s.lens, r, g, b);
+      s.cone.material.uniforms.color.value.setRGB(r * 0.15, g * 0.15, b * 0.15);
+      s.pool.material.color.setRGB(r * 0.12, g * 0.12, b * 0.12);
     });
     for (const s of sides) {
       const lvl = D[s.pos] * D[s.type];
@@ -2678,6 +2825,15 @@ function lookRows(look) {
     ['Face Lights', [{ text: FACE_LEVELS[look.face] || 'Off' }]],
     ['Side Lights', [{ text: sideText(look) }]],
     ['Cyclorama', [look.cyclo === 'none' ? { text: 'None' } : { text: colorLabel(look.cyclo, LIGHTS.cyclo), dot: hexOf(look.cyclo) }]],
+    ...KINDS.filter((kind) => CUSTOMS.some((light) => light.kind === kind.id)).map((kind) => {
+      const byColor = new Map();
+      for (const light of CUSTOMS) {
+        const value = light.kind === kind.id && look.custom && look.custom[light.id];
+        if (value) byColor.set(value, [...(byColor.get(value) || []), light.id]);
+      }
+      const lit = [...byColor].map(([value, ids]) => ({ dot: hexOf(value), text: `${colorLabel(value, LIGHTS[kind.id])}: ${ids.join(', ')}` }));
+      return [kind.name, lit.length ? lit : [{ text: 'All off' }]];
+    }),
   ];
 }
 
@@ -3762,13 +3918,14 @@ function buildShare() {
 
 // Light settings: how the LEDs and the cyclorama are controlled. Edited for a template (new
 // projects made from it get them) or for one project. `owner` is the template or project.
-let lightsDraft = null, lightsDone = null;
-function editLights(title, owner, save) {
-  const now = lightsOf(owner);
+let lightsDraft = null, lightsDone = null, lightsKinds = LIGHT_KINDS;
+function editLights(title, owner, save, kinds = []) {
+  const now = lightsOf(owner, kinds);
+  lightsKinds = [...LIGHT_KINDS, ...kinds.map((kind) => [kind.id, kind.name])];
   // work on a copy with every colour as a hex value, so each row has a colour to show
   lightsDraft = {};
-  for (const [kind] of LIGHT_KINDS) lightsDraft[kind] = { type: now[kind].type, on: now[kind].on || (SWITCHED.includes(kind) ? WARM_HEX : '#ffffff'), colors: (now[kind].colors || []).map((c) => ({ name: c.name, value: hexOf(c.value).toLowerCase() })) };
-  lightsDone = () => { owner.lights = lightsDraft; save(); if (templates.includes(owner)) republish(owner); };
+  for (const [kind] of lightsKinds) lightsDraft[kind] = { type: now[kind].type, on: now[kind].on || (SWITCHED.includes(kind) ? WARM_HEX : '#ffffff'), colors: (now[kind].colors || []).map((c) => ({ name: c.name, value: hexOf(c.value).toLowerCase() })) };
+  lightsDone = () => { owner.lights = Object.assign({}, owner.lights, lightsDraft); save(); if (templates.includes(owner)) republish(owner); };
   $('lights-title').textContent = 'Light Settings · ' + title;
   $('lights').hidden = false;
   renderLights();
@@ -3776,7 +3933,7 @@ function editLights(title, owner, save) {
 function renderLights() {
   const body = $('lights-body');
   body.textContent = '';
-  for (const [kind, label] of LIGHT_KINDS) {
+  for (const [kind, label] of lightsKinds) {
     const cfg = lightsDraft[kind], block = document.createElement('div');
     block.className = 'lights-kind';
     const head = document.createElement('div');
@@ -3829,7 +3986,7 @@ function buildLights() {
   $('lights-close').addEventListener('click', close);
   $('lights').addEventListener('click', (e) => { if (e.target === $('lights')) close(); });
   $('lights-save').addEventListener('click', () => {
-    for (const [kind] of LIGHT_KINDS) {
+    for (const [kind] of lightsKinds) {
       const cfg = lightsDraft[kind];
       cfg.colors = cfg.colors.map((c, i) => ({ name: c.name.trim() || `Color ${i + 1}`, value: c.value }));
       if (cfg.type === 'set' && !cfg.colors.length) return toast('A color set needs at least one color.', 3000);
@@ -3845,7 +4002,8 @@ function templatePreview(layout) {
   const leds = layout.leds.map((l) => `<rect class="tp-led" x="${l.x - 17}" y="${l.y - 9}" width="34" height="18" rx="9"/>`).join('');
   const spots = layout.spots.map((sp) => `<circle class="tp-spot" cx="${sp.x}" cy="${sp.y}" r="11"/>`).join('')
     + sidesOf(layout).map((sd) => `<rect class="tp-other" x="${sd.x - 12}" y="${sd.y - 10}" width="24" height="20" rx="5"/>`).join('')
-    + facesOf(layout).map((f) => `<rect class="tp-other" x="${f.x - 6}" y="${f.y - 14}" width="12" height="28" rx="6"/>`).join('');
+    + facesOf(layout).map((f) => `<rect class="tp-other" x="${f.x - 6}" y="${f.y - 14}" width="12" height="28" rx="6"/>`).join('')
+    + customsOf(layout).map((c) => `<rect class="tp-custom" x="${c.x - 14}" y="${c.y - 14}" width="28" height="28" rx="7"/>`).join('');
   return `<svg viewBox="330 150 1340 960"><rect class="tp-stage" x="${STAGE.x0}" y="${STAGE.y0}" width="${STAGE.x1 - STAGE.x0}" height="${STAGE.y1 - STAGE.y0}" rx="10"/>`
     + `<rect class="tp-cyc" x="${ZONES.x}" y="${STAGE.y0 - 16}" width="${ZONES.w * 3}" height="12" rx="5"/>${leds}${spots}</svg>`;
 }
@@ -3902,7 +4060,7 @@ function renderTemplates() {
     }
     if (tpl !== SCRATCH && !follows) {
       act('layout', 'Edit Layout', () => editTemplateLayout(tpl));
-      act('sliders', 'Light Settings', () => editLights(tpl.name, tpl, saveTemplates));
+      act('sliders', 'Light Settings', () => editLights(tpl.name, tpl, saveTemplates, kindsOf(tpl.layout)));
     }
     if (tpl !== SCRATCH) act('share', tpl.share ? 'Shared With a Code' : 'Share With a Code', () => openShare(tpl));
     if (tpl !== SCRATCH) {
@@ -4082,7 +4240,7 @@ function buildHome() {
   buildLights();
   buildShare();
   refreshShared();
-  $('home-lights').addEventListener('click', () => editLights(currentProject().name, currentProject(), saveProjects));
+  $('home-lights').addEventListener('click', () => editLights(currentProject().name, currentProject(), saveProjects, kindsOf(projectLayout(currentProject()))));
   $('home-layout').addEventListener('click', () => {
     const project = currentProject();
     if (!project.items.length) return toast('Add an item first: the layout editor opens on one of the project\'s items.', 3500);

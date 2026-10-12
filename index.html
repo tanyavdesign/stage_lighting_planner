@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121507">
+<link rel="stylesheet" href="style.css?v=202610121515">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -266,6 +266,11 @@
         </div>
       </div>
       <div class="group">
+        <div class="sec-head"><h3>Custom Lights</h3><button class="btn" id="layout-new-kind">New Kind</button></div>
+        <p class="hint note" id="layout-kinds-none">Lights of your own, such as a projector or a color bar. Give each kind a name and a shape; set how it is controlled under Light Settings.</p>
+        <div id="layout-kinds"></div>
+      </div>
+      <div class="group">
         <p class="hint" id="layout-none">Tap a light on the plan to select it. Drag a side light across the stage to put it in the other wing.</p>
         <div id="layout-picked" hidden>
           <div class="sec-head"><h3 id="layout-kind">LED</h3></div>
@@ -429,6 +434,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121507"></script>
+<script src="app.js?v=202610121515"></script>
 </body>
 </html>
