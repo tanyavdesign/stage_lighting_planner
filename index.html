@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121644">
+<link rel="stylesheet" href="style.css?v=202610121646">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -85,13 +85,13 @@
         <button id="home-settings-btn" class="btn">Settings<span id="home-settings-arrow" class="btn-arrow"></span></button>
         <div id="home-settings-menu" class="menu" hidden>
           <button data-go="home-showset" data-icon="clock">Show Settings</button>
-          <button data-go="home-layout" data-icon="layout">Edit Stage Layout</button>
           <button data-go="home-lights" data-icon="sliders">Light Settings</button>
+          <button data-go="home-layout" data-icon="layout">Edit Stage Layout</button>
         </div>
       </div>
-      <button id="home-showset" class="btn" hidden>Show Settings</button>
-      <button id="home-layout" class="btn" hidden>Edit Stage Layout</button>
-      <button id="home-lights" class="btn" hidden>Light Settings</button>
+      <button id="home-showset" class="btn with-icon" data-icon="clock" hidden>Show Settings</button>
+      <button id="home-lights" class="btn with-icon" data-icon="sliders" hidden>Light Settings</button>
+      <button id="home-layout" class="btn with-icon" data-icon="layout" hidden>Edit Stage Layout</button>
       <button id="pick-download" class="btn" hidden>Download</button>
       <button id="pick-all" class="btn" hidden>Select All</button>
     </div>
@@ -459,6 +459,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121644"></script>
+<script src="app.js?v=202610121646"></script>
 </body>
 </html>
