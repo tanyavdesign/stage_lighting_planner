@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610121213">
+<link rel="stylesheet" href="style.css?v=202610121217">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -215,15 +215,21 @@
 
 <footer class="dock">
   <div class="transport">
-    <button id="play" class="btn icon" data-icon="play" title="Play or pause (space)"></button>
-    <button id="prev-cue" class="btn icon" data-icon="prev" title="Previous cue"></button>
-    <button id="next-cue" class="btn icon" data-icon="next" title="Next cue"></button>
-    <button id="add-cue" class="btn icon primary" data-icon="plus" title="Add a cue here"></button>
-    <label class="btn icon" id="load-track" data-icon="note" title="Load a track" aria-label="Load a track">
-      <input id="track-file" type="file" accept="audio/*" hidden>
-    </label>
-    <span id="time" class="time">0:00.0 / 1:00.0</span>
-    <span id="next-text" class="hint"></span>
+    <div class="t-group t-left">
+      <span id="time" class="time">0:00.0 / 1:00.0</span>
+      <span id="next-text" class="hint"></span>
+    </div>
+    <div class="t-group t-mid">
+      <button id="prev-cue" class="btn icon" data-icon="prev" title="Previous cue"></button>
+      <button id="play" class="btn icon" data-icon="play" title="Play or pause (space)"></button>
+      <button id="next-cue" class="btn icon" data-icon="next" title="Next cue"></button>
+    </div>
+    <div class="t-group t-right">
+      <label class="btn icon" id="load-track" data-icon="note" title="Load a track" aria-label="Load a track">
+        <input id="track-file" type="file" accept="audio/*" hidden>
+      </label>
+      <button id="add-cue" class="btn icon primary" data-icon="plus" title="Add a cue here"></button>
+    </div>
   </div>
   <canvas id="wave" title="Pinch or scroll to zoom"></canvas>
 </footer>
@@ -231,6 +237,6 @@
 <div id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610121213"></script>
+<script src="app.js?v=202610121217"></script>
 </body>
 </html>
