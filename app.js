@@ -1011,9 +1011,9 @@ function applyView() {
 }
 function resetView() { view = baseView(); applyView(); }
 function svgPointAt(x, y) {
-  const p = svg.createSVGPoint();
+  const on = activeSvg || svg, p = on.createSVGPoint();
   p.x = x; p.y = y;
-  return p.matrixTransform(svg.getScreenCTM().inverse());
+  return p.matrixTransform(on.getScreenCTM().inverse());
 }
 function panTo(anchor, cx, cy) {       // slide the view so `anchor` sits under a screen point
   // the view can travel anywhere over the whole drawing, not just its starting crop
@@ -1199,6 +1199,7 @@ function drawStage() {
   }
 }
 function buildPlan() {
+  setupPanes();
   planEls.stageLayer = el('g', {});
   drawStage();
 
@@ -1753,7 +1754,7 @@ function buildControls() {
     };
     svg.addEventListener('pointerdown', take, { capture: true, once: true });
   });
-  each('#plan-views .btn', (b) => b.addEventListener('click', () => { planView = b.dataset.view; guides.length = 0; drawStage(); redrawLayout(); }));
+  each('#plan-views .btn', (b) => b.addEventListener('click', () => { splitView = b.dataset.view === 'all'; $('plan-wrap').classList.toggle('split', splitView); planView = splitView ? 'top' : b.dataset.view; resetView(); guides.length = 0; drawStage(); redrawLayout(); }));
   $('more-toggle').addEventListener('click', () => { $('more-fields').hidden = !$('more-fields').hidden; $('more-toggle').classList.toggle('open', !$('more-fields').hidden); });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
   typed('fix-tilt', 0, 180, placed((item, v) => { item.tilt = v; }));
@@ -2120,7 +2121,7 @@ function enterLayout() {
   });
   work.classic = work.leds.length + work.spots.length + work.faces.length + work.sides.length > 0;      // decided once, so the buttons do not vanish mid-edit
   layoutPast.length = layoutNext.length = 0;
-  planView = 'top';
+  planView = 'top'; splitView = false;
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -2134,7 +2135,8 @@ function redrawLayout() {
   work.sel = work.sel.filter((one) => { const item = itemOf(one); return item && !hiddenLayers.has(layerOf(one.kind, item)); });
   if (planView === 'top') drawFixtures(seen('led'), seen('spot'), work.sel, seen('side'), seen('face'), seen('custom'), work.kinds, seen('object'));
   else drawElevation();
-  each('#plan-views .btn', (b) => b.classList.toggle('active', b.dataset.view === planView));
+  each('#plan-views .btn', (b) => b.classList.toggle('active', splitView ? b.dataset.view === 'all' : b.dataset.view === planView));
+  if (splitView) drawPanes();
   // the eye beside Library shows or hides the open tab's group on the plan; a hidden group's tab is dimmed
   each('#lib-tabs .btn', (b) => b.classList.toggle('off', hiddenLayers.has(b.dataset.group)));
   renderKinds();
@@ -2240,15 +2242,18 @@ function redrawLayout() {
 // (the plan), from the front and from the side. The front and side views show height: a light
 // or an object dragged up or down there is raised or lowered, and an object's top edge can be
 // dragged to make it taller.
-let planView = 'top';
-const elevH = (item) => (planView === 'side' ? item.y + STAGE.cx - STAGE.cy : item.x);          // where it sits across the view (the side view is centred like the others)
+let planView = 'top', splitView = false, paneMode = null, activeSvg = null;
+// In the split view, the main pane is the plan and three more panes show Front, Side and 3D.
+// `paneMode` is the view of the pane being drawn or dragged in; `activeSvg` the drawing the pointer is in.
+const viewIs = (mode) => (paneMode || planView) === mode;
+const elevH = (item) => (viewIs('side') ? item.y + STAGE.cx - STAGE.cy : item.x);          // where it sits across the view (the side view is centred like the others)
 const elevGround = () => FULL.y + FULL.h - 190;                            // the stage floor's line in the view
 const elevY = (z) => elevGround() - z * UNIT;
 const CLASSIC_Z = { led: RIG_H, spot: RIG_H, face: 5.4, side: 1 };         // the four classic kinds hang at fixed heights
 const zOf = (kind, item) => (kind === 'custom' ? heightOf(item) : kind === 'object' ? item.z || 0 : item.z != null ? item.z : CLASSIC_Z[kind]);
-const acrossOf = (o) => { const a = (o.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(a)), n = Math.abs(Math.sin(a)); return planView === 'side' ? o.w * n + o.d * c : o.w * c + o.d * n; };
+const acrossOf = (o) => { const a = (o.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(a)), n = Math.abs(Math.sin(a)); return viewIs('side') ? o.w * n + o.d * c : o.w * c + o.d * n; };
 function drawElevStage() {
-  const layer = planEls.stageLayer, side = planView === 'side', ground = elevGround(), drop = Math.max(3, STAGE_H * UNIT);
+  const layer = planEls.stageLayer, side = viewIs('side'), ground = elevGround(), drop = Math.max(3, STAGE_H * UNIT);
   layer.textContent = '';
   const put = (name, attrs, text) => el(name, attrs, text, layer);
   const from = side ? elevH({ y: STAGE.y0 }) : STAGE.x0, to = side ? elevH({ y: STAGE.y1 }) : STAGE.x1, mid = (from + to) / 2;
@@ -2263,7 +2268,7 @@ function drawElevStage() {
   area(from, ground + drop + 26, side ? 'BACK' : 'STAGE LEFT'); area(to, ground + drop + 26, side ? 'FRONT' : 'STAGE RIGHT');
 }
 function drawElevation() {
-  const layer = planEls.fixtureLayer, side = planView === 'side', ground = elevGround(), labels = lightLabels(work.customs, work.kinds);
+  const layer = planEls.fixtureLayer, side = viewIs('side'), ground = elevGround(), labels = lightLabels(work.customs, work.kinds);
   layer.textContent = '';
   const group = (kind, id, hit, shape) => {       // something that can be pressed: a roomy invisible box, then what is seen
     const g = el('g', { class: 'fx' }, null, layer);
@@ -2345,6 +2350,103 @@ function drawElevation() {
     el('rect', { x: x + wide / 2 - 9, y: midY - 9, width: 18, height: 18, rx: 3, class: 'size-handle wide', 'data-size': 'wide', 'data-id': only.id }, null, layer);
   }
 }
+// The split view's other panes: Front and Side drawn into their own drawings, and the 3D pane
+// rebuilt from the layout as it is now. Each pane can be dragged in like the main one.
+const panes = {};
+function drawPanes() {
+  const keep = [paneMode, planEls.stageLayer, planEls.fixtureLayer];
+  for (const mode of ['front', 'side']) {
+    const pane = panes[mode];
+    paneMode = mode; planEls.stageLayer = pane.stage; planEls.fixtureLayer = pane.fixtures;
+    pane.svg.setAttribute('viewBox', `${FULL.x} ${elevGround() - 900} ${FULL.w} 1080`);
+    drawElevStage(); drawElevation();
+  }
+  [paneMode, planEls.stageLayer, planEls.fixtureLayer] = keep;
+  if (!panes.three.queued) { panes.three.queued = true; requestAnimationFrame(() => { panes.three.queued = false; buildPane3D(); }); }
+}
+function setupPanes() {
+  for (const mode of ['front', 'side']) {
+    const svgPane = $('pane-' + mode), pane = panes[mode] = { svg: svgPane };
+    pane.stage = document.createElementNS(NS, 'g'); pane.fixtures = document.createElementNS(NS, 'g');
+    svgPane.appendChild(pane.stage); svgPane.appendChild(pane.fixtures);
+    // a press, drag and release in this pane act as in that view
+    const act = (fn) => (e) => { if (!layoutMode) return; activeSvg = svgPane; paneMode = mode; fn(e); };
+    svgPane.addEventListener('pointerdown', act((e) => { try { svgPane.setPointerCapture(e.pointerId); } catch (err) { /* gone */ } elevPress(e); }));
+    svgPane.addEventListener('pointermove', (e) => { if (paneMode === mode) { activeSvg = svgPane; elevDrag(e); } });
+    svgPane.addEventListener('pointerup', () => { if (paneMode === mode) { layoutRelease(); paneMode = null; activeSvg = null; redrawLayout(); } });
+  }
+  panes.three = { box: $('pane-3d'), queued: false };
+}
+// The 3D pane: a plain model of the stage, objects and lights with their beams, to look round.
+// Drag to turn it, scroll or pinch to come closer. It is rebuilt whenever the layout changes.
+function buildPane3D() {
+  const P = panes.three;
+  if (!window.THREE || !splitView) return;
+  if (!P.renderer) {
+    P.renderer = new THREE.WebGLRenderer({ antialias: true });
+    P.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    P.renderer.setClearColor(0x101014);
+    P.box.appendChild(P.renderer.domElement);
+    P.scene = new THREE.Scene();
+    P.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 300);
+    P.orbit = { az: 0.6, el: 0.5, dist: 18 };
+    P.render = () => {
+      const w = P.box.clientWidth, h = P.box.clientHeight;
+      if (!w || !h) return;
+      P.renderer.setSize(w, h, false); P.camera.aspect = w / h; P.camera.updateProjectionMatrix();
+      const { az, el: up, dist } = P.orbit;
+      P.camera.position.set(dist * Math.sin(az) * Math.cos(up), 1.5 + dist * Math.sin(up), dist * Math.cos(az) * Math.cos(up));
+      P.camera.lookAt(0, 1.5, 0);
+      P.renderer.render(P.scene, P.camera);
+    };
+    let last = null;
+    P.renderer.domElement.addEventListener('pointerdown', (e) => { last = [e.clientX, e.clientY]; P.renderer.domElement.setPointerCapture(e.pointerId); });
+    P.renderer.domElement.addEventListener('pointermove', (e) => {
+      if (!last) return;
+      P.orbit.az -= (e.clientX - last[0]) * 0.01; P.orbit.el = Math.max(0.05, Math.min(1.45, P.orbit.el + (e.clientY - last[1]) * 0.008));
+      last = [e.clientX, e.clientY]; P.render();
+    });
+    P.renderer.domElement.addEventListener('pointerup', () => { last = null; });
+    P.renderer.domElement.addEventListener('wheel', (e) => { e.preventDefault(); P.orbit.dist = Math.max(5, Math.min(60, P.orbit.dist * (1 + e.deltaY * 0.001))); P.render(); }, { passive: false });
+    new ResizeObserver(() => P.render()).observe(P.box);
+  }
+  const scene = P.scene;
+  while (scene.children.length) scene.remove(scene.children[0]);
+  const mat = (color, opacity) => new THREE.MeshBasicMaterial(opacity ? { color, transparent: true, opacity, depthWrite: false } : { color });
+  const shade = (color) => [0.8, 0.8, 1.25, 0.6, 1, 0.9].map((k) => mat(new THREE.Color(color).multiplyScalar(k)));
+  const put = (mesh, x, y, z) => { mesh.position.set(x, y, z); scene.add(mesh); return mesh; };
+  const at = (it) => to3(it.x, it.y);
+  const drop = Math.max(0.02, STAGE_H);
+  put(new THREE.GridHelper(40, 40, 0x2a2a33, 0x1c1c22), 0, -drop, 0);
+  if (STAGE_OUTLINE) {
+    const slab = put(new THREE.Mesh(new THREE.ExtrudeGeometry(new THREE.Shape(STAGE_OUTLINE.map((q) => { const [x, z] = to3(q[0], q[1]); return new THREE.Vector2(x, z); })), { depth: drop, bevelEnabled: false }), shade(0x2a2a31)), 0, 0, 0);
+    slab.rotation.x = Math.PI / 2;
+  } else put(new THREE.Mesh(new THREE.BoxGeometry((STAGE.x1 - STAGE.x0) / UNIT, drop, (STAGE.y1 - STAGE.y0) / UNIT), shade(0x2a2a31)), 0, -drop / 2, 0);
+  for (const o of seen('object')) {
+    const [x, z] = at(o), h = Math.max(0.02, o.h);
+    const m = put(new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.03, o.w), h, Math.max(0.03, o.d)), shade(assetOf(o).look === 'screen' ? 0x2a3a4c : 0x3a3a44)), x, (o.z || 0) + h / 2, z);
+    m.rotation.y = -(o.rot || 0) * Math.PI / 180;
+  }
+  // a light: a small body and a see-through beam down to the floor (or 4 m out when it never comes down)
+  const light = (x, z, h, pan, tilt, beam, picked) => {
+    const t = tilt * Math.PI / 180, p = pan * Math.PI / 180, way = new THREE.Vector3(Math.sin(p) * Math.sin(t), -Math.cos(t), -Math.cos(p) * Math.sin(t));
+    const len = way.y < -0.08 ? Math.min(25, (h + drop) / -way.y) : 4, r = len * Math.tan(Math.min(60, beam / 2) * Math.PI / 180);
+    const geo = new THREE.ConeGeometry(Math.max(0.05, r), len, 24, 1, true); geo.translate(0, -len / 2, 0);
+    const cone = put(new THREE.Mesh(geo, mat(picked ? 0x0d99ff : 0xfff1be, picked ? 0.22 : 0.08)), x, h, z);
+    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), way);
+    put(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), mat(picked ? 0x0d99ff : 0x8a8a96)), x, h, z);
+  };
+  const DEF = { led: [0, 0, 56], spot: [0, 0, 36], face: [0, 40, 44] };
+  for (const kind of ['led', 'spot', 'face', 'side']) for (const it of seen(kind)) {
+    const [x, z] = at(it), [pan, tilt, beam] = kind === 'side' ? [it.x < STAGE.cx ? 90 : 270, 90, 40] : DEF[kind];
+    light(x, z, zOf(kind, it), pan, tilt, beam, isSelected(kind, it.id));
+  }
+  for (const it of seen('custom')) {
+    const kind = work.kinds.find((k) => k.id === it.kind), fx = fixtureOf(kind), [x, z] = at(it);
+    light(x, z, heightOf(it), it.pan || 0, it.tilt || 0, it.beam || (fx ? fx.beam : 30), isSelected('custom', it.id));
+  }
+  P.render();
+}
 function elevPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey, grip = e.target.closest('[data-size]');
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
@@ -2362,7 +2464,7 @@ function elevPress(e) {
 function elevDrag(e) {
   const p = svgPoint(e), step = (v) => (snapOn ? Math.round(v * 20) / 20 : Math.round(v * 100) / 100);         // 5 cm steps with snapping on
   if (turning && turning.elevAim) {          // the tilt handle: the beam follows the pointer, seen from this side
-    const light = turning.elevAim, side = planView === 'side', x = elevH(light), y = elevY(heightOf(light));
+    const light = turning.elevAim, side = viewIs('side'), x = elevH(light), y = elevY(heightOf(light));
     let phi = Math.atan2(p.x - x, p.y - y);          // from straight down, towards the right of the view
     if (snapOn) phi = Math.round(phi * 36 / Math.PI) * Math.PI / 36;          // 5 degree steps
     const t = (light.tilt || 0) * Math.PI / 180, pn = (light.pan || 0) * Math.PI / 180;
@@ -2381,7 +2483,7 @@ function elevDrag(e) {
     const o = sizing.item;
     if (sizing.elev === 'tall') o.h = Math.max(0.02, step((elevY(o.z || 0) - p.y) / UNIT));
     else {                                         // wider both ways from its middle, along whichever of its sides faces this view
-      const a = (o.rot || 0) * Math.PI / 180, along = planView === 'side' ? Math.abs(Math.sin(a)) : Math.abs(Math.cos(a));
+      const a = (o.rot || 0) * Math.PI / 180, along = viewIs('side') ? Math.abs(Math.sin(a)) : Math.abs(Math.cos(a));
       o[along >= 0.7 ? 'w' : 'd'] = Math.max(0.05, step(2 * Math.abs(p.x - elevH(o)) / UNIT));
     }
     return redrawLayout();
@@ -2391,7 +2493,7 @@ function elevDrag(e) {
   if (!across && !up) return;
   if (!moving.kept) { moving.kept = true; const now = moving.items.map((m) => [m.item, m.item.x, m.item.y, m.item.z]); for (const m of moving.items) { m.item.x = m.x; m.item.y = m.y; } layoutKeep(); for (const [it, x, y, z] of now) { it.x = x; it.y = y; if (z !== undefined) it.z = z; } }
   for (const m of moving.items) {
-    Object.assign(m.item, planView === 'side' ? hold(m.kind, m.x, m.y + across) : hold(m.kind, m.x + across, m.y));
+    Object.assign(m.item, viewIs('side') ? hold(m.kind, m.x, m.y + across) : hold(m.kind, m.x + across, m.y));
     m.item.z = m.kind === 'object' ? Math.max(-3, step(m.z + up)) : Math.max(0, step(m.z + up));          // up or down is its height
   }
   redrawLayout();
@@ -2591,6 +2693,7 @@ function joinUp(item) {
   item.z = metres(assetOf(best.other).up ? (best.other.z || 0) + best.other.h - item.h : best.other.z || 0);
 }
 function layoutRelease() {
+  if (paneMode && !moving && !sizing && !turning) { paneMode = null; activeSvg = null; }
   if ((moving || turning || sizing) && growDrawing(work.objects)) resetView();
   if (sizing && (sizing.stage || sizing.pt != null) && sizing.kept) resetView();
   const was = moving || sizing;

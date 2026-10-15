@@ -1052,3 +1052,19 @@ body.layout-mode #layout-props { display: block; flex: 1; overflow-y: auto; padd
 .plan .add-point { fill: var(--panel); stroke: var(--accent); stroke-width: 2; cursor: copy; opacity: .8; }
 .plan .scale-dot { fill: #ff3b8d; pointer-events: none; }
 .plan .trace-grip { cursor: move; }
+/* the split view: plan, front, side and 3D, two by two */
+.pane-box { display: none; position: relative; min-width: 0; min-height: 0; }
+.plan-wrap.split { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1px; background: var(--line); }
+.plan-wrap.split > #plan { position: relative; inset: auto; grid-column: 1; grid-row: 1; background: var(--bg); width: 100%; height: 100%; min-height: 0; }
+.plan-wrap.split .pane-box { display: block; background: var(--bg); }
+.plan-wrap.split .pane-box[data-pane="front"] { grid-column: 2; grid-row: 1; }
+.plan-wrap.split .pane-box[data-pane="side"] { grid-column: 1; grid-row: 2; }
+.plan-wrap.split .pane-box[data-pane="3d"] { grid-column: 2; grid-row: 2; }
+.pane-box svg, #pane-3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+#pane-3d canvas { width: 100% !important; height: 100% !important; display: block; cursor: grab; }
+.pane-label { position: absolute; top: 8px; left: 10px; z-index: 2; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); pointer-events: none; }
+.plan-wrap.split #plan-views { top: 8px; left: auto; right: 8px; }
+.plan-wrap.split .history { display: none; }
+.top-label { display: none; }
+.plan-wrap.split .top-label { display: block; }
+@media (max-width: 899px) { body.layout-mode #layout-props { padding-top: 64px; } }

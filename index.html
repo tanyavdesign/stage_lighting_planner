@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261015165043">
+<link rel="stylesheet" href="style.css?v=20261015165350">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -381,15 +381,20 @@
   <div class="grip" data-grip="view" title="Drag to resize"></div>
 
   <section class="panel plan-col">
-    <div class="plan-wrap">
+    <div class="plan-wrap" id="plan-wrap">
       <svg id="plan" class="plan" viewBox="250 110 1500 1010" xmlns="http://www.w3.org/2000/svg"></svg>
       <button id="deselect" class="btn small chip" hidden>Deselect</button>
       <div id="plan-views" class="seg">
         <button class="btn small" data-view="top" title="Looking Down on the Stage">Top</button>
         <button class="btn small" data-view="front" title="From the Audience: Drag Up and Down to Change Height">Front</button>
         <button class="btn small" data-view="side" title="From Stage Left: Drag Up and Down to Change Height">Side</button>
+        <button class="btn small" data-view="all" title="Top, Front, Side and 3D at Once">All</button>
       </div>
       <button id="plan-reset" class="btn small chip" hidden>Reset Zoom</button>
+      <span class="pane-label top-label">Top</span>
+      <div class="pane-box" data-pane="front"><span class="pane-label">Front</span><svg id="pane-front" class="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="pane-box" data-pane="side"><span class="pane-label">Side</span><svg id="pane-side" class="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="pane-box" data-pane="3d"><span class="pane-label">3D</span><div id="pane-3d"></div></div>
       <button id="aim-go" class="btn primary chip" hidden>Aim Here</button>
       <div class="history">
         <button id="undo" class="btn icon" data-icon="undo" title="Undo (Cmd+Z)" aria-label="Undo"></button>
@@ -630,6 +635,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=20261015165043"></script>
+<script src="app.js?v=20261015165350"></script>
 </body>
 </html>
