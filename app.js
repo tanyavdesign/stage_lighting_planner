@@ -1675,16 +1675,13 @@ function buildControls() {
   for (const [id, to] of [['row-across', 0], ['row-down', 90]]) $(id).addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); turnRow(row, to); redrawLayout(); });
   typed('row-rot', -360, 360, (v) => { const row = wholeRow(); if (row) turnRow(row, (v % 360 + 360) % 360); });
   $('row-remove').addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); work.rows = work.rows.filter((r) => r !== row); redrawLayout(); });
-  // The rail: one pane at a time on the left. Colors opens the light settings instead.
+  // The rail: one pane at a time on the left. (Colours are set in the right panel, with the selected light.)
   each('.rail-btn[data-pane]', (b) => b.addEventListener('click', () => {
     each('.rail-btn[data-pane]', (one) => one.classList.toggle('active', one === b));
     each('[data-pane-body]', (body) => { body.hidden = body.dataset.paneBody !== b.dataset.pane; });
     if (layoutMode) redrawLayout();
   }));
-  $('rail-colors').addEventListener('click', () => {
-    const project = currentProject(), tpl = project && project.scratch && templates.find((t) => t.id === project.templateId);
-    if (tpl) editLights(tpl.name, tpl, saveTemplates, work.kinds); else editLights(project.name, project, saveProjects, work.kinds);
-  });
+
   $('layout-keep-open').addEventListener('click', () => { $('layout-keep').hidden = false; $('layout-tpl-name').focus(); });
   svg.addEventListener('dblclick', (e) => {
     const point = layoutMode && e.target.closest('[data-pt]');
