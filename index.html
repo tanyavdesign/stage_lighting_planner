@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261015164618">
+<link rel="stylesheet" href="style.css?v=20261015164819">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -390,6 +390,7 @@
         <button class="btn small" data-view="side" title="From Stage Left: Drag Up and Down to Change Height">Side</button>
       </div>
       <button id="plan-reset" class="btn small chip" hidden>Reset Zoom</button>
+      <button id="aim-go" class="btn primary chip" hidden>Aim Here</button>
       <div class="history">
         <button id="undo" class="btn icon" data-icon="undo" title="Undo (Cmd+Z)" aria-label="Undo"></button>
         <button id="redo" class="btn icon" data-icon="redo" title="Redo (Cmd+Shift+Z)" aria-label="Redo"></button>
@@ -455,6 +456,12 @@
             <label class="num"><span>Depth</span><input id="stage-d" type="number" min="2" max="30" step="0.1"></label>
             <label class="num" title="How High the Stage Floor Is Above the Room Floor"><span>Height</span><input id="stage-h" type="number" min="0" max="3" step="0.1"></label>
           </div>
+          <div class="props-head">Aiming Zones</div>
+          <div class="line nums">
+            <label class="num" title="How Many Zones Across"><span>Columns</span><input id="zone-cols" type="number" min="1" max="8" step="1"></label>
+            <label class="num" title="How Many Zones From Back to Front"><span>Rows</span><input id="zone-rows" type="number" min="1" max="8" step="1"></label>
+          </div>
+          <p class="hint note">Drag the corners of the dashed box on the plan to choose where the zones are.</p>
           <div class="line"><button class="btn" id="layout-cyclo" title="The Lit Back Wall (Cyclorama): the Bar Across the Back of the Plan">Back Wall</button></div>
         </div>
         <div class="group" data-pane-body="file" hidden>
@@ -617,6 +624,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=20261015164618"></script>
+<script src="app.js?v=20261015164819"></script>
 </body>
 </html>

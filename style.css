@@ -1045,3 +1045,6 @@ body.layout-mode #layout-props { display: block; flex: 1; overflow-y: auto; padd
 #layout-props #fix-moves.active { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
 #layout-props .seg.tools .btn.icon { flex: 0 0 34px; }
 #layout-props #obj-rises.active { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
+.plan .zone-area { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 8 6; opacity: .7; pointer-events: none; }
+.plan .zone-pick .fx.on rect:first-child { fill: var(--accent); fill-opacity: .22; }
+#aim-go { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 3; }

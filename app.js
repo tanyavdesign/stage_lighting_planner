@@ -32,11 +32,25 @@ const FACE_X = [684, 729, 777, 827, 877, 926, 1074, 1119, 1167, 1217, 1267, 1316
 const FACE_Y = 1062;
 const SIDE_Y = [303, 383, 502, 604, 715];
 const SIDE_X = { L: 412, R: 1588 };
-// Nine aiming zones: a 3 x 3 grid as wide as the cyclorama and as deep as the stage,
-// numbered left to right, back to front.
-const ZONES = { x: 624, w: 253, y: 218, h: 203.3 };       // left edge and size of one zone
-const ZONE_X = [750.5, 1003.5, 1256.5];
-const ZONE_Y = [320, 523, 726];
+// Aiming zones: a grid over the stage, numbered left to right, back to front. Without
+// `layout.zones` it is the KDT grid, 3 x 3, as wide as the cyclorama and as deep as the stage;
+// a layout can set its own: `layout.zones = { cols, rows, x0, y0, x1, y1 }` (plan units).
+const ZONES = { x: 624, w: 253, y: 218, h: 203.3, cols: 3, rows: 3 };       // left edge, size of one zone, and how many
+const zoneCount = () => ZONES.cols * ZONES.rows;
+const zoneCentre = (z) => [ZONES.x + ZONES.w * ((z - 1) % ZONES.cols + 0.5), Math.round(ZONES.y + ZONES.h * (Math.floor((z - 1) / ZONES.cols) + 0.5))];
+function useZones(zones) {
+  if (!zones) return;
+  const cols = Math.max(1, Math.min(8, zones.cols | 0)), rows = Math.max(1, Math.min(8, zones.rows | 0));
+  Object.assign(ZONES, { cols, rows, x: zones.x0, y: zones.y0, w: (zones.x1 - zones.x0) / cols, h: (zones.y1 - zones.y0) / rows });
+}
+const zonesOf = () => ({ cols: ZONES.cols, rows: ZONES.rows, x0: Math.round(ZONES.x), y0: Math.round(ZONES.y), x1: Math.round(ZONES.x + ZONES.w * ZONES.cols), y1: Math.round(ZONES.y + ZONES.h * ZONES.rows) });
+// The cyclorama is aimed at as "zone 100"; looks saved when there were only nine zones call it 10.
+const isCyc = (z) => +z === 100 || (+z === 10 && zoneCount() < 10);
+function zoneName(z) {
+  if (isCyc(z)) return 'Cyclorama';
+  if (ZONES.cols === 3 && ZONES.rows === 3) return ZONE_NAMES[z - 1];
+  return `Row ${Math.floor((z - 1) / ZONES.cols) + 1}, Column ${(z - 1) % ZONES.cols + 1}`;
+}
 // The stage's size comes from the layout, in metres: `layout.stage = { w, d, h }` (width,
 // depth, and how high the stage floor is above the room's). A layout without one has the KDT
 // stage. setStage moves everything that is placed by the stage: its edges, the aiming zones,
@@ -55,8 +69,7 @@ function setStage(stage) {
   Object.assign(STAGE, { x0: STAGE.cx - halfW, x1: STAGE.cx + halfW, y0: STAGE.cy - halfD, y1: STAGE.cy + halfD });
   STAGE_H = stage ? stage.h : 0.6;
   const w = halfW * 2, d = halfD * 2;
-  Object.assign(ZONES, { x: sx(624), w: (sx(1383) - sx(624)) / 3, y: STAGE.y0, h: d / 3 });
-  for (const i of [0, 1, 2]) { ZONE_X[i] = ZONES.x + ZONES.w * (i + 0.5); ZONE_Y[i] = Math.round(ZONES.y + ZONES.h * (i + 0.5)); }
+  Object.assign(ZONES, { x: sx(624), w: (sx(1383) - sx(624)) / 3, y: STAGE.y0, h: d / 3, cols: 3, rows: 3 });
   Object.assign(CYC, { z: -(d / UNIT / 2 + 0.13), halfW: 3.8 * w / 1010 });
   Object.assign(BOUNDS, { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: STAGE.y1 - 24 });
   Object.assign(PLAN_BOUNDS, { x0: STAGE.x0 - 205, x1: STAGE.x1 + 205, y0: STAGE.y0 - 68, y1: STAGE.y1 + 262 });      // face and side lights stand off the stage
@@ -79,7 +92,7 @@ function growDrawing(objects) {
   return grew;
 }
 const ZONE_NAMES = ['Back L', 'Back C', 'Back R', 'Mid L', 'Mid C', 'Mid R', 'Front L', 'Front C', 'Front R', 'Cyclorama'];
-const CYCLO_ZONE = 10;       // aiming here points the beam at the cyclorama itself, not the floor
+const CYCLO_ZONE = 100;      // aiming here points the beam at the cyclorama itself, not the floor (see isCyc)
 const PEOPLE_AT = [[830, 455], [1000, 425], [1170, 455], [745, 600], [885, 680], [1000, 610], [1115, 680], [1255, 600]];
 
 // 3D units: 1 unit is about a metre; the stage is roughly 10 wide and 6 deep.
@@ -340,6 +353,7 @@ const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], CUSTOMS = [], KINDS = [
 let ledRows = 0, spotRows = 0, FACE_Z = 0;
 function useLayout(layout) {
   setStage(layout.stage);
+  useZones(layout.zones);
   CYCLO_ON = cycloOf(layout);
   PEOPLE.length = OBJECTS.length = 0;
   for (const [x, y] of PEOPLE_AT) { const [x3, z3] = to3(sx(x), sy(y)); PEOPLE.push({ x3, z3 }); }
@@ -394,12 +408,12 @@ function aimTargets(look) {
     if (zone) (groups[zone] = groups[zone] || []).push(led);
   }
   for (const zone in groups) {
-    const leds = groups[zone], cx = ZONE_X[(zone - 1) % 3], cy = ZONE_Y[Math.floor((zone - 1) / 3)];
+    const leds = groups[zone], [cx, cy] = isCyc(zone) ? [0, 0] : zoneCentre(+zone);
     const cols = leds.map((l) => l.col), rows = leds.map((l) => l.row);
     const c0 = Math.min(...cols), c1 = Math.max(...cols), r0 = Math.min(...rows), r1 = Math.max(...rows);
     for (const led of leds) {
       const u = c1 > c0 ? (led.col - c0) / (c1 - c0) - 0.5 : 0, v = r1 > r0 ? (led.row - r0) / (r1 - r0) - 0.5 : 0;
-      if (+zone === CYCLO_ZONE) {
+      if (isCyc(zone)) {
         // Pick a point on the cyclorama (spread across its width, a row of LEDs per
         // height), then carry the line from the fixture through it on down to floor
         // level, which is how every aim is stored. The third and fourth numbers are
@@ -523,6 +537,7 @@ function copyLayout(layout) {
   }
   if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
   if (layout.cyclo != null) out.cyclo = !!layout.cyclo;
+  if (layout.zones) out.zones = Object.assign({}, layout.zones);
   if (layout.rows && layout.rows.length) out.rows = layout.rows.map(({ axis, rot, gap, x, y, members }) => ({ axis, rot: rot != null ? rot : axis === 'y' ? 90 : 0, gap, x, y, members: members.map(({ kind, id }) => ({ kind, id })) }));
   if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h, media, rises }) => Object.assign({ id, type, name, x, y, z, rot, w, d, h }, media ? { media: { id: media.id, name: media.name, type: media.type } } : {}, rises ? { rises: true } : {}));
   return out;
@@ -972,7 +987,8 @@ const planEls = { leds: {}, aims: {}, spots: {}, face: [], side: { L: [], R: [] 
 
 // Selection: `selection` holds LEDs; spotlights and side positions have their own sets.
 const selSpots = new Set(), selSides = new Set(), selCustom = new Set();
-let aiming = false;        // true while the plan is waiting for a zone to be tapped
+let aiming = false;        // true while the plan is waiting for zones to be tapped
+const aimZones = new Set();   // the zones tapped so far
 let selCyclo = false;      // the cyclorama can be selected too, to bring up its colours
 const anySelected = () => selCyclo || selection.size + selSpots.size + selSides.size + selCustom.size > 0;
 function clearSelection() { selection.clear(); selSpots.clear(); selSides.clear(); selCustom.clear(); selCyclo = false; }
@@ -1148,10 +1164,16 @@ function drawStage() {
   const put = (name, attrs, text) => el(name, attrs, text, layer);
   const area = (x, y, text) => put('text', { x, y, 'text-anchor': 'middle', class: 'area' }, text);
   put('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
-  for (const c of [0, 1, 2, 3]) put('line', { x1: ZONES.x + ZONES.w * c, y1: STAGE.y0 + 26, x2: ZONES.x + ZONES.w * c, y2: STAGE.y1 - 12, class: 'grid' });
-  for (const r of [1, 2]) put('line', { x1: ZONES.x, y1: ZONES.y + ZONES.h * r, x2: ZONES.x + ZONES.w * 3, y2: ZONES.y + ZONES.h * r, class: 'grid' });
-  for (let z = 0; z < 9; z++) {
-    put('text', { x: ZONES.x + ZONES.w * (z % 3) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / 3) + ZONES.h - 11, 'text-anchor': 'end', class: 'zone' }, z + 1);
+  const zx1 = ZONES.x + ZONES.w * ZONES.cols, zy1 = ZONES.y + ZONES.h * ZONES.rows;
+  for (let c = 0; c <= ZONES.cols; c++) put('line', { x1: ZONES.x + ZONES.w * c, y1: ZONES.y + (ZONES.y <= STAGE.y0 ? 26 : 0), x2: ZONES.x + ZONES.w * c, y2: zy1 - (zy1 >= STAGE.y1 ? 12 : 0), class: 'grid' });
+  for (let r = 0; r <= ZONES.rows; r++) if ((r > 0 && r < ZONES.rows) || ZONES.y > STAGE.y0 + 1 || zy1 < STAGE.y1 - 1) put('line', { x1: ZONES.x, y1: ZONES.y + ZONES.h * r, x2: zx1, y2: ZONES.y + ZONES.h * r, class: 'grid' });
+  for (let z = 0; z < zoneCount(); z++) {
+    put('text', { x: ZONES.x + ZONES.w * (z % ZONES.cols) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / ZONES.cols) + ZONES.h - 11, 'text-anchor': 'end', class: 'zone' }, z + 1);
+  }
+  if (layoutMode) {                      // in the layout editor: the zones' area, with a handle at two corners to resize it
+    put('rect', { x: ZONES.x, y: ZONES.y, width: zx1 - ZONES.x, height: zy1 - ZONES.y, class: 'zone-area' });
+    put('rect', { x: ZONES.x - 8, y: ZONES.y - 8, width: 16, height: 16, rx: 3, class: 'size-handle', 'data-zone': '0' });
+    put('rect', { x: zx1 - 8, y: zy1 - 8, width: 16, height: 16, rx: 3, class: 'size-handle', 'data-zone': '1' });
   }
   planEls.cyclo = null;                  // the back wall is not drawn on the plan; its colour is set in the Cyclorama section
   area(STAGE.cx, sy(168), 'BACKSTAGE');
@@ -1171,19 +1193,21 @@ function buildPlan() {
   drawFixtures(LEDS, SPOTS);
   // Shown over the stage while choosing where the selected LEDs should point.
   planEls.zonePick = el('g', { class: 'zone-pick' });
-  for (let z = 0; z < 9; z++) {
-    const x = ZONES.x + ZONES.w * (z % 3), y = ZONES.y + ZONES.h * Math.floor(z / 3);
-    fixture(
+  // Tapping zones picks them (tap again to drop one); Aim sends the selected LEDs there.
+  const pickZone = (z, box) => { toggleIn(aimZones, z); box.parentNode.classList.toggle('on', aimZones.has(z)); syncUI(); };
+  for (let z = 0; z < zoneCount(); z++) {
+    const x = ZONES.x + ZONES.w * (z % ZONES.cols), y = ZONES.y + ZONES.h * Math.floor(z / ZONES.cols);
+    const box = fixture(
       ['rect', { x: x + 4, y: y + 4, width: ZONES.w - 8, height: ZONES.h - 8, rx: 10 }],
-      ['text', { x: x + ZONES.w / 2, y: y + ZONES.h / 2 + 27, 'text-anchor': 'middle', class: 'zone-num' }, z + 1],
-      () => { aiming = false; forSelection((id) => { state.aim[id] = z + 1; }); },
-      null, planEls.zonePick);
+      ['text', { x: x + ZONES.w / 2, y: y + ZONES.h / 2 + Math.min(27, ZONES.h / 5), 'text-anchor': 'middle', class: 'zone-num', 'font-size': Math.min(84, ZONES.h * 0.5, ZONES.w * 0.5) }, z + 1],
+      () => pickZone(z + 1, box), null, planEls.zonePick);
   }
-  if (CYCLO_ON) fixture(                                     // zone 10: the cyclorama itself
-    ['rect', { x: ZONES.x + 4, y: STAGE.y0 - 34, width: ZONES.w * 3 - 8, height: 34, rx: 8 }],
-    ['text', { x: ZONES.x + ZONES.w * 1.5, y: STAGE.y0 - 8, 'text-anchor': 'middle', class: 'zone-num small' }, '10  Cyclorama'],
-    () => { aiming = false; forSelection((id) => { state.aim[id] = CYCLO_ZONE; }); },
-    null, planEls.zonePick);
+  if (CYCLO_ON) {                                    // the cyclorama itself
+    const box = fixture(
+      ['rect', { x: ZONES.x + 4, y: STAGE.y0 - 34, width: ZONES.w * ZONES.cols - 8, height: 34, rx: 8 }],
+      ['text', { x: ZONES.x + ZONES.w * ZONES.cols / 2, y: STAGE.y0 - 8, 'text-anchor': 'middle', class: 'zone-num small' }, 'Cyclorama'],
+      () => pickZone(CYCLO_ZONE, box), null, planEls.zonePick);
+  }
   applyView();
 }
 
@@ -1335,7 +1359,16 @@ const each = (selector, fn) => document.querySelectorAll(selector).forEach(fn);
 function buildControls() {
   palette($('led-colors'), LIGHTS.led, (value) => forSelection((id) => { if (value) state.leds[id] = value; else delete state.leds[id]; }));
   $('aim-down').addEventListener('click', () => { aiming = false; forSelection((id) => { delete state.aim[id]; }); });
-  $('aim-zone').addEventListener('click', () => { aiming = !aiming; syncUI(); });
+  $('aim-zone').addEventListener('click', () => { aiming = !aiming; aimZones.clear(); each('.zone-pick .fx', (g) => g.classList.remove('on')); syncUI(); });
+  // Aim: the selected LEDs, left to right, are shared out over the zones picked, in order
+  $('aim-go').addEventListener('click', () => {
+    const zones = [...aimZones].sort((a, b) => a - b), lights = [...selection].map((id) => LEDS.find((l) => l.id === id)).filter(Boolean).sort((a, b) => a.x - b.x || a.y - b.y);
+    if (!zones.length) return;
+    aiming = false;
+    lights.forEach((led, i) => { state.aim[led.id] = zones[Math.floor(i * zones.length / lights.length)]; });
+    aimZones.clear(); each('.zone-pick .fx', (g) => g.classList.remove('on'));
+    commit();
+  });
   $('deselect').addEventListener('click', () => { clearSelection(); syncUI(); });
   each('[data-sel-spots]', (b) => b.addEventListener('click', () => {
     for (const id of selSpots) state.spots[id] = b.dataset.selSpots === 'on';
@@ -1591,6 +1624,8 @@ function buildControls() {
     return work.stageDirty ? (delete work.stageDirty, applyStage()) : redrawLayout();
   });
   const sized = (key) => (v) => { work.stage = Object.assign(stageOf(work), { [key]: v }); work.stageDirty = true; };
+  const gridded = (key) => (v) => { work.zones = Object.assign(zonesOf(), { [key]: Math.round(v) }); work.stageDirty = true; };
+  typed('zone-cols', 1, 8, gridded('cols')); typed('zone-rows', 1, 8, gridded('rows'));
   typed('stage-w', 2, 40, sized('w')); typed('stage-d', 2, 30, sized('d')); typed('stage-h', 0, 3, sized('h'));
   const placed = (set) => (v) => { const item = pickedItem(); if (item) set(item, v, work.picked.kind); };
   // an object that is moved or resized by typing takes the lights mounted on it along
@@ -1750,7 +1785,7 @@ function buildControls() {
 // Changes are made on a working copy; Done saves it to the project and reloads, so
 // every view is rebuilt from the new layout. Cancel reloads without saving.
 // ---------------------------------------------------------------------------
-let layoutMode = false, work = null, moving = null;
+let layoutMode = false, work = null, moving = null, zonesWere = null;
 const numberOf = (id) => +String(id).replace(/^[A-Z]/, '');
 const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light', custom: 'Custom Light', object: 'Object' };
 // What is selected in the layout editor: `work.sel`, a list of { kind, id }. `work.picked`
@@ -1765,7 +1800,7 @@ const boundsOf = (kind) => (kind === 'object' || kind === 'custom' ? { x0: STAGE
 const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
 // Undo and redo inside the editor: the layout as it was before each change, and after each undo.
 const layoutPast = [], layoutNext = [];
-const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage, cyclo: work.cyclo, rows: work.rows });
+const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage, cyclo: work.cyclo, rows: work.rows, zones: work.zones });
 function layoutKeep() { layoutPast.push(layoutNow()); if (layoutPast.length > 80) layoutPast.shift(); layoutNext.length = 0; }
 function layoutStep(from, to, none) {
   if (!from.length) return toast(none, 1500);
@@ -1774,13 +1809,14 @@ function layoutStep(from, to, none) {
   Object.assign(work, JSON.parse(from.pop()));
   work.sel = work.sel.filter((one) => itemOf(one));
   $('layout-kinds').dataset.shown = '';
-  if (JSON.stringify(work.stage) !== sized) applyStage(); else { drawStage(); redrawLayout(); }
+  if (JSON.stringify(work.stage) !== sized) applyStage(); else { useZones(work.zones); drawStage(); redrawLayout(); }
 }
 const layoutUndo = () => layoutStep(layoutPast, layoutNext, 'Nothing to undo.');
 const layoutRedo = () => layoutStep(layoutNext, layoutPast, 'Nothing to redo.');
 // The stage changed size: move everything drawn around it, and show the whole drawing again.
 function applyStage() {
   setStage(work.stage);
+  useZones(work.zones);
   growDrawing(work.objects);
   drawStage();
   resetView();
@@ -1906,7 +1942,8 @@ function enterLayout() {
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
   work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)),
-    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, cyclo: layout.cyclo, rows: clone(layout.rows || []), sel: [] };
+    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, cyclo: layout.cyclo, rows: clone(layout.rows || []), zones: layout.zones ? Object.assign({}, layout.zones) : null, sel: [] };
+  zonesWere = zonesOf();          // to carry aimed cues over if the zones change
   Object.defineProperty(work, 'picked', {
     get() { return this.sel.length === 1 ? this.sel[0] : null; },
     set(one) { this.sel = one ? [one] : []; },
@@ -2019,6 +2056,7 @@ function redrawLayout() {
   $('layout-classic').hidden = true;           // these four are in the library's Lights tab now
   const stage = stageOf(work);
   $('stage-sum').textContent = `${stage.w} × ${stage.d} m`;
+  for (const [id, v] of [['zone-cols', ZONES.cols], ['zone-rows', ZONES.rows]]) if (document.activeElement !== $(id)) $(id).value = v;
   for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
   $('layout-snap').classList.toggle('active', snapOn);
   $('layout-cyclo').classList.toggle('active', cycloOf(work));
@@ -2192,7 +2230,8 @@ function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   const handle = e.target.closest('[data-rot]');
-  const grip = e.target.closest('[data-size]'), edge = e.target.closest('[data-stage]');
+  const grip = e.target.closest('[data-size]'), edge = e.target.closest('[data-stage]'), corner = e.target.closest('[data-zone]');
+  if (corner) { sizing = { zone: corner.dataset.zone, kept: false }; moving = null; return; }
   if (grip) {                          // a corner of an object: the opposite corner stays where it is
     const item = work.objects.find((o) => o.id === grip.dataset.id), [cx, cy] = grip.dataset.size.split(',').map(Number), a = (item.rot || 0) * Math.PI / 180;
     const lx = -cx * item.w * UNIT / 2, ly = -cy * item.d * UNIT / 2;
@@ -2232,6 +2271,13 @@ function layoutDrag(e) {
   if (sizing) {
     const step = (v) => (snapOn ? Math.round(v * 20) / 20 : Math.round(v * 100) / 100);        // 5 cm steps with snapping on
     if (!sizing.kept) { sizing.kept = true; layoutKeep(); }
+    if (sizing.zone != null) {           // a corner of the zones' area: the other corner stays put
+      const z = zonesOf(), at = (v) => Math.round(v / 5) * 5;
+      if (sizing.zone === '0') { z.x0 = Math.min(at(p.x), z.x1 - 60); z.y0 = Math.min(at(p.y), z.y1 - 60); }
+      else { z.x1 = Math.max(at(p.x), z.x0 + 60); z.y1 = Math.max(at(p.y), z.y0 + 60); }
+      work.zones = z; useZones(z); drawStage();
+      return redrawLayout();
+    }
     if (sizing.stage) {                  // the stage grows both ways from its middle
       const stage = stageOf(work);
       if (sizing.stage === 'w') stage.w = Math.max(2, Math.min(40, step(2 * (p.x - STAGE.cx) / UNIT)));
@@ -2572,10 +2618,24 @@ function layoutDone() {
     for (const side of SIDES) was[side].forEach((id, i) => { if (look.sidePos && look.sidePos[side] && look.sidePos[side][i]) on.add(id); });
     look.sidePos = { L: now.L.map((light) => on.has(light.was)), R: now.R.map((light) => on.has(light.was)) };
   };
+  // the zones changed: every aimed light goes to the new zone nearest the middle of its old one
+  const zw = zonesWere, zonesNow = zonesOf(), oldCount = zw ? zw.cols * zw.rows : 9;
+  const reaim = zw && JSON.stringify(zw) !== JSON.stringify(zonesNow) ? (look) => {
+    for (const id in look.aim || {}) {
+      const z = +look.aim[id];
+      if (z === 100 || (z === 10 && oldCount < 10)) { look.aim[id] = 100; continue; }
+      if (!(z >= 1 && z <= oldCount)) continue;
+      const x = zw.x0 + (zw.x1 - zw.x0) / zw.cols * ((z - 1) % zw.cols + 0.5), y = zw.y0 + (zw.y1 - zw.y0) / zw.rows * (Math.floor((z - 1) / zw.cols) + 0.5);
+      let best = 1, far = Infinity;
+      for (let n = 1; n <= zoneCount(); n++) { const [cx, cy] = zoneCentre(n), d = (cx - x) ** 2 + (cy - y) ** 2; if (d < far) { far = d; best = n; } }
+      look.aim[id] = best;
+    }
+  } : null;
+  const settle = (look) => { resides(look); if (reaim) reaim(look); };
   layout = copyLayout(work);
   layoutMode = false;                       // let the saves below go through normally
-  relook(state, renamed, alive, resides);
-  show.cues.forEach((cue) => relook(cue.look, renamed, alive, resides));
+  relook(state, renamed, alive, settle);
+  show.cues.forEach((cue) => relook(cue.look, renamed, alive, settle));
   store.set(LAYOUT_KEY, layout);
   store.set(LOOK_KEY, state);
   saveShow();
@@ -2583,8 +2643,8 @@ function layoutDone() {
   for (const item of currentProject().items) {
     if (item.id === currentItemId) continue;
     const look = raw.get(projectKey(LOOK_KEY, item.id), null), part = raw.get(projectKey(SHOW_KEY, item.id), null);
-    if (look) raw.set(projectKey(LOOK_KEY, item.id), relook(look, renamed, alive, resides));
-    if (part && Array.isArray(part.cues)) { part.cues.forEach((cue) => relook(cue.look, renamed, alive, resides)); raw.set(projectKey(SHOW_KEY, item.id), part); }
+    if (look) raw.set(projectKey(LOOK_KEY, item.id), relook(look, renamed, alive, settle));
+    if (part && Array.isArray(part.cues)) { part.cues.forEach((cue) => relook(cue.look, renamed, alive, settle)); raw.set(projectKey(SHOW_KEY, item.id), part); }
   }
   leaveLayout(true);
 }
@@ -3098,8 +3158,10 @@ function syncUI() {
   const zone = zones.size === 1 ? [...zones][0] : null;
   $('aim-down').classList.toggle('active', !aiming && zone === 0);
   $('aim-zone').classList.toggle('active', aiming || zone > 0);
-  $('aim-zone').textContent = aiming ? 'Tap a Zone on the Plan' : zone > 0 ? `Zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'Aim at Zone';
+  $('aim-zone').textContent = aiming ? 'Tap Zones on the Plan' : zone > 0 ? (isCyc(zone) ? 'Cyclorama' : `Zone ${zone} (${zoneName(zone)})`) : zones.size > 1 ? 'Several Zones' : 'Aim at Zone';
   planEls.zonePick.style.display = aiming ? '' : 'none';
+  $('aim-go').hidden = !aiming || !aimZones.size;
+  $('aim-go').textContent = aimZones.size > 1 ? `Aim at ${aimZones.size} Zones` : 'Aim Here';
   const allSame = (values) => values.length > 0 && values.every((v) => v === values[0]);
   const spotStates = [...selSpots].map((id) => !!state.spots[id]);
   const sideStates = [...selSides].map((key) => !!state.sidePos[key[0]][+key.slice(1)]);
@@ -4222,7 +4284,7 @@ function sideText(look) {
   }).filter(Boolean);
   return types.length && places.length ? `${types.join(' + ')} on ${places.join(', ')}` : 'Off';
 }
-const zoneText = (zone) => (+zone ? `zone ${zone} (${ZONE_NAMES[zone - 1]})` : 'straight down');
+const zoneText = (zone) => (+zone ? (isCyc(zone) ? 'the cyclorama' : `zone ${zone} (${zoneName(zone)})`) : 'straight down');
 
 // What changed going from one look to another, for the "same as Cue N, except" note.
 // `kinds` counts the kinds of thing that differ (LED colours, LED aim, spotlights, face
