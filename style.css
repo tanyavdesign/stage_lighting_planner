@@ -1070,3 +1070,10 @@ body.layout-mode #layout-props { display: block; flex: 1; overflow-y: auto; padd
 @media (max-width: 899px) { body.layout-mode #layout-props { padding-top: 64px; } }
 .plan .zone-area.editing { pointer-events: all; fill: var(--accent); fill-opacity: .04; cursor: move; }
 #zone-edit.active { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
+.layer-line { display: flex; align-items: center; gap: 2px; }
+.layer-line .layer-row { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-row.off { opacity: .45; }
+.layer-line .layer-eye { flex: 0 0 28px; width: 28px !important; height: 28px !important; opacity: 0; }
+.layer-line:hover .layer-eye, .layer-line .layer-eye:not(.active) { opacity: 1; }
+.layer-line .layer-eye:not(.active) { color: var(--muted); }
+.layer-line .layer-eye svg { width: 16px !important; height: 16px !important; }

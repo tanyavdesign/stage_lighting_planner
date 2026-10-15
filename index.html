@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261015165954">
+<link rel="stylesheet" href="style.css?v=20261015170658">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -282,7 +282,7 @@
               <span class="lbl" id="z-lbl">Height</span>
               <input id="obj-z" type="number" step="0.1"><span class="slide-value">m</span>
             </div>
-            <div class="line lit-only" title="How Big Its Pool of Light Is">
+            <div class="line" id="fix-beam-line" title="How Big Its Pool of Light Is: How Far the Beam Spreads">
               <span class="lbl">Size</span>
               <input id="fix-beam" type="range" min="2" max="120" step="1" class="white-slide"><span class="slide-value" id="fix-beam-v"></span>
             </div>
@@ -358,6 +358,8 @@
             <button class="btn" id="layout-copy">Copy</button>
             <button class="btn" id="layout-delete">Delete</button>
             <button class="btn" id="row-make" title="Keep These in a Line at an Even Spacing">Auto Layout</button>
+            <button class="btn" id="group-make" title="Keep These Together Under One Name (Cmd+G)">Group</button>
+            <button class="btn" id="group-break" title="Stop Keeping These Together (Cmd+Shift+G)">Ungroup</button>
           </div>
         </div>
       </div>
@@ -649,6 +651,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=20261015165954"></script>
+<script src="app.js?v=20261015170658"></script>
 </body>
 </html>
