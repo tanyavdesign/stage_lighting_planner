@@ -677,6 +677,7 @@ body.layout-mode .history { display: none; }
 .plan .stage-grip.across { cursor: ew-resize; }
 .plan .stage-grip.down { cursor: ns-resize; }
 .plan .throw.cone { fill: var(--accent); fill-opacity: .06; }
+.plan .throw.cone.air { fill-opacity: .03; stroke-opacity: .5; }
 .plan .size-handle.tall { cursor: ns-resize; }
 .plan .size-handle.wide { cursor: ew-resize; }
 /* the editor's view switch: top, front, side */

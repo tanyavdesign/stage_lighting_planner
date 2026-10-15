@@ -362,14 +362,14 @@ function useLayout(layout) {
     LED_ROW_Y.push(items.reduce((sum, it) => sum + it.y, 0) / items.length);
     items.forEach((it, col) => {
       const idx = LEDS.length, [x3, z3] = to3(it.x, it.y);
-      LEDS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, col, idx, soft: (it.soft != null ? it.soft : 100) / 100, s1: rand(idx + 1), s2: rand(idx + 101), s3: rand(idx + 201) });
+      LEDS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, col, idx, h: it.z != null ? it.z : RIG_H, soft: (it.soft != null ? it.soft : 100) / 100, s1: rand(idx + 1), s2: rand(idx + 101), s3: rand(idx + 201) });
     });
   });
   spots.forEach((items, row) => items.forEach((it) => {
     const [x3, z3] = to3(it.x, it.y);
-    SPOTS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, soft: (it.soft != null ? it.soft : 100) / 100 });
+    SPOTS.push({ id: it.id, x: it.x, y: it.y, x3, z3, row, h: it.z != null ? it.z : RIG_H, soft: (it.soft != null ? it.soft : 100) / 100 });
   }));
-  const metres = (it) => { const [x3, z3] = to3(it.x, it.y); return { id: it.id, x: it.x, y: it.y, x3, z3 }; };
+  const metres = (it) => { const [x3, z3] = to3(it.x, it.y); return { id: it.id, x: it.x, y: it.y, x3, z3, h: it.z }; };
   FACES.length = 0;
   for (const it of facesOf(layout)) FACES.push(metres(it));
   FACE_Z = FACES.length ? FACES.reduce((sum, f) => sum + f.z3, 0) / FACES.length : to3(0, sy(FACE_Y))[1];
@@ -509,7 +509,7 @@ let templates = raw.get(TEMPLATES_KEY, []);
 const saveTemplates = () => raw.set(TEMPLATES_KEY, templates);
 const findTemplate = (id) => (id === SCRATCH.id ? SCRATCH : templates.find((t) => t.id === id) || BUILTIN);
 function copyLayout(layout) {
-  const plain = (list) => list.map(({ id, x, y, soft }) => (soft != null ? { id, x, y, soft } : { id, x, y }));       // soft: how soft its pool's edge is, when it was set
+  const plain = (list) => list.map(({ id, x, y, soft, z }) => Object.assign({ id, x, y }, soft != null ? { soft } : {}, z != null ? { z } : {}));       // soft and z (height) only when they were set
   const out = { leds: plain(layout.leds), spots: plain(layout.spots) };
   if (layout.faces) out.faces = plain(layout.faces);
   if (layout.sides) out.sides = plain(layout.sides);
@@ -865,16 +865,16 @@ const ground = new Float32Array(LEDS.length);
 function cycloHit(led, tx, tz) {
   if (tz >= CYC.z || led.z3 <= CYC.z) return null;
   const s = (CYC.z - led.z3) / (tz - led.z3);
-  const x = led.x3 + (tx - led.x3) * s, y = RIG_H * (1 - s);
+  const x = led.x3 + (tx - led.x3) * s, y = led.h * (1 - s);
   if (Math.abs(x) > CYC.halfW || y > CYC.top) return null;
-  const dx = tx - led.x3, dz = tz - led.z3, length = Math.hypot(dx, RIG_H, dz);
+  const dx = tx - led.x3, dz = tz - led.z3, length = Math.hypot(dx, led.h, dz);
   return {
     x, y, s,
     strength: ground[led.idx] + (TOP - ground[led.idx]) * Math.pow(1 - s, 2.4),
     radius: 0.5 + 1.4 * s,                                   // the beam is wider the further it has travelled
     stretch: Math.min(1.9, length / Math.max(Math.abs(dz), 0.05)),   // a glancing beam smears into a longer oval
     fade: Math.min(1, (CYC.z - tz) / 0.7),                   // eases in as the beam climbs onto the wall
-    angle: Math.atan2(-RIG_H, dx),                           // which way the oval points, on the wall
+    angle: Math.atan2(-led.h, dx),                           // which way the oval points, on the wall
   };
 }
 // Light on the cyclorama keeps the LED's own colour.
@@ -910,7 +910,7 @@ function lightFigures(D) {
       if (D[o] + D[o + 1] + D[o + 2] < 0.01) continue;
       const d = Math.hypot(D[o + 3] - p.x3, D[o + 4] - p.z3) / REACH;
       // a beam thrown a long way across the stage arrives weaker than one pointing straight down
-      const thrown = Math.hypot(D[o + 3] - led.x3, RIG_H, D[o + 4] - led.z3);
+      const thrown = Math.hypot(D[o + 3] - led.x3, led.h, D[o + 4] - led.z3);
       const w = Math.exp(-d * d) * ground[led.idx] / LANDING * 0.5 * Math.pow(RIG_H / thrown, 1.5);
       r += D[o] * w; g += D[o + 1] * w; b += D[o + 2] * w;
     }
@@ -1984,7 +1984,9 @@ function redrawLayout() {
     if (!lit) { $('more-fields').hidden = true; $('more-toggle').classList.remove('open'); }      // the DMX numbers open only on request
     const softable = lit || work.picked.kind === 'led' || work.picked.kind === 'spot';
     each('#layout-picked .soft-only', (n) => { n.hidden = !softable; });
-    $('z-lbl').textContent = lit ? 'Height' : 'Off Floor';
+    $('z-lbl').textContent = object ? 'Off Floor' : 'Height';
+    $('z-line').hidden = false;
+    if (!lit && !object) fill('obj-z', metres(zOf(work.picked.kind, item)));
     if (softable) { fill('fix-soft', item.soft != null ? item.soft : fx && fx.soft != null ? fx.soft : 100); $('fix-soft-v').textContent = softWord(+$('fix-soft').value); }
     each('#layout-picked .high-only', (n) => { n.hidden = !object && !lit; });
     if (lit) {
@@ -2031,7 +2033,7 @@ const elevH = (item) => (planView === 'side' ? item.y + STAGE.cx - STAGE.cy : it
 const elevGround = () => FULL.y + FULL.h - 190;                            // the stage floor's line in the view
 const elevY = (z) => elevGround() - z * UNIT;
 const CLASSIC_Z = { led: RIG_H, spot: RIG_H, face: 5.4, side: 1 };         // the four classic kinds hang at fixed heights
-const zOf = (kind, item) => (kind === 'custom' ? heightOf(item) : kind === 'object' ? item.z || 0 : CLASSIC_Z[kind]);
+const zOf = (kind, item) => (kind === 'custom' ? heightOf(item) : kind === 'object' ? item.z || 0 : item.z != null ? item.z : CLASSIC_Z[kind]);
 const acrossOf = (o) => { const a = (o.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(a)), n = Math.abs(Math.sin(a)); return planView === 'side' ? o.w * n + o.d * c : o.w * c + o.d * n; };
 function drawElevStage() {
   const layer = planEls.stageLayer, side = planView === 'side', ground = elevGround(), drop = Math.max(3, STAGE_H * UNIT);
@@ -2045,8 +2047,8 @@ function drawElevStage() {
   put('rect', { x: from, y: ground, width: to - from, height: drop, rx: 3, class: 'stage' });
   put('line', { x1: FULL.x + 30, y1: ground + drop, x2: FULL.x + FULL.w - 30, y2: ground + drop, class: 'rail' });
   const area = (x, y, text) => put('text', { x, y, 'text-anchor': 'middle', class: 'area' }, text);
-  area(mid, ground + drop + 44, side ? 'SIDE VIEW' : 'FRONT VIEW');
-  area(from - 90, ground + 5, side ? 'BACK' : 'STAGE LEFT'); area(to + 90, ground + 5, side ? 'FRONT' : 'STAGE RIGHT');
+  area(mid, ground + drop + 52, side ? 'SIDE VIEW' : 'FRONT VIEW');            // the names sit under the floor, clear of the beams
+  area(from, ground + drop + 26, side ? 'BACK' : 'STAGE LEFT'); area(to, ground + drop + 26, side ? 'FRONT' : 'STAGE RIGHT');
 }
 function drawElevation() {
   const layer = planEls.fixtureLayer, side = planView === 'side', ground = elevGround(), labels = lightLabels(work.customs, work.kinds);
@@ -2066,22 +2068,62 @@ function drawElevation() {
     if (wide > 70 && tall > 18) el('text', { x: elevH(o), y: y + tall / 2 + 5, 'text-anchor': 'middle', class: 'obj-name' }, o.name, layer);
   }
   const box = (x, y) => ({ x: x - 32, y: y - 26, width: 64, height: 52 });
-  for (const it of seen('led')) { const x = elevH(it), y = elevY(CLASSIC_Z.led); group('led', it.id, box(x, y), ['rect', { x: x - 23, y: y - 13, width: 46, height: 26, rx: 13, class: 'led' }]); }
-  for (const it of seen('spot')) { const x = elevH(it), y = elevY(CLASSIC_Z.spot); group('spot', it.id, box(x, y), ['circle', { cx: x, cy: y, r: 17, class: 'spot' }]); }
-  for (const it of seen('face')) { const x = elevH(it), y = elevY(CLASSIC_Z.face); group('face', it.id, box(x, y), ['rect', { x: x - 8, y: y - 19, width: 16, height: 38, rx: 8, class: 'face' }]); }
-  for (const it of seen('side')) { const x = elevH(it), y = elevY(CLASSIC_Z.side); group('side', it.id, box(x, y), ['circle', { cx: x, cy: y, r: 14, class: 'side' }]); }
+  const from = side ? elevH({ y: STAGE.y0 }) : STAGE.x0, to = side ? elevH({ y: STAGE.y1 }) : STAGE.x1;
+  // A beam seen from here: from the light down to the stage, or past its edge to the room floor,
+  // or 3 m into the air when it points level or up. Returns where its middle ends.
+  const cone = (x, z, aim) => {
+    const t = aim.tilt * Math.PI / 180, p = aim.pan * Math.PI / 180, half = Math.min(60, aim.beam / 2) * Math.PI / 180;
+    const lean = (side ? -Math.cos(p) : Math.sin(p)) * Math.sin(t), down = Math.cos(t), mid = Math.atan2(lean, down);     // the beam's angle from straight down, seen from here
+    let air = false;
+    // each edge of the beam ends where it meets the stage, or past the stage's edge the room floor, or 3 m out when it never comes down
+    const edge = (angle) => {
+      const c = Math.cos(angle), sn = Math.sin(angle), y = elevY(z);
+      if (c > 0.08 && z > 0.02) {
+        let len = z / c;
+        if (x + sn * len * UNIT < from || x + sn * len * UNIT > to) len = (z + STAGE_H) / c;
+        if (len < 30) return `${x + sn * len * UNIT},${y + c * len * UNIT}`;
+      }
+      air = true;
+      return `${x + sn * 3 * UNIT},${y + c * 3 * UNIT}`;
+    };
+    const points = `${x},${elevY(z)} ${edge(mid - half)} ${edge(mid + half)}`;
+    el('polygon', { points, class: 'throw cone' + (air ? ' air' : '') }, null, layer);
+  };
+  // The classic kinds point where they do in the theatre: LEDs and spotlights straight down, side lights across the stage, face lights back at it.
+  const CLASSIC_AIM = { led: { pan: 0, tilt: 0, beam: 56 }, spot: { pan: 0, tilt: 0, beam: 36 }, face: { pan: 0, tilt: 40, beam: 44 } };
+  const draw = (kind, it, label, shape, aim) => {
+    const x = elevH(it), z = zOf(kind, it), y = elevY(z);
+    cone(x, z, aim);
+    const n = group(kind, it.id, box(x, y), [shape[0], Object.assign({}, shape[1], { transform: `translate(${x} ${y})` })]);
+    el('text', { x, y: y - 30, 'text-anchor': 'middle' }, label, layer);
+    return n;
+  };
+  for (const it of seen('led')) draw('led', it, it.id, ['rect', { x: -23, y: -13, width: 46, height: 26, rx: 13, class: 'led' }], CLASSIC_AIM.led);
+  for (const it of seen('spot')) draw('spot', it, it.id, ['circle', { r: 17, class: 'spot' }], CLASSIC_AIM.spot);
+  for (const it of seen('face')) draw('face', it, it.id, ['rect', { x: -8, y: -19, width: 16, height: 38, rx: 8, class: 'face' }], CLASSIC_AIM.face);
+  for (const it of seen('side')) {
+    const left = it.x < STAGE.cx, aim = { pan: left ? 90 : 270, tilt: 90, beam: 40 };          // level, across the stage from its wing
+    const point = side ? '' : left ? '18,0 -14,-14 -14,14' : '-18,0 14,-14 14,14';
+    draw('side', it, it.id, side ? ['circle', { r: 14, class: 'side' }] : ['polygon', { points: point, class: 'side' }], aim);
+  }
+  let aimed = null;                                 // the one selected library light, which gets a handle to tilt it
   for (const light of seen('custom')) {
     const kind = work.kinds.find((k) => k.id === light.kind);
     if (!kind) continue;
-    const fx = fixtureOf(kind), x = elevH(light), z = heightOf(light), y = elevY(z);
-    const t = (light.tilt || 0) * Math.PI / 180, p = (light.pan || 0) * Math.PI / 180, half = Math.min(60, (light.beam || (fx ? fx.beam : 30)) / 2) * Math.PI / 180;
-    const lean = (side ? -Math.cos(p) : Math.sin(p)) * Math.sin(t), down = Math.cos(t);       // which way the beam goes, seen from here
-    if (down > 0.08 && z > 0.05) {                // the beam, down to where it lands
-      const len = z / down, cx = x + lean * len * UNIT, r = len * Math.tan(half) * UNIT;
-      el('polygon', { points: `${x},${y} ${cx - r},${ground} ${cx + r},${ground}`, class: 'throw cone' }, null, layer);
-    }
-    group('custom', light.id, box(x, y), ['circle', { cx: x, cy: y, r: 16, class: 'custom' }]);
-    el('text', { x, y: y - 24, 'text-anchor': 'middle' }, labels.get(light.id), layer);
+    const fx = fixtureOf(kind), aim = { pan: light.pan || 0, tilt: light.tilt || 0, beam: light.beam || (fx ? fx.beam : 30) };
+    const p = aim.pan * Math.PI / 180, long = kind.shape === 'batten' || kind.shape === 'strobe' || kind.shape === 'bar';
+    const shape = long ? ['rect', { x: -Math.max(9, 36 * Math.abs(side ? Math.sin(p) : Math.cos(p))), y: -9, width: 2 * Math.max(9, 36 * Math.abs(side ? Math.sin(p) : Math.cos(p))), height: 18, rx: 4, class: 'custom' }]
+      : FIXTURE_PATHS[kind.shape] ? ['path', { d: FIXTURE_PATHS[kind.shape], 'fill-rule': 'evenodd', class: 'custom' }]
+      : { square: ['rect', { x: -17, y: -17, width: 34, height: 34, rx: 5, class: 'custom' }], triangle: ['polygon', { points: '0,-20 20,15 -20,15', class: 'custom' }] }[kind.shape] || ['circle', { r: 17, class: 'custom' }];
+    draw('custom', light, labels.get(light.id), shape, aim);
+    if (work.sel.length === 1 && isSelected('custom', light.id)) aimed = { light, aim };
+  }
+  if (aimed) {                                      // the tilt handle: where the beam points, seen from here
+    const { light, aim } = aimed, x = elevH(light), y = elevY(heightOf(light)), t = aim.tilt * Math.PI / 180, p = aim.pan * Math.PI / 180;
+    let lean = (side ? -Math.cos(p) : Math.sin(p)) * Math.sin(t), down = Math.cos(t);
+    const size = Math.hypot(lean, down) || 1; lean /= size; down /= size;
+    el('line', { x1: x, y1: y, x2: x + lean * 80, y2: y + down * 80, class: 'rot-stem' }, null, layer);
+    el('circle', { cx: x + lean * 80, cy: y + down * 80, r: 10, class: 'rot-handle', 'data-aim': light.id }, null, layer);
   }
   // one object selected: a square on its top edge to make it taller, and one on its side to make it wider
   const only = work.sel.length === 1 && work.sel[0].kind === 'object' && itemOf(work.sel[0]);
@@ -2095,6 +2137,8 @@ function elevPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey, grip = e.target.closest('[data-size]');
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   moving = null;
+  const aimGrip = e.target.closest('[data-aim]');
+  if (aimGrip) { turning = { elevAim: work.customs.find((l) => l.id === aimGrip.dataset.aim), kept: false }; return; }
   if (grip) { sizing = { elev: grip.dataset.size, item: work.objects.find((o) => o.id === grip.dataset.id), kept: false }; return; }
   if (!g) { if (!add) work.sel = []; return redrawLayout(); }
   const one = { kind: g.dataset.kind, id: g.dataset.id };
@@ -2105,6 +2149,21 @@ function elevPress(e) {
 }
 function elevDrag(e) {
   const p = svgPoint(e), step = (v) => (snapOn ? Math.round(v * 20) / 20 : Math.round(v * 100) / 100);         // 5 cm steps with snapping on
+  if (turning && turning.elevAim) {          // the tilt handle: the beam follows the pointer, seen from this side
+    const light = turning.elevAim, side = planView === 'side', x = elevH(light), y = elevY(heightOf(light));
+    let phi = Math.atan2(p.x - x, p.y - y);          // from straight down, towards the right of the view
+    if (snapOn) phi = Math.round(phi * 36 / Math.PI) * Math.PI / 36;          // 5 degree steps
+    const t = (light.tilt || 0) * Math.PI / 180, pn = (light.pan || 0) * Math.PI / 180;
+    let dx = Math.sin(pn) * Math.sin(t), dz = -Math.cos(pn) * Math.sin(t);
+    const keep = side ? dx : dz, m = Math.sqrt(Math.max(0, 1 - keep * keep));      // the part of the aim this view cannot show stays as it was
+    if (side) dz = m * Math.sin(phi); else dx = m * Math.sin(phi);
+    const tilt = Math.round(Math.acos(Math.max(-1, Math.min(1, m * Math.cos(phi)))) * 180 / Math.PI);
+    const pan = Math.hypot(dx, dz) > 0.01 ? ((Math.round(Math.atan2(dx, -dz) * 180 / Math.PI) % 360) + 360) % 360 : light.pan || 0;
+    if (tilt === (light.tilt || 0) && pan === (light.pan || 0)) return;
+    if (!turning.kept) { turning.kept = true; layoutKeep(); }
+    light.tilt = tilt; light.pan = pan;
+    return redrawLayout();
+  }
   if (sizing && sizing.item) {
     if (!sizing.kept) { sizing.kept = true; layoutKeep(); }
     const o = sizing.item;
@@ -2121,8 +2180,7 @@ function elevDrag(e) {
   if (!moving.kept) { moving.kept = true; const now = moving.items.map((m) => [m.item, m.item.x, m.item.y, m.item.z]); for (const m of moving.items) { m.item.x = m.x; m.item.y = m.y; } layoutKeep(); for (const [it, x, y, z] of now) { it.x = x; it.y = y; if (z !== undefined) it.z = z; } }
   for (const m of moving.items) {
     Object.assign(m.item, planView === 'side' ? hold(m.kind, m.x, m.y + across) : hold(m.kind, m.x + across, m.y));
-    if (m.kind === 'custom') m.item.z = Math.max(0, step(m.z + up));          // only library lights and objects can be raised
-    if (m.kind === 'object') m.item.z = Math.max(-3, step(m.z + up));
+    m.item.z = m.kind === 'object' ? Math.max(-3, step(m.z + up)) : Math.max(0, step(m.z + up));          // up or down is its height
   }
   redrawLayout();
 }
@@ -3422,13 +3480,13 @@ function buildThree() {
   }
 
   const leds = LEDS.map((led) => {
-    const pivot = add(new THREE.Group(), led.x3, RIG_H, led.z3);
-    const cone = beam(0.12, 1.5, RIG_H); pivot.add(cone);
-    return { led, pivot, cone, lens: lens(led.x3, RIG_H, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3), hard: add(hardPool(2.7), led.x3, 0.0105, led.z3), wall: add(wallSpot(1), led.x3, 2, CYC.z + 0.03) };
+    const pivot = add(new THREE.Group(), led.x3, led.h, led.z3);
+    const cone = beam(0.12, 1.5, led.h); pivot.add(cone);
+    return { led, pivot, cone, lens: lens(led.x3, led.h, led.z3), pool: add(pool(2.7), led.x3, 0.01, led.z3), hard: add(hardPool(2.7), led.x3, 0.0105, led.z3), wall: add(wallSpot(1), led.x3, 2, CYC.z + 0.03) };
   });
   const spots = SPOTS.map((s) => ({
-    cone: add(beam(0.1, 1.2, RIG_H), s.x3, RIG_H, s.z3),
-    lens: lens(s.x3, RIG_H, s.z3),
+    cone: add(beam(0.1, 1.2, s.h), s.x3, s.h, s.z3),
+    lens: lens(s.x3, s.h, s.z3),
     pool: add(pool(1.6), s.x3, 0.012, s.z3), hard: add(hardPool(1.6), s.x3, 0.0125, s.z3), soft: s.soft,
   }));
   const customs = CUSTOMS.map((s) => {
@@ -3449,12 +3507,12 @@ function buildThree() {
   SIDES.forEach((side, sIdx) => {
     const d = side === 'L' ? -1 : 1;
     SIDE_LIGHTS[side].forEach((light, j) => {
-      const z = light.z3, x = light.x3 - d * 0.15;
-      add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.9, 0.1), solid(0x222228)), light.x3, 0.65, z);
+      const z = light.z3, x = light.x3 - d * 0.15, up = (light.h != null ? light.h : 1) - 1;      // a side light set higher or lower moves its whole boom
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.9, 0.1), solid(0x222228)), light.x3, 0.65 + up, z);
       SIDE_TYPES.forEach(([type], t) => {
-        const cone = add(beam(0.05, 0.42, 3.8), x, SIDE_H[type], z);     // a short throw
+        const cone = add(beam(0.05, 0.42, 3.8), x, SIDE_H[type] + up, z);     // a short throw
         cone.rotation.z = -d * Math.PI / 2;
-        sides.push({ pos: sideAt(sIdx, j), type: O_TYPE + t, cone, lens: lens(x, SIDE_H[type], z) });
+        sides.push({ pos: sideAt(sIdx, j), type: O_TYPE + t, cone, lens: lens(x, SIDE_H[type] + up, z) });
       });
     });
   });
@@ -3462,11 +3520,11 @@ function buildThree() {
   // Face lights hang high above the audience and point down at the front of the stage.
   const FACE_H = 5.4;
   const faces = FACES.map((light) => {
-    const x = light.x3, faceZ = light.z3;
-    dir.set(x * 0.9 - x, -FACE_H, 1.2 - faceZ);
-    const cone = add(beam(0.06, 1.0, dir.length()), x, FACE_H, faceZ);
+    const x = light.x3, faceZ = light.z3, high = light.h != null ? light.h : FACE_H;
+    dir.set(x * 0.9 - x, -high, 1.2 - faceZ);
+    const cone = add(beam(0.06, 1.0, dir.length()), x, high, faceZ);
     cone.quaternion.setFromUnitVectors(DOWN, dir.normalize());
-    return { cone, lens: lens(x, FACE_H, faceZ) };
+    return { cone, lens: lens(x, high, faceZ) };
   });
   if (FACES.length) add(new THREE.Mesh(new THREE.BoxGeometry(7 / FIT.x, 0.06, 0.06), solid(0x222228)), 0, FACE_H + 0.1, FACE_Z);
   const faceGlow = add(new THREE.Mesh(new THREE.PlaneGeometry(9, 5), glow(glowTex)), 0, 0.014, 0.9);
@@ -3528,10 +3586,10 @@ function buildThree() {
       if (!on) continue;
       const tx = D[o + 3], tz = D[o + 4], wide = D[o + 5];
       const hit = cycloHit(f.led, tx, tz);       // on the cyclorama: the beam ends there, not on the floor
-      dir.set(tx - f.led.x3, -RIG_H, tz - f.led.z3);
+      dir.set(tx - f.led.x3, -f.led.h, tz - f.led.z3);
       const len = dir.length() * (hit ? hit.s : 1);
       f.pivot.quaternion.setFromUnitVectors(DOWN, dir.normalize());
-      f.cone.scale.set(wide * (hit ? hit.s : 1), len / RIG_H, wide * (hit ? hit.s : 1));
+      f.cone.scale.set(wide * (hit ? hit.s : 1), len / f.led.h, wide * (hit ? hit.s : 1));
       const land = hit ? hit.strength : ground[f.led.idx];
       // the cone is drawn front and back, so each face carries half the strength
       f.cone.material.uniforms.color.value.setRGB(r * TOP / 2, g * TOP / 2, b * TOP / 2);
