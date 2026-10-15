@@ -1048,3 +1048,7 @@ body.layout-mode #layout-props { display: block; flex: 1; overflow-y: auto; padd
 .plan .zone-area { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 8 6; opacity: .7; pointer-events: none; }
 .plan .zone-pick .fx.on rect:first-child { fill: var(--accent); fill-opacity: .22; }
 #aim-go { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 3; }
+.plan .trace { opacity: .35; pointer-events: none; }
+.plan .add-point { fill: var(--panel); stroke: var(--accent); stroke-width: 2; cursor: copy; opacity: .8; }
+.plan .scale-dot { fill: #ff3b8d; pointer-events: none; }
+.plan .trace-grip { cursor: move; }

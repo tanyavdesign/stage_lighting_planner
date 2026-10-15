@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261015164819">
+<link rel="stylesheet" href="style.css?v=20261015165043">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -451,11 +451,17 @@
         </div>
         <div class="group" data-pane-body="stage" hidden>
           <div class="sec-head"><h3>Stage</h3><span class="count" id="stage-sum"></span></div>
-          <div class="line nums">
+          <div class="line"><span class="lbl">Shape</span><div class="seg"><button class="btn" id="shape-rect">Rectangle</button><button class="btn" id="shape-drawn">Drawn</button></div></div>
+          <p class="hint note" id="shape-note" hidden>Drag the corners on the plan. Click a + to add a corner, double-click a corner to remove it.</p>
+          <div class="line nums" id="stage-size">
             <label class="num"><span>Width</span><input id="stage-w" type="number" min="2" max="40" step="0.1"></label>
             <label class="num"><span>Depth</span><input id="stage-d" type="number" min="2" max="30" step="0.1"></label>
             <label class="num" title="How High the Stage Floor Is Above the Room Floor"><span>Height</span><input id="stage-h" type="number" min="0" max="3" step="0.1"></label>
           </div>
+          <div class="props-head">Trace Image</div>
+          <div class="line"><span class="media-name" id="trace-name">None</span><button class="btn" id="trace-pick" title="A Picture of the Venue's Plan, to Draw the Stage Over">Choose</button><button class="btn trace-only" id="trace-clear">Remove</button><input id="trace-file" type="file" accept="image/*" hidden></div>
+          <div class="line trace-only"><button class="btn" id="trace-scale" title="Click Two Points on the Picture, Then Type How Far Apart They Are">Set Scale</button><button class="btn" id="trace-inside" title="Click Inside the Stage on the Picture to Draw Its Outline">Click Inside to Trace</button></div>
+          <div class="line" id="trace-scale-line" hidden><span class="lbl">Distance</span><input id="trace-metres" type="number" min="0.1" step="0.1"><span class="slide-value">m</span><button class="btn" id="trace-apply">Apply</button></div>
           <div class="props-head">Aiming Zones</div>
           <div class="line nums">
             <label class="num" title="How Many Zones Across"><span>Columns</span><input id="zone-cols" type="number" min="1" max="8" step="1"></label>
@@ -624,6 +630,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=20261015164819"></script>
+<script src="app.js?v=20261015165043"></script>
 </body>
 </html>

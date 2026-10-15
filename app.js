@@ -59,7 +59,7 @@ const UNIT = 101;                        // plan units in a metre
 const stageOf = (layout) => Object.assign({ w: 10, d: 6, h: 0.6 }, layout.stage);
 const BOUNDS = {}, PLAN_BOUNDS = {}, FULL = {}, PHONE_VIEW = {};
 const FIT = { x: 1, z: 1 };              // the front view always shows the whole stage: how much it is squeezed to fit
-let STAGE_H = 0.6;
+let STAGE_H = 0.6, STAGE_OUTLINE = null;
 // A place on the KDT plan, moved to where it belongs on this stage: across the stage in
 // proportion, and off the stage at the same distance from its edge.
 const sx = (x) => (x < 495 ? STAGE.x0 - (495 - x) : x > 1505 ? STAGE.x1 + (x - 1505) : STAGE.cx + (x - 1000) * (STAGE.x1 - STAGE.x0) / 1010);
@@ -67,10 +67,14 @@ const sy = (y) => (y < 218 ? STAGE.y0 - (218 - y) : y > 828 ? STAGE.y1 + (y - 82
 function setStage(stage) {
   const halfW = stage ? stage.w * UNIT / 2 : 505, halfD = stage ? stage.d * UNIT / 2 : 305;
   Object.assign(STAGE, { x0: STAGE.cx - halfW, x1: STAGE.cx + halfW, y0: STAGE.cy - halfD, y1: STAGE.cy + halfD });
+  // A stage drawn as an outline (`stage.outline`, corner points in plan units) reaches as far as its points do.
+  const pts = stage && stage.outline && stage.outline.length > 2 ? stage.outline : null;
+  if (pts) Object.assign(STAGE, { x0: Math.min(...pts.map((q) => q[0])), x1: Math.max(...pts.map((q) => q[0])), y0: Math.min(...pts.map((q) => q[1])), y1: Math.max(...pts.map((q) => q[1])) });
+  STAGE_OUTLINE = pts;
   STAGE_H = stage ? stage.h : 0.6;
-  const w = halfW * 2, d = halfD * 2;
+  const w = STAGE.x1 - STAGE.x0, d = STAGE.y1 - STAGE.y0;
   Object.assign(ZONES, { x: sx(624), w: (sx(1383) - sx(624)) / 3, y: STAGE.y0, h: d / 3, cols: 3, rows: 3 });
-  Object.assign(CYC, { z: -(d / UNIT / 2 + 0.13), halfW: 3.8 * w / 1010 });
+  Object.assign(CYC, { z: -((STAGE.cy - STAGE.y0) / UNIT + 0.13), halfW: 3.8 * w / 1010 });
   Object.assign(BOUNDS, { x0: STAGE.x0 + 30, x1: STAGE.x1 - 30, y0: STAGE.y0 + 30, y1: STAGE.y1 - 24 });
   Object.assign(PLAN_BOUNDS, { x0: STAGE.x0 - 205, x1: STAGE.x1 + 205, y0: STAGE.y0 - 68, y1: STAGE.y1 + 262 });      // face and side lights stand off the stage
   Object.assign(FULL, { x: STAGE.x0 - 245, y: STAGE.y0 - 108, w: w + 490, h: d + 400 });       // the whole drawing, face lights included
@@ -535,7 +539,8 @@ function copyLayout(layout) {
       return one;
     });
   }
-  if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
+  if (layout.stage) out.stage = Object.assign({ w: layout.stage.w, d: layout.stage.d, h: layout.stage.h }, layout.stage.outline ? { outline: layout.stage.outline.map((q) => [q[0], q[1]]) } : {});
+  if (layout.trace) out.trace = Object.assign({}, layout.trace);
   if (layout.cyclo != null) out.cyclo = !!layout.cyclo;
   if (layout.zones) out.zones = Object.assign({}, layout.zones);
   if (layout.rows && layout.rows.length) out.rows = layout.rows.map(({ axis, rot, gap, x, y, members }) => ({ axis, rot: rot != null ? rot : axis === 'y' ? 90 : 0, gap, x, y, members: members.map(({ kind, id }) => ({ kind, id })) }));
@@ -1163,7 +1168,9 @@ function drawStage() {
   layer.textContent = '';
   const put = (name, attrs, text) => el(name, attrs, text, layer);
   const area = (x, y, text) => put('text', { x, y, 'text-anchor': 'middle', class: 'area' }, text);
-  put('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
+  if (layoutMode && work.trace) drawTrace(layer);               // the venue's plan, faded, to draw the stage over
+  if (STAGE_OUTLINE) put('polygon', { points: STAGE_OUTLINE.map((q) => q.join(',')).join(' '), class: 'stage' });
+  else put('rect', { x: STAGE.x0, y: STAGE.y0, width: STAGE.x1 - STAGE.x0, height: STAGE.y1 - STAGE.y0, rx: 12, class: 'stage' });
   const zx1 = ZONES.x + ZONES.w * ZONES.cols, zy1 = ZONES.y + ZONES.h * ZONES.rows;
   for (let c = 0; c <= ZONES.cols; c++) put('line', { x1: ZONES.x + ZONES.w * c, y1: ZONES.y + (ZONES.y <= STAGE.y0 ? 26 : 0), x2: ZONES.x + ZONES.w * c, y2: zy1 - (zy1 >= STAGE.y1 ? 12 : 0), class: 'grid' });
   for (let r = 0; r <= ZONES.rows; r++) if ((r > 0 && r < ZONES.rows) || ZONES.y > STAGE.y0 + 1 || zy1 < STAGE.y1 - 1) put('line', { x1: ZONES.x, y1: ZONES.y + ZONES.h * r, x2: zx1, y2: ZONES.y + ZONES.h * r, class: 'grid' });
@@ -1180,7 +1187,13 @@ function drawStage() {
   area(STAGE.cx, sy(866), 'STAGE FRONT');
   area(sx(318), STAGE.cy - 15, 'STAGE LEFT');
   area(sx(1684), STAGE.cy - 15, 'STAGE RIGHT');
-  if (layoutMode) {                      // drag the stage's right or front edge to change its width or depth
+  if (layoutMode && STAGE_OUTLINE) {     // a drawn stage: a handle on every corner, and a + halfway along every edge to add one
+    STAGE_OUTLINE.forEach((q, i) => {
+      const next = STAGE_OUTLINE[(i + 1) % STAGE_OUTLINE.length];
+      put('circle', { cx: (q[0] + next[0]) / 2, cy: (q[1] + next[1]) / 2, r: 7, class: 'add-point', 'data-ins': i });
+    });
+    STAGE_OUTLINE.forEach((q, i) => put('rect', { x: q[0] - 8, y: q[1] - 8, width: 16, height: 16, rx: 3, class: 'size-handle', 'data-pt': i }));
+  } else if (layoutMode) {                      // drag the stage's right or front edge to change its width or depth
     put('rect', { x: STAGE.x1 - 7, y: STAGE.cy - 26, width: 14, height: 52, rx: 5, class: 'size-handle stage-grip across', 'data-stage': 'w' });
     put('rect', { x: STAGE.cx - 26, y: STAGE.y1 - 7, width: 52, height: 14, rx: 5, class: 'size-handle stage-grip down', 'data-stage': 'd' });
   }
@@ -1672,6 +1685,74 @@ function buildControls() {
     if (tpl) editLights(tpl.name, tpl, saveTemplates, work.kinds); else editLights(project.name, project, saveProjects, work.kinds);
   });
   $('layout-keep-open').addEventListener('click', () => { $('layout-keep').hidden = false; $('layout-tpl-name').focus(); });
+  svg.addEventListener('dblclick', (e) => {
+    const point = layoutMode && e.target.closest('[data-pt]');
+    if (!point || STAGE_OUTLINE.length <= 3) return;
+    layoutKeep();
+    setOutline(STAGE_OUTLINE.filter((q, i) => i !== +point.dataset.pt));
+    redrawLayout();
+  });
+  // the stage's shape, and the trace image
+  $('shape-rect').addEventListener('click', () => { if (STAGE_OUTLINE) { stageShape(false); } });
+  $('shape-drawn').addEventListener('click', () => { if (!STAGE_OUTLINE) { stageShape(true); } });
+  $('trace-pick').addEventListener('click', () => $('trace-file').click());
+  $('trace-file').addEventListener('change', async () => {
+    const file = $('trace-file').files[0];
+    $('trace-file').value = '';
+    if (!file) return;
+    if (!/^image\//.test(file.type)) return toast('Choose a picture of the plan (a PDF can be saved as an image first).', 3500);
+    const id = 'm' + newId(), pic = new Image();
+    await audioStore.put(mediaKey(id), file);
+    pic.onload = () => {
+      layoutKeep();
+      const w = STAGE.x1 - STAGE.x0 + 400, h = w * pic.naturalHeight / pic.naturalWidth;          // as wide as the stage and a bit, to begin with
+      traceShown[id] = pic;
+      work.trace = { id, name: file.name, type: file.type, x: Math.round(STAGE.cx - w / 2), y: Math.round(STAGE.cy - h / 2), w: Math.round(w), h: Math.round(h) };
+      drawStage(); redrawLayout();
+      toast('Now set its scale: click Set Scale.', 3000);
+    };
+    pic.src = URL.createObjectURL(file);
+  });
+  $('trace-clear').addEventListener('click', () => { layoutKeep(); work.trace = null; drawStage(); redrawLayout(); });
+  // Set Scale: two clicks on the picture, then the real distance between them
+  const twoClicks = (done) => {
+    const got = [];
+    const take = (e) => {
+      e.stopImmediatePropagation(); e.preventDefault();
+      const q = svgPoint(e); got.push(q);
+      el('circle', { cx: q.x, cy: q.y, r: 8, class: 'scale-dot' }, null, planEls.fixtureLayer);
+      if (got.length < 2) svg.addEventListener('pointerdown', take, { capture: true, once: true }); else done(got);
+    };
+    svg.addEventListener('pointerdown', take, { capture: true, once: true });
+  };
+  $('trace-scale').addEventListener('click', () => {
+    toast('Click two points on the picture that are a known distance apart.', 3500);
+    twoClicks((got) => { scalePoints = got; $('trace-scale-line').hidden = false; $('trace-metres').focus(); });
+  });
+  $('trace-apply').addEventListener('click', () => {
+    const metresApart = parseFloat($('trace-metres').value), t = work.trace;
+    if (!scalePoints || !t || !(metresApart > 0)) return toast('Type the distance between the two points, in metres.', 3000);
+    const [a, b] = scalePoints, k = metresApart * UNIT / Math.hypot(b.x - a.x, b.y - a.y);
+    layoutKeep();
+    Object.assign(t, { x: Math.round(a.x + (t.x - a.x) * k), y: Math.round(a.y + (t.y - a.y) * k), w: Math.round(t.w * k), h: Math.round(t.h * k) });      // the first point stays where it is
+    scalePoints = null; $('trace-scale-line').hidden = true;
+    drawStage(); redrawLayout();
+    toast('Scale set. Drag the square at its top-left corner to line it up with the stage.', 3500);
+  });
+  $('trace-inside').addEventListener('click', () => {
+    if (!work.trace || !traceShown[work.trace.id]) return toast('Add a trace image first.', 2500);
+    toast('Click inside the stage on the picture.', 3000);
+    const take = (e) => {
+      e.stopImmediatePropagation(); e.preventDefault();
+      const q = svgPoint(e), pts = traceOutline(q.x, q.y);
+      if (!pts) return toast('The outline could not be followed: there may be a gap in it. Draw the corners by hand instead.', 4500);
+      layoutKeep();
+      setOutline(pts);
+      redrawLayout(); resetView();
+      toast(`Traced ${pts.length} corners. Drag any that are off.`, 3500);
+    };
+    svg.addEventListener('pointerdown', take, { capture: true, once: true });
+  });
   each('#plan-views .btn', (b) => b.addEventListener('click', () => { planView = b.dataset.view; guides.length = 0; drawStage(); redrawLayout(); }));
   $('more-toggle').addEventListener('click', () => { $('more-fields').hidden = !$('more-fields').hidden; $('more-toggle').classList.toggle('open', !$('more-fields').hidden); });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
@@ -1785,7 +1866,7 @@ function buildControls() {
 // Changes are made on a working copy; Done saves it to the project and reloads, so
 // every view is rebuilt from the new layout. Cancel reloads without saving.
 // ---------------------------------------------------------------------------
-let layoutMode = false, work = null, moving = null, zonesWere = null;
+let layoutMode = false, work = null, moving = null, zonesWere = null, scalePoints = null;
 const numberOf = (id) => +String(id).replace(/^[A-Z]/, '');
 const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light', custom: 'Custom Light', object: 'Object' };
 // What is selected in the layout editor: `work.sel`, a list of { kind, id }. `work.picked`
@@ -1800,7 +1881,7 @@ const boundsOf = (kind) => (kind === 'object' || kind === 'custom' ? { x0: STAGE
 const hold = (kind, x, y) => { const b = boundsOf(kind); return { x: Math.max(b.x0, Math.min(b.x1, x)), y: Math.max(b.y0, Math.min(b.y1, y)) }; };
 // Undo and redo inside the editor: the layout as it was before each change, and after each undo.
 const layoutPast = [], layoutNext = [];
-const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage, cyclo: work.cyclo, rows: work.rows, zones: work.zones });
+const layoutNow = () => JSON.stringify({ leds: work.leds, spots: work.spots, faces: work.faces, sides: work.sides, customs: work.customs, kinds: work.kinds, objects: work.objects, stage: work.stage, cyclo: work.cyclo, rows: work.rows, zones: work.zones, trace: work.trace });
 function layoutKeep() { layoutPast.push(layoutNow()); if (layoutPast.length > 80) layoutPast.shift(); layoutNext.length = 0; }
 function layoutStep(from, to, none) {
   if (!from.length) return toast(none, 1500);
@@ -1831,6 +1912,95 @@ const seen = (kind) => work[kind + 's'].filter((item) => !hiddenLayers.has(layer
 // What the panel says beside its sliders: how wide the pool is on the floor, and how soft.
 const poolSize = (light, beam) => { const t = (light.tilt || 0) * Math.PI / 180, wide = 2 * heightOf(light) / Math.max(0.2, Math.cos(t)) * Math.tan(Math.min(60, beam / 2) * Math.PI / 180); return `${Math.round(wide * 10) / 10} m`; };
 const softWord = (v) => (v <= 15 ? 'Sharp' : v >= 85 ? 'Soft' : v + '%');
+// The stage's outline in the editor. Switching to a drawn shape starts from the rectangle;
+// switching back keeps the outline's size as a rectangle.
+function stageShape(drawn) {
+  layoutKeep();
+  const st = stageOf(work);
+  if (drawn && !st.outline) st.outline = [[STAGE.x0, STAGE.y0], [STAGE.x1, STAGE.y0], [STAGE.x1, STAGE.y1], [STAGE.x0, STAGE.y1]].map((q) => q.map(Math.round));
+  if (!drawn && st.outline) {
+    st.w = metres((STAGE.x1 - STAGE.x0) / UNIT); st.d = metres((STAGE.y1 - STAGE.y0) / UNIT);
+    delete st.outline;
+  }
+  work.stage = st;
+  applyStage();
+}
+function setOutline(points) {
+  const st = stageOf(work);
+  st.outline = points;
+  st.w = metres((Math.max(...points.map((q) => q[0])) - Math.min(...points.map((q) => q[0]))) / UNIT);
+  st.d = metres((Math.max(...points.map((q) => q[1])) - Math.min(...points.map((q) => q[1]))) / UNIT);
+  work.stage = st;
+  setStage(st); useZones(work.zones); growDrawing(work.objects); drawStage();
+}
+// The trace image: a picture of the venue's plan, kept like a screen's media, shown faded under
+// the stage in the editor only. `layout.trace = { id, name, type, x, y, w, h }` (plan units).
+const traceShown = {};                       // media id -> the image element, once loaded
+function drawTrace(layer) {
+  const t = work.trace, img = traceShown[t.id];
+  if (!img) {
+    if (img === undefined) {
+      traceShown[t.id] = null;
+      audioStore.get(mediaKey(t.id)).then((file) => {
+        if (!file) return;
+        const pic = new Image();
+        pic.onload = () => { traceShown[t.id] = pic; if (layoutMode) drawStage(); };
+        pic.src = URL.createObjectURL(file);
+      });
+    }
+    return;
+  }
+  el('image', { href: img.src, x: t.x, y: t.y, width: t.w, height: t.h, preserveAspectRatio: 'none', class: 'trace' }, null, layer);
+  el('rect', { x: t.x - 8, y: t.y - 8, width: 16, height: 16, rx: 3, class: 'size-handle trace-grip', 'data-trace': 'move' }, null, layer);
+}
+// Click Inside to Trace: from the point clicked on the trace image, fill outwards over light
+// pixels until dark lines stop the fill, follow the edge of what was filled, and keep only the
+// corners that matter. Returns plan points, or null when the fill leaks out to the image's edge.
+function traceOutline(px, py) {
+  const t = work.trace, img = traceShown[t.id];
+  if (!img) return null;
+  const k = Math.min(1, 1200 / Math.max(img.naturalWidth, img.naturalHeight)), W = Math.round(img.naturalWidth * k), H = Math.round(img.naturalHeight * k);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0, W, H);
+  const data = g.getImageData(0, 0, W, H).data, light = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) light[i] = data[i * 4] * 0.3 + data[i * 4 + 1] * 0.59 + data[i * 4 + 2] * 0.11 > 150 && data[i * 4 + 3] > 40 ? 1 : 0;
+  const sx0 = Math.floor((px - t.x) / t.w * W), sy0 = Math.floor((py - t.y) / t.h * H);
+  if (sx0 < 0 || sy0 < 0 || sx0 >= W || sy0 >= H || !light[sy0 * W + sx0]) return null;
+  const fill = new Uint8Array(W * H), stack = [sy0 * W + sx0];
+  fill[stack[0]] = 1;
+  while (stack.length) {                     // the paint bucket
+    const i = stack.pop(), x = i % W, y = (i - x) / W;
+    if (x === 0 || y === 0 || x === W - 1 || y === H - 1) return null;          // it reached the edge of the picture: there is a gap
+    for (const n of [i - 1, i + 1, i - W, i + W]) if (light[n] && !fill[n]) { fill[n] = 1; stack.push(n); }
+  }
+  // follow the edge of the filled area, clockwise, from its top-left pixel
+  let start = 0; while (!fill[start]) start++;
+  const dirs = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+  const at = (x, y) => x >= 0 && y >= 0 && x < W && y < H && fill[y * W + x];
+  const edge = [];
+  let x = start % W, y = (start - x) / W, d = 6, guard = W * H;
+  do {
+    edge.push([x, y]);
+    let turned = false;
+    for (let n = 0; n < 8; n++) {
+      const dd = (d + 6 + n) % 8, nx = x + dirs[dd][0], ny = y + dirs[dd][1];
+      if (at(nx, ny)) { x = nx; y = ny; d = dd; turned = true; break; }
+    }
+    if (!turned) break;
+  } while ((x !== start % W || y !== (start - start % W) / W) && --guard > 0);
+  // keep only the corners: Douglas-Peucker with a tolerance of 1% of the picture
+  const tol = Math.max(W, H) * 0.01;
+  const simplify = (pts) => {
+    if (pts.length < 3) return pts;
+    const [ax, ay] = pts[0], [bx, by] = pts[pts.length - 1], len = Math.hypot(bx - ax, by - ay) || 1;
+    let far = 0, idx = 0;
+    for (let i = 1; i < pts.length - 1; i++) { const dist = Math.abs((bx - ax) * (ay - pts[i][1]) - (ax - pts[i][0]) * (by - ay)) / len; if (dist > far) { far = dist; idx = i; } }
+    return far > tol ? [...simplify(pts.slice(0, idx + 1)).slice(0, -1), ...simplify(pts.slice(idx))] : [pts[0], pts[pts.length - 1]];
+  };
+  const half = Math.floor(edge.length / 2), corners = [...simplify(edge.slice(0, half + 1)).slice(0, -1), ...simplify(edge.slice(half)).slice(0, -1)];
+  if (corners.length < 3) return null;
+  return corners.map(([cx, cy]) => [Math.round(t.x + (cx + 0.5) / W * t.w), Math.round(t.y + (cy + 0.5) / H * t.h)]);
+}
 // Auto layout: a line of lights or objects that keeps an even spacing. `layout.rows` is a list
 // of { rot: the angle the line runs at, in degrees (0 across, 90 down), gap: metres between neighbours, x, y: its middle,
 // members: [{ kind, id }] in order }. Whatever happens to a member, the line closes up again
@@ -1942,7 +2112,7 @@ function enterLayout() {
   // `was` remembers each fixture's id when editing began, so cues can follow a renumbering
   const editable = (list) => list.map((it) => Object.assign({ was: it.id }, it));
   work = { leds: editable(layout.leds), spots: editable(layout.spots), faces: editable(facesOf(layout)), sides: editable(sidesOf(layout)), customs: editable(customsOf(layout)), kinds: kindsOf(layout).map((k) => Object.assign({}, k)),
-    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, cyclo: layout.cyclo, rows: clone(layout.rows || []), zones: layout.zones ? Object.assign({}, layout.zones) : null, sel: [] };
+    objects: objectsOf(layout).map((o) => Object.assign({}, o)), stage: layout.stage ? Object.assign({}, layout.stage) : null, cyclo: layout.cyclo, rows: clone(layout.rows || []), zones: layout.zones ? Object.assign({}, layout.zones) : null, trace: layout.trace ? Object.assign({}, layout.trace) : null, sel: [] };
   zonesWere = zonesOf();          // to carry aimed cues over if the zones change
   Object.defineProperty(work, 'picked', {
     get() { return this.sel.length === 1 ? this.sel[0] : null; },
@@ -2056,6 +2226,10 @@ function redrawLayout() {
   $('layout-classic').hidden = true;           // these four are in the library's Lights tab now
   const stage = stageOf(work);
   $('stage-sum').textContent = `${stage.w} × ${stage.d} m`;
+  $('shape-rect').classList.toggle('active', !STAGE_OUTLINE); $('shape-drawn').classList.toggle('active', !!STAGE_OUTLINE);
+  $('stage-size').hidden = !!STAGE_OUTLINE; $('shape-note').hidden = !STAGE_OUTLINE;
+  $('trace-name').textContent = work.trace ? work.trace.name : 'None';
+  each('.trace-only', (n) => { n.hidden = !work.trace; });
   for (const [id, v] of [['zone-cols', ZONES.cols], ['zone-rows', ZONES.rows]]) if (document.activeElement !== $(id)) $(id).value = v;
   for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
   $('layout-snap').classList.toggle('active', snapOn);
@@ -2230,6 +2404,15 @@ function layoutPress(e) {
   const g = e.target.closest('.fx[data-kind]'), add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { svg.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
   const handle = e.target.closest('[data-rot]');
+  const point = e.target.closest('[data-pt]'), insert = e.target.closest('[data-ins]'), traceGrip = e.target.closest('[data-trace]');
+  if (point || insert) {                     // a corner of a drawn stage, or the + that adds one halfway along an edge
+    layoutKeep();
+    let i = point ? +point.dataset.pt : +insert.dataset.ins + 1;
+    if (insert) { const q = svgPoint(e); STAGE_OUTLINE.splice(i, 0, [Math.round(q.x), Math.round(q.y)]); setOutline(STAGE_OUTLINE.slice()); }
+    sizing = { pt: i, kept: true }; moving = null;
+    return redrawLayout();
+  }
+  if (traceGrip) { sizing = { trace: true, kept: false, start: svgPoint(e), x: work.trace.x, y: work.trace.y }; moving = null; return; }
   const grip = e.target.closest('[data-size]'), edge = e.target.closest('[data-stage]'), corner = e.target.closest('[data-zone]');
   if (corner) { sizing = { zone: corner.dataset.zone, kept: false }; moving = null; return; }
   if (grip) {                          // a corner of an object: the opposite corner stays where it is
@@ -2271,6 +2454,17 @@ function layoutDrag(e) {
   if (sizing) {
     const step = (v) => (snapOn ? Math.round(v * 20) / 20 : Math.round(v * 100) / 100);        // 5 cm steps with snapping on
     if (!sizing.kept) { sizing.kept = true; layoutKeep(); }
+    if (sizing.pt != null) {             // a corner of a drawn stage follows the pointer
+      const pts = STAGE_OUTLINE.slice(), at = (v) => (snapOn ? Math.round(v / 5) * 5 : Math.round(v));
+      pts[sizing.pt] = [at(p.x), at(p.y)];
+      setOutline(pts);
+      return redrawLayout();
+    }
+    if (sizing.trace) {                  // the trace image moves with its handle
+      Object.assign(work.trace, { x: Math.round(sizing.x + p.x - sizing.start.x), y: Math.round(sizing.y + p.y - sizing.start.y) });
+      drawStage();
+      return;
+    }
     if (sizing.zone != null) {           // a corner of the zones' area: the other corner stays put
       const z = zonesOf(), at = (v) => Math.round(v / 5) * 5;
       if (sizing.zone === '0') { z.x0 = Math.min(at(p.x), z.x1 - 60); z.y0 = Math.min(at(p.y), z.y1 - 60); }
@@ -2398,7 +2592,7 @@ function joinUp(item) {
 }
 function layoutRelease() {
   if ((moving || turning || sizing) && growDrawing(work.objects)) resetView();
-  if (sizing && sizing.stage && sizing.kept) resetView();
+  if (sizing && (sizing.stage || sizing.pt != null) && sizing.kept) resetView();
   const was = moving || sizing;
   moving = turning = sizing = null;
   if (was && was.drill && !was.kept) work.sel = [was.drill];
@@ -3495,7 +3689,11 @@ function buildThree() {
   const stageW = (STAGE.x1 - STAGE.x0) / UNIT, stageD = (STAGE.y1 - STAGE.y0) / UNIT, drop = Math.max(0.02, STAGE_H);
   const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(60 + stageW, 60 + stageD), solid(0x08080b)), 0, -drop, 0);
   floor.rotation.x = -Math.PI / 2;
-  add(new THREE.Mesh(new THREE.BoxGeometry(stageW + 0.4, drop, stageD + 0.4), solid(0x15151a)), 0, -drop / 2, 0);
+  if (STAGE_OUTLINE) {                   // a drawn stage: its outline, as deep as the stage is high
+    const shape = new THREE.Shape(STAGE_OUTLINE.map((q) => { const [x3, z3] = to3(q[0], q[1]); return new THREE.Vector2(x3, z3); }));
+    const slab = add(new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: drop, bevelEnabled: false }), solid(0x15151a)), 0, 0, 0);
+    slab.rotation.x = Math.PI / 2;
+  } else add(new THREE.Mesh(new THREE.BoxGeometry(stageW + 0.4, drop, stageD + 0.4), solid(0x15151a)), 0, -drop / 2, 0);
   const cyclo = add(new THREE.Mesh(new THREE.PlaneGeometry(CYC.halfW * 2, CYC.top), solid(0x0c0c11)), 0, CYC.top / 2, CYC.z);
   cyclo.visible = CYCLO_ON;
   for (const y of LED_ROW_Y) add(new THREE.Mesh(new THREE.BoxGeometry(6.6 / FIT.x, 0.06, 0.06), solid(0x222228)), 0, RIG_H + 0.1, to3(0, y)[1]);
@@ -4932,7 +5130,7 @@ async function itemRecord(item) {
 // a list of where each one is ({ id: { path, name, type } }) to find them again on the way in.
 async function packMedia(layout) {
   const files = [], list = {};
-  for (const o of objectsOf(layout)) {
+  for (const o of [...objectsOf(layout), ...(layout.trace ? [{ media: layout.trace }] : [])]) {
     if (!o.media || list[o.media.id]) continue;
     const file = await audioStore.get(mediaKey(o.media.id));
     if (!file) continue;
