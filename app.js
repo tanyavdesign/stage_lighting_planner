@@ -1177,8 +1177,8 @@ function drawStage() {
   for (let z = 0; z < zoneCount(); z++) {
     put('text', { x: ZONES.x + ZONES.w * (z % ZONES.cols) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / ZONES.cols) + ZONES.h - 11, 'text-anchor': 'end', class: 'zone' }, z + 1);
   }
-  if (layoutMode) {                      // in the layout editor: the zones' area, with a handle at two corners to resize it
-    put('rect', { x: ZONES.x, y: ZONES.y, width: zx1 - ZONES.x, height: zy1 - ZONES.y, class: 'zone-area' });
+  if (layoutMode && zoneEdit) {          // while Modify Zones is on: the zones' area, to drag, with a handle at two corners to resize it
+    put('rect', { x: ZONES.x, y: ZONES.y, width: zx1 - ZONES.x, height: zy1 - ZONES.y, class: 'zone-area editing', 'data-zone-move': '1' });
     put('rect', { x: ZONES.x - 8, y: ZONES.y - 8, width: 16, height: 16, rx: 3, class: 'size-handle', 'data-zone': '0' });
     put('rect', { x: zx1 - 8, y: zy1 - 8, width: 16, height: 16, rx: 3, class: 'size-handle', 'data-zone': '1' });
   }
@@ -1639,6 +1639,18 @@ function buildControls() {
   });
   const sized = (key) => (v) => { work.stage = Object.assign(stageOf(work), { [key]: v }); work.stageDirty = true; };
   const gridded = (key) => (v) => { work.zones = Object.assign(zonesOf(), { [key]: Math.round(v) }); work.stageDirty = true; };
+  // Modify Zones: shows the zones' area to drag and resize, and the buttons that line it up with the stage
+  $('zone-edit').addEventListener('click', () => { zoneEdit = !zoneEdit; drawStage(); redrawLayout(); });
+  const zoneTo = (how) => {
+    layoutKeep();
+    const z = zonesOf(), w = z.x1 - z.x0, h = z.y1 - z.y0, my = (STAGE.y0 + STAGE.y1) / 2;
+    const at = { left: { x0: STAGE.x0 }, right: { x0: STAGE.x1 - w }, centre: { x0: STAGE.cx - w / 2 }, top: { y0: STAGE.y0 }, bottom: { y0: STAGE.y1 - h }, middle: { y0: my - h / 2 } }[how];
+    if (how === 'fit') Object.assign(z, { x0: STAGE.x0, x1: STAGE.x1, y0: STAGE.y0, y1: STAGE.y1 });
+    else { Object.assign(z, at); z.x1 = z.x0 + w; z.y1 = z.y0 + h; }
+    for (const k of ['x0', 'x1', 'y0', 'y1']) z[k] = Math.round(z[k]);
+    work.zones = z; useZones(z); drawStage(); redrawLayout();
+  };
+  each('[data-zone-align]', (b) => b.addEventListener('click', () => zoneTo(b.dataset.zoneAlign)));
   typed('zone-cols', 1, 8, gridded('cols')); typed('zone-rows', 1, 8, gridded('rows'));
   typed('stage-w', 2, 40, sized('w')); typed('stage-d', 2, 30, sized('d')); typed('stage-h', 0, 3, sized('h'));
   const placed = (set) => (v) => { const item = pickedItem(); if (item) set(item, v, work.picked.kind); };
@@ -1864,7 +1876,7 @@ function buildControls() {
 // Changes are made on a working copy; Done saves it to the project and reloads, so
 // every view is rebuilt from the new layout. Cancel reloads without saving.
 // ---------------------------------------------------------------------------
-let layoutMode = false, work = null, moving = null, zonesWere = null, scalePoints = null;
+let layoutMode = false, work = null, moving = null, zonesWere = null, scalePoints = null, zoneEdit = false;
 const numberOf = (id) => +String(id).replace(/^[A-Z]/, '');
 const KIND_NAMES = { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light', custom: 'Custom Light', object: 'Object' };
 // What is selected in the layout editor: `work.sel`, a list of { kind, id }. `work.picked`
@@ -2118,7 +2130,7 @@ function enterLayout() {
   });
   work.classic = work.leds.length + work.spots.length + work.faces.length + work.sides.length > 0;      // decided once, so the buttons do not vanish mid-edit
   layoutPast.length = layoutNext.length = 0;
-  planView = 'top'; splitView = false;
+  planView = 'top'; splitView = false; zoneEdit = false;
   document.body.classList.add('layout-mode');
   document.body.classList.toggle('tpl-edit', !!(currentProject() && currentProject().scratch));     // a layout edited by itself
   const own = templates.find((t) => currentProject() && t.id === currentProject().templateId && (!t.share || t.share.key));
@@ -2230,6 +2242,8 @@ function redrawLayout() {
   $('trace-name').textContent = work.trace ? work.trace.name : 'None';
   each('.trace-only', (n) => { n.hidden = !work.trace; });
   for (const [id, v] of [['zone-cols', ZONES.cols], ['zone-rows', ZONES.rows]]) if (document.activeElement !== $(id)) $(id).value = v;
+  $('zone-edit').classList.toggle('active', zoneEdit); $('zone-edit').textContent = zoneEdit ? 'Done Modifying' : 'Modify Zones';
+  $('zone-tools').hidden = !zoneEdit;
   for (const key of ['w', 'd', 'h']) if (document.activeElement !== $('stage-' + key)) $('stage-' + key).value = stage[key];
   $('layout-snap').classList.toggle('active', snapOn);
   $('layout-cyclo').classList.toggle('active', cycloOf(work));
@@ -2514,6 +2528,8 @@ function layoutPress(e) {
   if (traceGrip) { sizing = { trace: true, kept: false, start: svgPoint(e), x: work.trace.x, y: work.trace.y }; moving = null; return; }
   const grip = e.target.closest('[data-size]'), edge = e.target.closest('[data-stage]'), corner = e.target.closest('[data-zone]');
   if (corner) { sizing = { zone: corner.dataset.zone, kept: false }; moving = null; return; }
+  const zoneBody = e.target.closest('[data-zone-move]');
+  if (zoneBody && !e.target.closest('.fx')) { sizing = { zoneMove: true, kept: false, start: svgPoint(e), was: zonesOf() }; moving = null; return; }
   if (grip) {                          // a corner of an object: the opposite corner stays where it is
     const item = work.objects.find((o) => o.id === grip.dataset.id), [cx, cy] = grip.dataset.size.split(',').map(Number), a = (item.rot || 0) * Math.PI / 180;
     const lx = -cx * item.w * UNIT / 2, ly = -cy * item.d * UNIT / 2;
@@ -2564,10 +2580,24 @@ function layoutDrag(e) {
       drawStage();
       return;
     }
-    if (sizing.zone != null) {           // a corner of the zones' area: the other corner stays put
-      const z = zonesOf(), at = (v) => Math.round(v / 5) * 5;
-      if (sizing.zone === '0') { z.x0 = Math.min(at(p.x), z.x1 - 60); z.y0 = Math.min(at(p.y), z.y1 - 60); }
-      else { z.x1 = Math.max(at(p.x), z.x0 + 60); z.y1 = Math.max(at(p.y), z.y0 + 60); }
+    if (sizing.zoneMove) {               // the whole zones' area, dragged; its edges and middle click onto the stage's
+      if (!sizing.kept) { sizing.kept = true; layoutKeep(); }
+      const w0 = sizing.was, dx = Math.round((p.x - sizing.start.x) / 5) * 5, dy = Math.round((p.y - sizing.start.y) / 5) * 5;
+      const z = Object.assign({}, w0, { x0: w0.x0 + dx, x1: w0.x1 + dx, y0: w0.y0 + dy, y1: w0.y1 + dy });
+      const near = Math.max(12, view.w / (svg.clientWidth || 800) * 10);
+      const pull = (lo, hi, marks) => { for (const [mine, theirs] of marks(lo, hi)) if (Math.abs(mine - theirs) <= near) return theirs - mine; return 0; };
+      const sx2 = pull(z.x0, z.x1, (a, b) => [[a, STAGE.x0], [b, STAGE.x1], [(a + b) / 2, STAGE.cx]]), sy2 = pull(z.y0, z.y1, (a, b) => [[a, STAGE.y0], [b, STAGE.y1], [(a + b) / 2, (STAGE.y0 + STAGE.y1) / 2]]);
+      Object.assign(z, { x0: z.x0 + sx2, x1: z.x1 + sx2, y0: z.y0 + sy2, y1: z.y1 + sy2 });
+      work.zones = z; useZones(z); drawStage();
+      return redrawLayout();
+    }
+    if (sizing.zone != null) {           // a corner of the zones' area: the other corner stays put, and the corner clicks onto the stage's edges
+      if (!sizing.kept) { sizing.kept = true; layoutKeep(); }
+      const z = zonesOf(), near = Math.max(12, view.w / (svg.clientWidth || 800) * 10);
+      const at = (v, edges) => { for (const e2 of edges) if (Math.abs(v - e2) <= near) return Math.round(e2); return Math.round(v / 5) * 5; };
+      const ax = at(p.x, [STAGE.x0, STAGE.x1, STAGE.cx]), ay = at(p.y, [STAGE.y0, STAGE.y1]);
+      if (sizing.zone === '0') { z.x0 = Math.min(ax, z.x1 - 60); z.y0 = Math.min(ay, z.y1 - 60); }
+      else { z.x1 = Math.max(ax, z.x0 + 60); z.y1 = Math.max(ay, z.y0 + 60); }
       work.zones = z; useZones(z); drawStage();
       return redrawLayout();
     }

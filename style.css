@@ -1068,3 +1068,5 @@ body.layout-mode #layout-props { display: block; flex: 1; overflow-y: auto; padd
 .top-label { display: none; }
 .plan-wrap.split .top-label { display: block; }
 @media (max-width: 899px) { body.layout-mode #layout-props { padding-top: 64px; } }
+.plan .zone-area.editing { pointer-events: all; fill: var(--accent); fill-opacity: .04; cursor: move; }
+#zone-edit.active { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }

@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261015165711">
+<link rel="stylesheet" href="style.css?v=20261015165954">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -471,7 +471,22 @@
             <label class="num" title="How Many Zones Across"><span>Columns</span><input id="zone-cols" type="number" min="1" max="8" step="1"></label>
             <label class="num" title="How Many Zones From Back to Front"><span>Rows</span><input id="zone-rows" type="number" min="1" max="8" step="1"></label>
           </div>
-          <p class="hint note">Drag the corners of the dashed box on the plan to choose where the zones are.</p>
+          <div class="line"><button class="btn" id="zone-edit" title="Show the Zones' Area on the Plan, to Move, Resize and Line It Up">Modify Zones</button></div>
+          <div id="zone-tools" hidden>
+            <p class="hint note">Drag the dashed box to move it, or its corners to resize it. It clicks onto the stage's edges and middle.</p>
+            <div class="line">
+              <span class="lbl">Align</span>
+              <div class="seg tools">
+                <button class="btn icon" data-zone-align="left" data-icon="alignleft" title="To the Stage's Left Edge"></button>
+                <button class="btn icon" data-zone-align="centre" data-icon="aligncentre" title="To the Middle of the Stage, Across"></button>
+                <button class="btn icon" data-zone-align="right" data-icon="alignright" title="To the Stage's Right Edge"></button>
+                <button class="btn icon" data-zone-align="top" data-icon="aligntop" title="To the Back of the Stage"></button>
+                <button class="btn icon" data-zone-align="middle" data-icon="alignmiddle" title="To the Middle of the Stage, Front to Back"></button>
+                <button class="btn icon" data-zone-align="bottom" data-icon="alignbottom" title="To the Front of the Stage"></button>
+              </div>
+            </div>
+            <div class="line"><button class="btn" data-zone-align="fit" title="Make the Zones Cover the Whole Stage">Fit to Stage</button></div>
+          </div>
           <div class="line"><button class="btn" id="layout-cyclo" title="The Lit Back Wall (Cyclorama): the Bar Across the Back of the Plan">Back Wall</button></div>
         </div>
         <div class="group" data-pane-body="file" hidden>
@@ -634,6 +649,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=20261015165711"></script>
+<script src="app.js?v=20261015165954"></script>
 </body>
 </html>
