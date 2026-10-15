@@ -31,7 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202610130018">
+<link rel="stylesheet" href="style.css?v=20261015164241">
 </head>
 <body data-view="front">
 <div id="home" hidden>
@@ -235,6 +235,133 @@
   <button id="toggle-right" class="btn icon" data-icon="panelRight" aria-label="Hide or show the previews" title="Hide or show the previews"></button>
 
   <section class="view-col" id="views">
+    <div id="layout-props">
+      <p class="hint" id="props-none">Select something on the plan to change it.</p>
+      <div id="layout-sel" hidden>
+        <div id="layout-picked">
+          <div class="sec-head"><h3 id="layout-kind">LED</h3></div>
+          <div id="layout-row" hidden>
+            <div class="line" title="Metres Between Each One and the Next">
+              <span class="lbl">Spacing</span>
+              <input id="row-gap" type="number" min="0.1" max="20" step="0.05"><span class="slide-value">m</span>
+            </div>
+            <div class="line" title="How Many Are in the Line. More Are Copies of the Last One">
+              <span class="lbl">Count</span>
+              <input id="row-count" type="number" min="2" max="60" step="1">
+            </div>
+            <div class="line" title="The Angle the Line Runs At. Drag the Round Handle on the Plan to Turn It">
+              <span class="lbl">Angle</span>
+              <input id="row-rot" type="number" step="15"><span class="slide-value">°</span>
+              <div class="seg"><button class="btn" id="row-across">Across</button><button class="btn" id="row-down">Down</button></div>
+            </div>
+            <div class="line"><button class="btn" id="row-remove">Remove Auto Layout</button></div>
+          </div>
+          <div id="layout-single">
+            <input id="obj-name" class="title-input high-only" type="text" maxlength="40" autocomplete="off" title="Its Name. Leave Empty to Number It Automatically">
+            <div class="line">
+              <span class="lbl" id="layout-number-lbl">Number</span>
+              <input id="layout-number" type="number" min="1" step="1">
+            </div>
+            <div class="props-head high-only">Light</div>
+            <div class="line" id="obj-rises-line" title="A Platform That Rises Can Be Set to a Different Height in Every Cue">
+              <span class="lbl">Rises</span>
+              <button class="btn" id="obj-rises">Off</button>
+            </div>
+            <div class="line obj-only" title="How Tall It Is. Drag Its Corners on the Plan to Change Its Width and Depth">
+              <span class="lbl">Tall</span>
+              <input id="obj-h" type="number" step="0.05"><span class="slide-value">m</span>
+            </div>
+            <div class="line" id="obj-media">
+              <span class="lbl">Shows</span>
+              <span class="media-name" id="media-name">Nothing Showing</span>
+              <button class="btn" id="media-pick" title="Choose a Picture or a Video for This Screen">Choose</button>
+              <button class="btn" id="media-clear" title="Take the Picture or Video Off This Screen">Remove</button>
+              <input id="media-file" type="file" accept="image/*,video/*" hidden>
+            </div>
+            <div class="line high-only" title="Metres Above the Stage Floor">
+              <span class="lbl" id="z-lbl">Height</span>
+              <input id="obj-z" type="number" step="0.1"><span class="slide-value">m</span>
+            </div>
+            <div class="line lit-only" title="How Big Its Pool of Light Is">
+              <span class="lbl">Size</span>
+              <input id="fix-beam" type="range" min="2" max="120" step="1" class="white-slide"><span class="slide-value" id="fix-beam-v"></span>
+            </div>
+            <div class="line soft-only" title="The Edge of Its Pool: From a Hard Edge to Fading Away">
+              <span class="lbl">Softness</span>
+              <input id="fix-soft" type="range" min="0" max="100" step="5" class="white-slide"><span class="slide-value" id="fix-soft-v"></span>
+            </div>
+            <div class="line lit-only" id="fix-moves-line" title="A Light That Moves Can Pan, Tilt and Zoom to a New Place in Every Cue">
+              <span class="lbl">Moves</span>
+              <button class="btn" id="fix-moves">Off</button>
+            </div>
+            <p class="hint note lit-only" id="fix-mount"></p>
+          </div>
+          <div class="props-head" id="props-color-head" hidden>Color</div>
+          <div id="props-color" hidden></div>
+          <div id="layout-single-2">
+            <div class="props-head lit-only">Aim</div>
+            <div class="line lit-only" title="Which Way It Points, in Degrees Clockwise From the Back of the Stage. The Round Handle on the Plan Does the Same">
+              <span class="lbl">Turn</span><input id="fix-pan" type="number" step="5"><span class="slide-value">°</span>
+            </div>
+            <div class="line lit-only" title="0 Points Straight Down, 90 Points Level">
+              <span class="lbl">Tilt</span><input id="fix-tilt" type="number" min="0" max="180" step="5"><span class="slide-value">°</span>
+            </div>
+            <div class="props-head">Position</div>
+            <div class="line" title="Metres Right of the Stage Centre (Left Is Negative)">
+              <span class="lbl">Across</span><input id="pos-x" type="number" step="0.05"><span class="slide-value">m</span>
+            </div>
+            <div class="line" title="Metres Towards the Audience From the Stage Centre (Back Is Negative)">
+              <span class="lbl">Forward</span><input id="pos-y" type="number" step="0.05"><span class="slide-value">m</span>
+            </div>
+            <div class="line obj-only" title="Degrees, Clockwise Seen From Above">
+              <span class="lbl">Turn</span><input id="obj-rot" type="number" step="5"><span class="slide-value">°</span>
+            </div>
+            <div class="line obj-only"><span class="lbl">Width</span><input id="obj-w" type="number" step="0.05"><span class="slide-value">m</span></div>
+            <div class="line obj-only"><span class="lbl">Depth</span><input id="obj-d" type="number" step="0.05"><span class="slide-value">m</span></div>
+            <button class="row-btn sub lit-only" id="more-toggle"><span>DMX</span><span class="count" id="dmx-sum"></span><span data-icon="chevron"></span></button>
+            <div id="more-fields" hidden>
+              <div class="line"><span class="lbl">Universe</span><input id="fix-uni" type="number" min="1" max="64" step="1"></div>
+              <div class="line"><span class="lbl">Address</span><input id="fix-addr" type="number" min="1" max="512" step="1"></div>
+              <div class="line" title="How Many DMX Channels It Uses. Type the Real Fixture's Count"><span class="lbl">Channels</span><input id="fix-ch" type="number" min="1" max="64" step="1"></div>
+            </div>
+          </div>
+          <div class="props-head">Arrange</div>
+          <div id="layout-align">
+            <div class="line">
+              <span class="lbl">Align</span>
+              <div class="seg tools">
+                <button class="btn icon" data-align="left" data-icon="alignleft" title="Align Left Edges"></button>
+                <button class="btn icon" data-align="centre" data-icon="aligncentre" title="Align Centres Across"></button>
+                <button class="btn icon" data-align="right" data-icon="alignright" title="Align Right Edges"></button>
+                <button class="btn icon" data-align="top" data-icon="aligntop" title="Align Tops"></button>
+                <button class="btn icon" data-align="middle" data-icon="alignmiddle" title="Align Centres Down"></button>
+                <button class="btn icon" data-align="bottom" data-icon="alignbottom" title="Align Bottoms"></button>
+              </div>
+            </div>
+            <div class="line">
+              <span class="lbl">Flip</span>
+              <div class="seg tools">
+                <button class="btn icon" data-flip="x" data-icon="flipx" title="Flip Across (Shift+H)"></button>
+                <button class="btn icon" data-flip="y" data-icon="flipy" title="Flip Front to Back (Shift+V)"></button>
+              </div>
+            </div>
+            <div class="line" id="layout-space">
+              <span class="lbl">Space</span>
+              <div class="seg tools">
+                <button class="btn icon" data-spread="x" data-icon="spreadx" title="Space Evenly Across (3 or More)"></button>
+                <button class="btn icon" data-spread="y" data-icon="spready" title="Space Evenly Down (3 or More)"></button>
+              </div>
+            </div>
+          </div>
+          <div class="line">
+            <button class="btn" id="layout-dup">Duplicate</button>
+            <button class="btn" id="layout-copy">Copy</button>
+            <button class="btn" id="layout-delete">Delete</button>
+            <button class="btn" id="row-make" title="Keep These in a Line at an Even Spacing">Auto Layout</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <button id="wide" class="btn icon" aria-label="Full Screen, Landscape" title="Full Screen, Landscape"></button>
     <div class="seg view-switch">
       <button class="btn small" data-view-pick="front">Front</button>
@@ -274,148 +401,55 @@
 
   <aside class="panel side" id="mods">
     <div id="layout-panel">
-      <div class="group">
-        <div class="sec-head">
-          <h3>Edit Layout</h3>
-          <div class="seg tools">
+      <nav class="rail">
+        <button class="rail-btn active" data-pane="library" title="Library: Add Lights, Stage Pieces and Screens"><span data-icon="library"></span>Library</button>
+        <button class="rail-btn" data-pane="layers" title="Layers: Everything in This Layout"><span data-icon="layers"></span>Layers</button>
+        <button class="rail-btn" data-pane="stage" title="Stage: Size and Back Wall"><span data-icon="stage"></span>Stage</button>
+        <button class="rail-btn" id="rail-colors" title="Colors: Which Colors Each Kind of Light Can Use"><span data-icon="palette"></span>Colors</button>
+        <button class="rail-btn" data-pane="file" title="File: Save, Reset, Patch and Fixture List"><span data-icon="file"></span>File</button>
+      </nav>
+      <div class="pane">
+        <div class="pane-top">
+          <div class="line">
+            <h3>Edit Layout</h3>
+            <button class="btn primary" id="layout-done">Done</button>
+            <button class="btn" id="layout-cancel">Cancel</button>
+          </div>
+          <div class="line tools-line">
             <button class="btn icon" id="layout-undo" data-icon="undo" title="Undo"></button>
             <button class="btn icon" id="layout-redo" data-icon="redo" title="Redo"></button>
             <button class="btn icon" id="layout-paste" data-icon="paste" title="Paste"></button>
             <button class="btn icon" id="layout-snap" data-icon="magnet" title="Snap: Line Up With Other Lights, Objects and the Stage Centre"></button>
+            <span class="count" id="layout-count"></span>
           </div>
         </div>
-        <div class="count" id="layout-count"></div>
-      </div>
-      <div class="group" id="layout-sel" hidden>
-        <div id="layout-picked">
-          <div class="sec-head"><h3 id="layout-kind">LED</h3></div>
-          <div id="layout-row" hidden>
-            <div class="line" title="Metres Between Each One and the Next">
-              <span class="lbl">Spacing</span>
-              <input id="row-gap" type="number" min="0.1" max="20" step="0.05"><span class="slide-value">m</span>
-            </div>
-            <div class="line" title="How Many Are in the Line. More Are Copies of the Last One">
-              <span class="lbl">Count</span>
-              <input id="row-count" type="number" min="2" max="60" step="1">
-            </div>
-            <div class="line" title="The Angle the Line Runs At. Drag the Round Handle on the Plan to Turn It">
-              <span class="lbl">Angle</span>
-              <input id="row-rot" type="number" step="15"><span class="slide-value">°</span>
-              <div class="seg"><button class="btn" id="row-across">Across</button><button class="btn" id="row-down">Down</button></div>
-            </div>
-            <div class="line"><button class="btn" id="row-remove">Remove Auto Layout</button></div>
-          </div>
-          <div id="layout-single">
-            <div class="line">
-              <span class="lbl" id="layout-number-lbl">Number</span>
-              <input id="layout-number" type="number" min="1" step="1">
-            </div>
-            <div class="line obj-only" title="How Tall It Is. Drag Its Corners on the Plan to Change Its Width and Depth">
-              <span class="lbl">Tall</span>
-              <input id="obj-h" type="number" step="0.05"><span class="slide-value">m</span>
-            </div>
-            <div class="line" id="obj-media">
-              <span class="lbl">Shows</span>
-              <span class="media-name" id="media-name">Nothing Showing</span>
-              <button class="btn" id="media-pick" title="Choose a Picture or a Video for This Screen">Choose</button>
-              <button class="btn" id="media-clear" title="Take the Picture or Video Off This Screen">Remove</button>
-              <input id="media-file" type="file" accept="image/*,video/*" hidden>
-            </div>
-            <div class="line high-only" title="Metres Above the Stage Floor">
-              <span class="lbl" id="z-lbl">Height</span>
-              <input id="obj-z" type="number" step="0.1"><span class="slide-value">m</span>
-            </div>
-            <div class="line lit-only" title="How Big Its Pool of Light Is">
-              <span class="lbl">Size</span>
-              <input id="fix-beam" type="range" min="2" max="120" step="1" class="white-slide"><span class="slide-value" id="fix-beam-v"></span>
-            </div>
-            <div class="line soft-only" title="The Edge of Its Pool: From a Hard Edge to Fading Away">
-              <span class="lbl">Softness</span>
-              <input id="fix-soft" type="range" min="0" max="100" step="5" class="white-slide"><span class="slide-value" id="fix-soft-v"></span>
-            </div>
-            <div class="line lit-only" id="fix-moves-line" title="A Light That Moves Can Pan, Tilt and Zoom to a New Place in Every Cue">
-              <span class="lbl">Moves</span>
-              <button class="btn" id="fix-moves">Off</button>
-            </div>
-            <p class="hint note lit-only" id="fix-mount"></p>
-            <button class="row-btn sub" id="more-toggle"><span>More Settings</span><span data-icon="chevron"></span></button>
-            <div id="more-fields" hidden>
-              <div class="line high-only"><span class="lbl">Name</span><input id="obj-name" type="text" maxlength="40" autocomplete="off" placeholder="Name"></div>
-              <div class="line nums">
-                <label class="num" title="Metres Right of the Stage Centre"><span>X</span><input id="pos-x" type="number" step="0.05"></label>
-                <label class="num" title="Metres Forward of the Stage Centre"><span>Y</span><input id="pos-y" type="number" step="0.05"></label>
-                <label class="num obj-only" title="Degrees, Clockwise Seen From Above"><span>Turn</span><input id="obj-rot" type="number" step="5"></label>
-              </div>
-              <div class="line nums obj-only">
-                <label class="num"><span>Width</span><input id="obj-w" type="number" step="0.05"></label>
-                <label class="num"><span>Depth</span><input id="obj-d" type="number" step="0.05"></label>
-              </div>
-              <div class="line nums lit-only">
-                <label class="num" title="Which Way It Points: Degrees Clockwise From Upstage"><span>Pan</span><input id="fix-pan" type="number" step="5"></label>
-                <label class="num" title="Degrees Away From Straight Down (90 Is Level)"><span>Tilt</span><input id="fix-tilt" type="number" min="0" max="180" step="5"></label>
-              </div>
-              <div class="line nums lit-only">
-                <label class="num" title="DMX Universe"><span>Universe</span><input id="fix-uni" type="number" min="1" max="64" step="1"></label>
-                <label class="num" title="DMX Start Address, 1 to 512"><span>Address</span><input id="fix-addr" type="number" min="1" max="512" step="1"></label>
-                <label class="num" title="How Many DMX Channels It Uses. Type the Real Fixture's Count"><span>Channels</span><input id="fix-ch" type="number" min="1" max="64" step="1"></label>
-              </div>
-            </div>
-          </div>
-          <div class="line">
-            <button class="btn" id="layout-dup">Duplicate</button>
-            <button class="btn" id="layout-copy">Copy</button>
-            <button class="btn" id="layout-delete">Delete</button>
-            <button class="btn" id="row-make" title="Keep These in a Line at an Even Spacing">Auto Layout</button>
-          </div>
-          <div id="layout-align">
-            <div class="line">
-              <span class="lbl">Align</span>
-              <div class="seg tools">
-                <button class="btn icon" data-align="left" data-icon="alignleft" title="Align Left Edges"></button>
-                <button class="btn icon" data-align="centre" data-icon="aligncentre" title="Align Centres Across"></button>
-                <button class="btn icon" data-align="right" data-icon="alignright" title="Align Right Edges"></button>
-                <button class="btn icon" data-align="top" data-icon="aligntop" title="Align Tops"></button>
-                <button class="btn icon" data-align="middle" data-icon="alignmiddle" title="Align Centres Down"></button>
-                <button class="btn icon" data-align="bottom" data-icon="alignbottom" title="Align Bottoms"></button>
-              </div>
-            </div>
-            <div class="line" id="layout-space">
-              <span class="lbl">Space</span>
-              <div class="seg tools">
-                <button class="btn icon" data-spread="x" data-icon="spreadx" title="Space Evenly Across (3 or More)"></button>
-                <button class="btn icon" data-spread="y" data-icon="spready" title="Space Evenly Down (3 or More)"></button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="group">
-        <div class="sec-head">
-          <h3>Library</h3>
-          <div class="seg tools">
+        <div class="group" data-pane-body="library">
+          <div class="sec-head">
+            <h3>Library</h3>
             <button class="btn icon" id="lib-search" data-icon="search" title="Search the Library"></button>
-            <button class="btn icon" id="lib-eye" data-icon="eye" title="Show or Hide This Group on the Plan While Editing"></button>
           </div>
-        </div>
-        <div class="line"><input id="lib-find" type="text" placeholder="Search" autocomplete="off" hidden></div>
-        <div class="line"><div class="seg" id="lib-tabs"></div></div>
-        <div id="lib-list"></div>
-        <div id="lib-more" hidden>
-          <div class="line" id="layout-classic">
-            <div class="seg">
-              <button class="btn" id="layout-add-led">LED</button>
-              <button class="btn" id="layout-add-spot">Spotlight</button>
-              <button class="btn" id="layout-add-side">Side</button>
-              <button class="btn" id="layout-add-face">Face</button>
+          <div class="line"><input id="lib-find" type="text" placeholder="Search" autocomplete="off" hidden></div>
+          <div class="line"><div class="seg" id="lib-tabs"></div></div>
+          <div id="lib-list"></div>
+          <div id="lib-more" hidden>
+            <div class="line" id="layout-classic">
+              <div class="seg">
+                <button class="btn" id="layout-add-led">LED</button>
+                <button class="btn" id="layout-add-spot">Spotlight</button>
+                <button class="btn" id="layout-add-side">Side</button>
+                <button class="btn" id="layout-add-face">Face</button>
+              </div>
             </div>
+            <div class="line"><button class="btn" id="layout-new-kind" title="A Light of Your Own, With a Name and a Shape">New Custom Light</button></div>
+            <div id="layout-kinds"></div>
           </div>
-          <div class="line"><button class="btn" id="layout-new-kind" title="A Light of Your Own, With a Name and a Shape">New Custom Light</button></div>
-          <div id="layout-kinds"></div>
         </div>
-      </div>
-      <div class="group">
-        <button class="row-btn" id="stage-toggle" title="Stage Size and Back Wall"><span>Stage</span><span class="count" id="stage-sum"></span><span data-icon="chevron"></span></button>
-        <div id="stage-fields" hidden>
+        <div class="group" data-pane-body="layers" hidden>
+          <div class="sec-head"><h3>Layers</h3></div>
+          <div id="layers-list"></div>
+        </div>
+        <div class="group" data-pane-body="stage" hidden>
+          <div class="sec-head"><h3>Stage</h3><span class="count" id="stage-sum"></span></div>
           <div class="line nums">
             <label class="num"><span>Width</span><input id="stage-w" type="number" min="2" max="40" step="0.1"></label>
             <label class="num"><span>Depth</span><input id="stage-d" type="number" min="2" max="30" step="0.1"></label>
@@ -423,19 +457,19 @@
           </div>
           <div class="line"><button class="btn" id="layout-cyclo" title="The Lit Back Wall (Cyclorama): the Bar Across the Back of the Plan">Back Wall</button></div>
         </div>
-      </div>
-      <div class="group">
-        <div class="line">
-          <button class="btn primary" id="layout-done">Done</button>
-          <button class="btn" id="layout-cancel">Cancel</button>
-          <button class="btn icon" id="layout-more" data-icon="dots" title="More: Save as a Layout, Reset, Patch, Fixture List"></button>
-        </div>
-        <div class="line" id="layout-keep" hidden>
-          <input id="layout-tpl-name" type="text" placeholder="New Layout Name" maxlength="60" autocomplete="off">
-          <button class="btn" id="layout-save-tpl">Save</button>
-        </div>
-        <div hidden>
-          <button id="layout-template"></button><button id="layout-patch"></button><button id="layout-list"></button><button id="layout-update-tpl" hidden></button>
+        <div class="group" data-pane-body="file" hidden>
+          <div class="sec-head"><h3>File</h3></div>
+          <div class="file-list">
+            <button class="btn" id="layout-keep-open">Save as a New Layout</button>
+            <div class="line" id="layout-keep" hidden>
+              <input id="layout-tpl-name" type="text" placeholder="New Layout Name" maxlength="60" autocomplete="off">
+              <button class="btn" id="layout-save-tpl">Save</button>
+            </div>
+            <button class="btn" id="layout-update-tpl" hidden>Update Layout</button>
+            <button class="btn" id="layout-template">Reset to Saved Layout</button>
+            <button class="btn" id="layout-patch" title="Give Every Library Light a DMX Address, in Order">Give Every Light a DMX Address</button>
+            <button class="btn" id="layout-list" title="A Spreadsheet of Every Light and Object: Position, Height, Aim and Patch">Download Fixture List</button>
+          </div>
         </div>
       </div>
     </div>
@@ -583,6 +617,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=202610130018"></script>
+<script src="app.js?v=20261015164241"></script>
 </body>
 </html>

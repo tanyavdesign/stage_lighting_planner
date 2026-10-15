@@ -179,17 +179,17 @@ let CYCLO_ON = true;
 // add a line here.
 // Truss, rigging and other equipment are no longer offered (group 'old'): they stay listed so
 // layouts that already use them still draw.
-const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens']];
+const ASSET_GROUPS = [['light', 'Lights'], ['stage', 'Stage'], ['screen', 'Screens'], ['custom', 'Custom']];      // Custom: lights you made yourself
 const ENDS = [[-1, 0], [1, 0]], SIDES4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 const ASSETS = [
-  { type: 'platform', group: 'stage', name: 'Platform', w: 2, d: 1, h: 0.3, z: 0, look: 'solid' },
-  { type: 'riser', group: 'stage', name: 'Riser', w: 2, d: 1, h: 0.6, z: 0, look: 'solid' },
-  { type: 'wing', group: 'stage', name: 'Stage Wing', w: 2, d: 6, h: 0.6, z: -0.6, look: 'solid', beside: 'left' },
-  { type: 'backstage', group: 'stage', name: 'Backstage Area', w: 10, d: 2, h: 0.6, z: -0.6, look: 'solid', beside: 'back' },
-  { type: 'backdrop', group: 'stage', name: 'Backdrop', w: 8, d: 0.1, h: 5, z: 0, look: 'flat', beside: 'back' },
+  { type: 'platform', group: 'stage', name: 'Platform', w: 2, d: 1, h: 0.3, z: 0, look: 'solid', rises: true },      // also a plain block for set pieces; it can rise in the show
+  { type: 'riser', group: 'old', name: 'Riser', w: 2, d: 1, h: 0.6, z: 0, look: 'solid' },
+  { type: 'wing', group: 'old', name: 'Stage Wing', w: 2, d: 6, h: 0.6, z: -0.6, look: 'solid', beside: 'left' },
+  { type: 'backstage', group: 'old', name: 'Backstage Area', w: 10, d: 2, h: 0.6, z: -0.6, look: 'solid', beside: 'back' },
+  { type: 'backdrop', group: 'old', name: 'Backdrop', w: 8, d: 0.1, h: 5, z: 0, look: 'flat', beside: 'back' },
   { type: 'wall', group: 'stage', name: 'Wall', w: 10, d: 0.2, h: 6, z: -0.6, look: 'flat', beside: 'back' },
-  { type: 'ceiling', group: 'stage', name: 'Ceiling Panel', w: 6, d: 4, h: 0.1, z: 7, look: 'solid' },
-  { type: 'seats', group: 'stage', name: 'Audience Seating', w: 6, d: 2.4, h: 1, z: -0.6, look: 'seats', beside: 'front' },
+  { type: 'ceiling', group: 'old', name: 'Ceiling Panel', w: 6, d: 4, h: 0.1, z: 7, look: 'solid' },
+  { type: 'seats', group: 'old', name: 'Audience Seating', w: 6, d: 2.4, h: 1, z: -0.6, look: 'seats', beside: 'front' },
   { type: 'stairs', group: 'stage', name: 'Stairs', w: 1.2, d: 1.4, h: 0.6, z: -0.6, look: 'solid', beside: 'front' },
   { type: 'truss1', group: 'old', name: 'Straight Truss', note: '1 m', w: 1, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
   { type: 'truss2', group: 'old', name: 'Straight Truss', note: '2 m', w: 2, d: 0.29, h: 0.29, z: 5, look: 'truss', joins: ENDS },
@@ -201,10 +201,10 @@ const ASSETS = [
   { type: 'bar', group: 'old', name: 'Lighting Bar', note: '3 m', w: 3, d: 0.05, h: 0.05, z: 5, look: 'pipe', joins: ENDS },
   { type: 'boom', group: 'old', name: 'Boom', note: '3 m', w: 0.05, d: 0.05, h: 3, z: 0, look: 'stand', joins: [[0, 0]], up: true },
   { type: 'videowall', group: 'screen', name: 'LED Video Wall', w: 4, d: 0.15, h: 2.5, z: 0.5, look: 'screen' },
-  { type: 'screen', group: 'screen', name: 'Projection Screen', w: 4, d: 0.05, h: 2.25, z: 1, look: 'screen' },
+  { type: 'screen', group: 'screen', name: 'Backdrop', was: 'Projection Screen', w: 4, d: 0.05, h: 2.25, z: 1, look: 'screen' },
   { type: 'booth', group: 'old', name: 'DJ Booth', w: 2, d: 0.8, h: 1, z: 0, look: 'solid' },
   { type: 'speaker', group: 'old', name: 'Speaker', w: 0.5, d: 0.5, h: 1.2, z: 0, look: 'solid' },
-  { type: 'curtain', group: 'stage', name: 'Curtain', w: 1, d: 0.1, h: 5, z: 0, look: 'curtain' },
+  { type: 'curtain', group: 'old', name: 'Curtain', w: 1, d: 0.1, h: 5, z: 0, look: 'curtain' },
   { type: 'hazer', group: 'old', name: 'Haze Machine', w: 0.5, d: 0.3, h: 0.25, z: 0, look: 'solid' },
 ];
 // The lights in the library, under plain names (`was` is the trade name, shown in the hover
@@ -281,16 +281,30 @@ const channelsOf = (light, kinds) => {
 function fixtureList(layout, project) {
   const kinds = kindsOf(layout), objects = objectsOf(layout), m = (v) => Math.round(v * 100) / 100;
   const xy = (it) => [m((it.x - STAGE.cx) / UNIT), m((it.y - STAGE.cy) / UNIT)];
+  const labels = lightLabels(customsOf(layout), kinds);
   const rows = [['ID', 'Name', 'Type', 'X (m)', 'Y (m)', 'Height (m)', 'Pan', 'Tilt', 'Beam', 'Mounted On', 'Universe', 'Address', 'Channels']];
   const plain = (list, type) => { for (const it of list) rows.push([it.id, '', type, ...xy(it), '', '', '', '', '', '', '', '']); };
   plain(layout.leds, 'LED'); plain(layout.spots, 'Spotlight'); plain(sidesOf(layout), 'Side Light'); plain(facesOf(layout), 'Face Light');
   for (const it of customsOf(layout)) {
     const kind = kinds.find((k) => k.id === it.kind), f = fixtureOf(kind), on = it.on && objects.find((o) => o.id === it.on);
-    rows.push([it.id, it.name || '', kind ? kind.name + (f ? ' (Generic)' : '') : '', ...xy(it), m(heightOf(it)), it.pan || 0, it.tilt || 0, it.beam || (f ? f.beam : 30), on ? on.name : '', it.uni || '', it.addr || '', channelsOf(it, kinds)]);
+    rows.push([it.id, labels.get(it.id), kind ? kind.name + (f ? ' (Generic)' : '') : '', ...xy(it), m(heightOf(it)), it.pan || 0, it.tilt || 0, it.beam || (f ? f.beam : 30), on ? on.name : '', it.uni || '', it.addr || '', channelsOf(it, kinds)]);
   }
   for (const o of objects) rows.push([o.id, o.name, assetOf(o).name, ...xy(o), m(o.z || 0), o.rot || 0, '', '', '', '', '', '']);
   const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
   return `${project ? project.name : 'Layout'}\n` + rows.map((row) => row.map(cell).join(',')).join('\n') + '\n';
+}
+// What a light is called on the plan: its own name, or a short word for its kind and a number
+// counted among the lights of that kind ("Spot 1", "Flood 2"), instead of its id.
+const SHORT_NAMES = { profile: 'Spot', fresnel: 'Spot', mhspot: 'Spot', follow: 'Spot', mhbeam: 'Beam', par: 'Flood', mhwash: 'Flood', cyc: 'Flood', batten: 'Bar', blinder: 'Flash', strobe: 'Strobe' };
+function lightLabels(customs, kinds) {
+  const shortOf = (light) => { const kind = kinds.find((k) => k.id === light.kind), f = fixtureOf(kind); return f ? SHORT_NAMES[f.type] || f.name : kind ? kind.name : 'Light'; };
+  const out = new Map(), counted = {};
+  for (const light of [...customs].sort((a, b) => numberOf(a.id) - numberOf(b.id))) {
+    const short = shortOf(light);
+    counted[short] = (counted[short] || 0) + 1;
+    out.set(light.id, light.name || `${short} ${counted[short]}`);
+  }
+  return out;
 }
 const assetOf = (o) => ASSETS.find((a) => a.type === o.type) || { type: o.type, name: 'Block', look: 'solid' };
 // Where an object's connecting points are on the plan, turned with it.
@@ -321,7 +335,7 @@ function inRows(items) {
   rows.forEach((row) => row.sort((a, b) => a.x - b.x));
   return rows;
 }
-const FRONT_OBJECTS = [];
+const FRONT_OBJECTS = [], RISERS = [];      // RISERS: platforms that can rise during the show, in frame order
 const LEDS = [], SPOTS = [], LED_ROW_Y = [], FACES = [], CUSTOMS = [], KINDS = [], OBJECTS = [], PEOPLE = [], SIDE_LIGHTS = { L: [], R: [] };       // filled by useLayout once the project is known
 let ledRows = 0, spotRows = 0, FACE_Z = 0;
 function useLayout(layout) {
@@ -339,6 +353,8 @@ function useLayout(layout) {
     FRONT_OBJECTS.push(Object.assign({ look: assetOf(o).look, across: o.w * Math.abs(Math.cos(a)) + o.d * Math.abs(Math.sin(a)) }, o));
   }
   FRONT_OBJECTS.sort((a, b) => a.z3 - b.z3);
+  RISERS.length = 0;
+  for (const o of OBJECTS) if (o.rises) RISERS.push(o);
   LEDS.length = SPOTS.length = LED_ROW_Y.length = 0;
   const leds = inRows(layout.leds), spots = inRows(layout.spots);
   ledRows = leds.length; spotRows = spots.length;
@@ -411,6 +427,7 @@ const blankLook = () => ({
   custom: {},            // custom lights: id -> colour, missing when off
   dim: {},               // custom lights: id -> brightness from 0 to 1, missing when full
   point: {},             // moving heads: id -> { pan, tilt, beam } in degrees, missing when left as the layout has them
+  lift: {},              // rising platforms: id -> metres off the stage floor, missing when where the layout has it
 });
 // Projects. Everything is kept on this device. The list of projects is one entry in
 // local storage; each project's lights and cues are stored under keys that carry its id.
@@ -507,7 +524,7 @@ function copyLayout(layout) {
   if (layout.stage) out.stage = { w: layout.stage.w, d: layout.stage.d, h: layout.stage.h };
   if (layout.cyclo != null) out.cyclo = !!layout.cyclo;
   if (layout.rows && layout.rows.length) out.rows = layout.rows.map(({ axis, rot, gap, x, y, members }) => ({ axis, rot: rot != null ? rot : axis === 'y' ? 90 : 0, gap, x, y, members: members.map(({ kind, id }) => ({ kind, id })) }));
-  if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h, media }) => (media ? { id, type, name, x, y, z, rot, w, d, h, media: { id: media.id, name: media.name, type: media.type } } : { id, type, name, x, y, z, rot, w, d, h }));
+  if (layout.objects && layout.objects.length) out.objects = layout.objects.map(({ id, type, name, x, y, z, rot, w, d, h, media, rises }) => Object.assign({ id, type, name, x, y, z, rot, w, d, h }, media ? { media: { id: media.id, name: media.name, type: media.type } } : {}, rises ? { rises: true } : {}));
   return out;
 }
 const templateName = () => (currentProject() && currentProject().template) || TEMPLATE;
@@ -631,6 +648,12 @@ const ICONS = {
   paste: '<rect x="3.5" y="3.5" width="9" height="10.5" rx="1.5"/><path d="M6 3.5V2.2h4v1.3M6 7.5h4M6 10h4"/>',
   magnet: '<path d="M3.5 2.5h3v6a1.5 1.5 0 0 0 3 0v-6h3v6a4.5 4.5 0 0 1-9 0zM3.5 5.2h3M9.5 5.2h3"/>',
   dots: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2.2" stroke-linecap="round"/>',
+  library: '<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><path d="M11.25 9v4.5M9 11.25h4.5"/>',
+  layers: '<path d="M8 2.5 13.5 5.5 8 8.5 2.5 5.5zM2.5 8.2 8 11.2l5.5-3M2.5 10.9 8 13.9l5.5-3"/>',
+  stage: '<path d="M2 11.5h12M3.5 11.5V5.5h9v6M2.5 3h11"/>',
+  palette: '<path d="M8 2.5a5.5 5.5 0 1 0 0 11c1 0 1.3-.7 1.1-1.4-.3-.9.2-1.6 1.1-1.6h1.4a1.9 1.9 0 0 0 1.9-1.9C13.5 5 11 2.5 8 2.5z"/><circle cx="5.3" cy="7" r=".6"/><circle cx="7.6" cy="5" r=".6"/><circle cx="10.4" cy="5.8" r=".6"/>',
+  flipx: '<path d="M8 2v12M6 4.5 2.5 11.5h3.5zM10 4.5l3.5 7H10z"/>',
+  flipy: '<path d="M2 8h12M4.5 6l7-3.5v3.5zM4.5 10l7 3.5V10z"/>',
   search: '<circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 13.5 13.5"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   forward: '<path d="M6.5 3.5 11 8l-4.5 4.5"/>',
@@ -717,7 +740,8 @@ const O_SPOT = LEDS.length * L, O_FACE = O_SPOT + SPOTS.length, O_TYPE = O_FACE 
 const sideAt = (s, j) => O_POS + (s ? SIDE_LIGHTS.L.length : 0) + j;       // side s (0 left, 1 right), light j from the back
 const O_CUS = O_CYC + 3;                       // then r, g, b for each custom light
 const O_MOV = O_CUS + CUSTOMS.length * 3;    // then pan, tilt and beam width in degrees for each custom light
-const FRAME_N = O_MOV + CUSTOMS.length * 3;
+const O_LIFT = O_MOV + CUSTOMS.length * 3;   // then how high each rising platform's underside is, in metres
+const FRAME_N = O_LIFT + RISERS.length;
 
 // Random fade pulses: each LED runs its own offset timeline of segments, and each
 // segment is either a fade up and down or dark.
@@ -778,6 +802,7 @@ function compute(look, t, out) {
     out[O_CUS + i * 3] = rgb[0] * dim; out[O_CUS + i * 3 + 1] = rgb[1] * dim; out[O_CUS + i * 3 + 2] = rgb[2] * dim;
     out[O_MOV + i * 3] = to ? to.pan : light.pan; out[O_MOV + i * 3 + 1] = to ? to.tilt : light.tilt; out[O_MOV + i * 3 + 2] = (to && to.beam) || light.beam;
   });
+  RISERS.forEach((o, i) => { out[O_LIFT + i] = look.lift && look.lift[o.id] != null ? look.lift[o.id] : o.z || 0; });
 }
 
 const target = new Float32Array(FRAME_N), shown = new Float32Array(FRAME_N), scratch = new Float32Array(FRAME_N);
@@ -811,7 +836,7 @@ function ease(dt) {
   const a = 1 - Math.exp(-dt / 0.002), b = 1 - Math.exp(-dt / 0.15), c = 1 - Math.exp(-dt / 0.3);
   for (let i = 0; i < FRAME_N; i++) {
     const isAim = i < O_SPOT && (i % L === 3 || i % L === 4);
-    shown[i] += (isPan(i) ? nearer(target[i] - shown[i]) : target[i] - shown[i]) * (i >= O_MOV ? c : isAim ? b : a);         // a moving head takes a moment to swing round
+    shown[i] += (isPan(i) ? nearer(target[i] - shown[i]) : target[i] - shown[i]) * (i >= O_MOV ? c : isAim ? b : a);         // rising platforms ease like moving heads         // a moving head takes a moment to swing round
   }
 }
 
@@ -1005,6 +1030,7 @@ function tapFixture(g) {
 // Draw the LEDs and spotlights (and their labels and aim lines) into their layer.
 // Called once normally, and again after every change while the layout is being edited.
 function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_LIGHTS.R], faces = FACES, customs = CUSTOMS, kinds = KINDS, objects = OBJECTS) {
+  const labels = lightLabels(customs, kinds);
   const layer = planEls.fixtureLayer;
   layer.textContent = '';
   planEls.leds = {}; planEls.aims = {}; planEls.spots = {}; planEls.face = []; planEls.side = { L: [], R: [] }; planEls.custom = {};
@@ -1095,7 +1121,7 @@ function drawFixtures(leds, spots, editing, sides = [...SIDE_LIGHTS.L, ...SIDE_L
     planEls.custom[light.id] = tag(fixture(
       ['rect', { x: x - 40, y: y - 26, width: 80, height: 52 }], shape,
       () => { toggleIn(selCustom, light.id); syncUI(); }, null, layer), 'custom', light.id);
-    text(x, y + 38, light.id);
+    text(x, y + 38, labels.get(light.id));
   }
   // one object or library light selected in the layout editor: a handle to turn it by
   const only = editing && editing.length === 1 && editing[0];
@@ -1127,10 +1153,7 @@ function drawStage() {
   for (let z = 0; z < 9; z++) {
     put('text', { x: ZONES.x + ZONES.w * (z % 3) + ZONES.w - 10, y: ZONES.y + ZONES.h * Math.floor(z / 3) + ZONES.h - 11, 'text-anchor': 'end', class: 'zone' }, z + 1);
   }
-  planEls.cyclo = (layoutMode ? cycloOf(work) : CYCLO_ON) ? fixture(
-    ['rect', { x: ZONES.x, y: STAGE.y0 - 26, width: ZONES.w * 3, height: 52 }],
-    ['rect', { x: ZONES.x, y: STAGE.y0 - 13, width: ZONES.w * 3, height: 26, rx: 6, class: 'cyclo' }],
-    () => { selCyclo = !selCyclo; syncUI(); }, null, layer) : null;
+  planEls.cyclo = null;                  // the back wall is not drawn on the plan; its colour is set in the Cyclorama section
   area(STAGE.cx, sy(168), 'BACKSTAGE');
   area(STAGE.cx, sy(866), 'STAGE FRONT');
   area(sx(318), STAGE.cy - 15, 'STAGE LEFT');
@@ -1425,6 +1448,24 @@ function buildControls() {
     $('mods').appendChild(section);
   }
 
+  // Rising platforms: how high each one is in this cue
+  if (RISERS.length) {
+    const section = document.createElement('div');
+    section.className = 'group'; section.id = 'sec-risers';
+    section.innerHTML = '<div class="sec-head"><h3>Rising Platforms</h3></div>';
+    for (const o of RISERS) {
+      const row = document.createElement('div'), lbl = document.createElement('span'), slide = document.createElement('input'), value = document.createElement('span');
+      row.className = 'line'; lbl.className = 'lbl'; lbl.textContent = o.name;
+      slide.type = 'range'; slide.min = -STAGE_H; slide.max = 4; slide.step = 0.05; slide.className = 'white-slide'; slide.dataset.lift = o.id;
+      value.className = 'slide-value';
+      slide.read = () => { if (document.activeElement !== slide) slide.value = state.lift && state.lift[o.id] != null ? state.lift[o.id] : o.z || 0; value.textContent = (+slide.value).toFixed(2) + ' m'; };
+      slide.addEventListener('input', () => { if (!state.lift) state.lift = {}; state.lift[o.id] = +slide.value; value.textContent = (+slide.value).toFixed(2) + ' m'; });
+      slide.addEventListener('change', () => { slide.blur(); commit(); });
+      row.appendChild(lbl); row.appendChild(slide); row.appendChild(value); section.appendChild(row);
+      slide.read();
+    }
+    $('mods').appendChild(section);
+  }
   const effect = $('effect');
   for (const [id, name] of EFFECTS) effect.add(new Option(name, id));
   effect.addEventListener('change', () => {
@@ -1473,7 +1514,7 @@ function buildControls() {
   };
   // Everything the library offers, the most used first in each group.
   const LIGHT_ORDER = ['led', 'profile', 'par', 'side', 'face', 'batten', 'blinder'];
-  const STAGE_ORDER = ['platform', 'riser', 'curtain', 'backdrop', 'stairs', 'wing', 'backstage', 'wall', 'ceiling', 'seats'];
+  const STAGE_ORDER = ['platform', 'wall', 'stairs', 'videowall', 'screen'];
   const CLASSIC = [['led', 'LED', 'A color-changing light on the rig, with effects and aiming zones'], ['side', 'Side Light', 'A light in the wings that shines across the stage'], ['face', 'Face Light', 'A light in front of the stage that lights faces']];
   const byOrder = (order) => (a, b) => (order.indexOf(a.key) + 99) % 99 - (order.indexOf(b.key) + 99) % 99;
   const entries = [
@@ -1484,13 +1525,14 @@ function buildControls() {
       if (!kind) work.kinds.push(kind = { id: 'k' + newId(), name: f.name, shape: f.shape, fixture: f.type });
       layoutAdd('custom', kind.id);
     } })),
-    ...ASSETS.filter((a) => a.group !== 'old').map((a) => ({ key: a.type, group: a.group, name: a.name, words: a.name, icon: assetIcon(a), note: a.note || (a.look === 'screen' ? `${a.w} × ${a.h} m` : `${a.w} × ${a.d} m`), tip: `Add ${a.name}`, add: () => layoutAdd('object', a.type) })),
+    ...ASSETS.filter((a) => a.group !== 'old').map((a) => ({ key: a.type, group: a.group, name: a.name, words: a.name, icon: assetIcon(a), note: a.note || (a.look === 'screen' || a.look === 'flat' ? `${a.w} × ${a.h} m` : `${a.w} × ${a.d} m`), tip: `Add ${a.name}`, add: () => layoutAdd('object', a.type) })),
   ].sort(byOrder([...LIGHT_ORDER, ...STAGE_ORDER]));
   const renderLibrary = () => {
     const find = $('lib-find').value.trim().toLowerCase();
     $('lib-tabs').textContent = ''; $('lib-list').textContent = '';
     for (const [id, name] of ASSET_GROUPS) button($('lib-tabs'), name, 'btn' + (id === libGroup && !find ? ' active' : ''), () => { libGroup = id; $('lib-find').value = ''; renderLibrary(); if (layoutMode) redrawLayout(); }).dataset.group = id;
-    $('lib-more').hidden = libGroup !== 'light' || !!find;          // lights of your own are listed under the library's lights
+    $('lib-more').hidden = libGroup !== 'custom' || !!find;         // the Custom tab: make a light of your own, and change the ones made
+    $('lib-list').hidden = libGroup === 'custom' && !find;
     // searching looks through every tab at once
     const shown = entries.filter((one) => (find ? one.words.toLowerCase().includes(find) : one.group === libGroup));
     for (const one of shown) {
@@ -1525,25 +1567,7 @@ function buildControls() {
     toast(`${file.name} will show on ${item.name} after you press Done.`, 3000);
   });
   $('media-clear').addEventListener('click', () => { const item = pickedItem(); if (!item) return; layoutKeep(); delete item.media; redrawLayout(); });
-  $('lib-eye').addEventListener('click', () => {
-    const tab = document.querySelector('#lib-tabs .btn.active'), id = tab && tab.dataset.group;
-    if (!id) return;
-    hiddenLayers.has(id) ? hiddenLayers.delete(id) : hiddenLayers.add(id);
-    redrawLayout();
-  });
-  $('stage-toggle').addEventListener('click', () => { $('stage-fields').hidden = !$('stage-fields').hidden; $('stage-toggle').classList.toggle('open', !$('stage-fields').hidden); });
-  // The rest of what the editor can do, behind one button
-  $('layout-more').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const alone = document.body.classList.contains('tpl-edit'), update = $('layout-update-tpl');
-    popMenu($('layout-more'), [
-      !alone && ['Save as a New Layout', () => { $('layout-keep').hidden = false; $('layout-tpl-name').focus(); }],
-      !alone && !update.hidden && [update.textContent, () => update.click()],
-      !alone && ['Reset to Saved Layout', () => $('layout-template').click()],
-      ['Give Every Light a DMX Address', () => $('layout-patch').click()],
-      ['Download Fixture List', () => $('layout-list').click()],
-    ].filter(Boolean));
-  });
+
   $('layout-list').addEventListener('click', () => saveBlob(new Blob([fixtureList(work, currentProject())], { type: 'text/csv' }), `${currentProject().name} Fixture List.csv`));
   $('layout-patch').addEventListener('click', () => {
     layoutKeep();
@@ -1583,6 +1607,7 @@ function buildControls() {
   typed('obj-w', 0.05, 40, placed((item, v) => { item.w = v; }));
   typed('obj-d', 0.05, 40, placed((item, v) => { item.d = v; }));
   typed('obj-h', 0.02, 20, carry((item, v) => { item.h = v; }));
+  $('obj-rises').addEventListener('click', () => { const item = pickedItem(); if (!item) return; layoutKeep(); item.rises = !item.rises; if (!item.rises) delete item.rises; redrawLayout(); });
   $('fix-moves').addEventListener('click', () => {
     const item = pickedItem(), fx = item && fixtureOf(work.kinds.find((k) => k.id === item.kind));
     if (!fx) return;
@@ -1601,6 +1626,17 @@ function buildControls() {
   for (const [id, to] of [['row-across', 0], ['row-down', 90]]) $(id).addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); turnRow(row, to); redrawLayout(); });
   typed('row-rot', -360, 360, (v) => { const row = wholeRow(); if (row) turnRow(row, (v % 360 + 360) % 360); });
   $('row-remove').addEventListener('click', () => { const row = wholeRow(); if (!row) return; layoutKeep(); work.rows = work.rows.filter((r) => r !== row); redrawLayout(); });
+  // The rail: one pane at a time on the left. Colors opens the light settings instead.
+  each('.rail-btn[data-pane]', (b) => b.addEventListener('click', () => {
+    each('.rail-btn[data-pane]', (one) => one.classList.toggle('active', one === b));
+    each('[data-pane-body]', (body) => { body.hidden = body.dataset.paneBody !== b.dataset.pane; });
+    if (layoutMode) redrawLayout();
+  }));
+  $('rail-colors').addEventListener('click', () => {
+    const project = currentProject(), tpl = project && project.scratch && templates.find((t) => t.id === project.templateId);
+    if (tpl) editLights(tpl.name, tpl, saveTemplates, work.kinds); else editLights(project.name, project, saveProjects, work.kinds);
+  });
+  $('layout-keep-open').addEventListener('click', () => { $('layout-keep').hidden = false; $('layout-tpl-name').focus(); });
   each('#plan-views .btn', (b) => b.addEventListener('click', () => { planView = b.dataset.view; guides.length = 0; drawStage(); redrawLayout(); }));
   $('more-toggle').addEventListener('click', () => { $('more-fields').hidden = !$('more-fields').hidden; $('more-toggle').classList.toggle('open', !$('more-fields').hidden); });
   typed('fix-pan', -360, 360, placed((item, v) => { item.pan = (v % 360 + 360) % 360; }));
@@ -1622,6 +1658,7 @@ function buildControls() {
   $('layout-undo').addEventListener('click', layoutUndo);
   each('[data-align]', (b) => b.addEventListener('click', () => layoutAlign(b.dataset.align)));
   each('[data-spread]', (b) => b.addEventListener('click', () => layoutSpread(b.dataset.spread)));
+  each('[data-flip]', (b) => b.addEventListener('click', () => layoutFlip(b.dataset.flip)));
   $('layout-new-kind').addEventListener('click', () => {
     const id = 'k' + newId();
     work.kinds.push({ id, name: `Custom Light ${work.kinds.length + 1}`, shape: 'circle' });
@@ -1791,6 +1828,45 @@ function settleRows(moved = []) {
     arrange(row);
   }
 }
+// The Layers pane: everything in the layout in three groups. Tap a row to select it (Shift or
+// Cmd adds it), double-tap a light or object of your own to rename it, and the eye hides a
+// whole group on the plan while editing.
+function renderLayers() {
+  const box = $('layers-list'), labels = lightLabels(work.customs, work.kinds);
+  if (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;     // a name is being typed
+  box.textContent = '';
+  const CLASSIC_NAMES = { led: 'LED', spot: 'Spot', side: 'Side', face: 'Face' };
+  const groups = [
+    ['light', 'Lights', [...['led', 'spot', 'side', 'face'].flatMap((kind) => work[kind + 's'].map((it) => ({ kind, it, name: `${CLASSIC_NAMES[kind]} ${it.id}` }))), ...work.customs.map((it) => ({ kind: 'custom', it, name: labels.get(it.id) }))]],
+    ['stage', 'Stage', work.objects.filter((o) => assetOf(o).group !== 'screen').map((it) => ({ kind: 'object', it, name: it.name }))],
+    ['screen', 'Screens', work.objects.filter((o) => assetOf(o).group === 'screen').map((it) => ({ kind: 'object', it, name: it.name }))],
+  ];
+  for (const [layer, title, rows] of groups) {
+    if (!rows.length) continue;
+    const head = document.createElement('div');
+    head.className = 'layer-head' + (hiddenLayers.has(layer) ? ' off' : '');
+    head.innerHTML = `<span>${title}</span><span class="count">${rows.length}</span>`;
+    const eye = button(head, '', 'btn icon' + (hiddenLayers.has(layer) ? '' : ' active'), () => { hiddenLayers.has(layer) ? hiddenLayers.delete(layer) : hiddenLayers.add(layer); redrawLayout(); });
+    eye.innerHTML = svgIcon('eye'); eye.title = `Show or Hide ${title} on the Plan`;
+    box.appendChild(head);
+    for (const { kind, it, name } of rows) {
+      const row = button(box, '', 'layer-row' + (isSelected(kind, it.id) ? ' picked' : ''), (e) => {
+        const one = { kind, id: it.id };
+        work.sel = e.shiftKey || e.metaKey || e.ctrlKey ? (isSelected(kind, it.id) ? work.sel.filter((m) => !(m.kind === kind && m.id === it.id)) : [...work.sel, one]) : [one];
+        redrawLayout();
+      });
+      row.textContent = name;
+      if (kind === 'custom' || kind === 'object') row.addEventListener('dblclick', () => {
+        const field = document.createElement('input');
+        field.type = 'text'; field.value = it.name || ''; field.placeholder = name; field.className = 'layer-rename';
+        row.replaceWith(field); field.focus(); field.select();
+        const done = () => { const v = field.value.trim(); if (v !== (it.name || '') && (v || kind === 'custom')) { layoutKeep(); it.name = v; } field.blur(); field.remove(); redrawLayout(); };
+        field.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(); if (e.key === 'Escape') { field.value = it.name || ''; done(); } });
+        field.addEventListener('blur', done, { once: true });
+      });
+    }
+  }
+}
 function makeRow() {
   const all = selected();
   if (all.length < 2) return;
@@ -1854,12 +1930,19 @@ function redrawLayout() {
   each('#plan-views .btn', (b) => b.classList.toggle('active', b.dataset.view === planView));
   // the eye beside Library shows or hides the open tab's group on the plan; a hidden group's tab is dimmed
   each('#lib-tabs .btn', (b) => b.classList.toggle('off', hiddenLayers.has(b.dataset.group)));
-  const tab = document.querySelector('#lib-tabs .btn.active');
-  $('lib-eye').hidden = !tab || tab.dataset.group === 'more';
-  $('lib-eye').classList.toggle('active', !!tab && !hiddenLayers.has(tab.dataset.group));
   renderKinds();
   const item = pickedItem(), many = work.sel.length;
   $('layout-sel').hidden = !many;
+  $('props-none').hidden = !!many;
+  // the colour choices of the selected light's kind, when everything selected is of one kind
+  const kindKey = (one) => (one.kind === 'custom' ? (itemOf(one) || {}).kind : one.kind === 'object' ? null : one.kind);
+  const keys = [...new Set(work.sel.map(kindKey))], colorKey = keys.length === 1 && keys[0];
+  $('props-color-head').hidden = $('props-color').hidden = !colorKey;
+  if (colorKey && $('props-color').dataset.kind !== colorKey) {
+    const custom = work.kinds.find((k) => k.id === colorKey);
+    renderPropsColor(colorKey, custom ? custom.name : { led: 'LED', spot: 'Spotlight', side: 'Side Light', face: 'Face Light' }[colorKey]);
+  }
+  if (!$('layers-list').closest('[data-pane-body]').hidden) renderLayers();
   const line = many > 1 && wholeRow();
   $('layout-row').hidden = !line;
   $('row-make').hidden = many < 2 || !!line;
@@ -1880,7 +1963,7 @@ function redrawLayout() {
     el('line', { x1: row.x, y1: row.y, x2: row.x + Math.sin(a) * far, y2: row.y - Math.cos(a) * far, class: 'rot-stem' }, null, planEls.fixtureLayer);
     el('circle', { cx: row.x + Math.sin(a) * far, cy: row.y - Math.cos(a) * far, r: 10, class: 'rot-handle', 'data-rot': 'row', 'data-of': 'row' }, null, planEls.fixtureLayer);
   }
-  $('layout-single').hidden = !item;
+  $('layout-single').hidden = $('layout-single-2').hidden = !item;
   $('layout-align').hidden = !many;
   $('layout-space').hidden = many < 3;
   each('[data-align]', (b) => { b.title = b.title.replace(/ on the Stage$/, '') + (many === 1 ? ' on the Stage' : ''); });
@@ -1898,6 +1981,7 @@ function redrawLayout() {
     const fx = fixtureOf(ofKind), lit = work.picked.kind === 'custom';
     each('#layout-picked .obj-only', (n) => { n.hidden = !object; });
     each('#layout-picked .lit-only', (n) => { n.hidden = !lit; });
+    if (!lit) { $('more-fields').hidden = true; $('more-toggle').classList.remove('open'); }      // the DMX numbers open only on request
     const softable = lit || work.picked.kind === 'led' || work.picked.kind === 'spot';
     each('#layout-picked .soft-only', (n) => { n.hidden = !softable; });
     $('z-lbl').textContent = lit ? 'Height' : 'Off Floor';
@@ -1911,6 +1995,8 @@ function redrawLayout() {
       $('fix-beam-v').textContent = poolSize(item, +$('fix-beam').value);
       $('fix-moves-line').hidden = !fx;
       fill('fix-uni', item.uni || ''); fill('fix-addr', item.addr || ''); fill('fix-ch', channelsOf(item, work.kinds));
+      $('dmx-sum').textContent = item.addr ? `${item.uni || 1}.${item.addr}` : 'Not Patched';
+      $('obj-name').placeholder = lightLabels(work.customs, work.kinds).get(item.id);
       const on = item.on && work.objects.find((o) => o.id === item.on);
       const rig = fx && work.objects.some((o) => assetOf(o).joins);          // only layouts that still have truss or stands can mount
       $('fix-mount').textContent = on ? `Mounted on ${on.name}. Drag it off to free it.` : rig ? 'Drag it onto truss, a bar or a stand to mount it.' : '';
@@ -1919,6 +2005,8 @@ function redrawLayout() {
     $('obj-media').hidden = !object || assetOf(item).look !== 'screen';
     if (object) $('media-name').textContent = item.media ? item.media.name : 'Nothing Showing';
     $('media-clear').hidden = !object || !item.media;
+    $('obj-rises-line').hidden = !object || !assetOf(item).rises;
+    if (object) { $('obj-rises').classList.toggle('active', !!item.rises); $('obj-rises').textContent = item.rises ? 'On' : 'Off'; }
     if (object) { fill('obj-name', item.name); for (const key of ['z', 'w', 'd', 'h', 'rot']) fill('obj-' + key, metres(item[key] || 0)); }
     $('layout-number').parentNode.hidden = !numbered;
     if (numbered && document.activeElement !== $('layout-number')) $('layout-number').value = numberOf(item.id);
@@ -1961,7 +2049,7 @@ function drawElevStage() {
   area(from - 90, ground + 5, side ? 'BACK' : 'STAGE LEFT'); area(to + 90, ground + 5, side ? 'FRONT' : 'STAGE RIGHT');
 }
 function drawElevation() {
-  const layer = planEls.fixtureLayer, side = planView === 'side', ground = elevGround();
+  const layer = planEls.fixtureLayer, side = planView === 'side', ground = elevGround(), labels = lightLabels(work.customs, work.kinds);
   layer.textContent = '';
   const group = (kind, id, hit, shape) => {       // something that can be pressed: a roomy invisible box, then what is seen
     const g = el('g', { class: 'fx' }, null, layer);
@@ -1993,7 +2081,7 @@ function drawElevation() {
       el('polygon', { points: `${x},${y} ${cx - r},${ground} ${cx + r},${ground}`, class: 'throw cone' }, null, layer);
     }
     group('custom', light.id, box(x, y), ['circle', { cx: x, cy: y, r: 16, class: 'custom' }]);
-    el('text', { x, y: y - 24, 'text-anchor': 'middle' }, light.id, layer);
+    el('text', { x, y: y - 24, 'text-anchor': 'middle' }, labels.get(light.id), layer);
   }
   // one object selected: a square on its top edge to make it taller, and one on its side to make it wider
   const only = work.sel.length === 1 && work.sel[0].kind === 'object' && itemOf(work.sel[0]);
@@ -2219,7 +2307,7 @@ function layoutClip() {
 }
 const clipOf = () => selected().map(({ kind, item }) => {
   const one = { kind, x: item.x, y: item.y, of: item.kind };
-  if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h, media: item.media };
+  if (kind === 'object') one.more = { type: item.type, name: item.name, z: item.z, rot: item.rot, w: item.w, d: item.d, h: item.h, media: item.media, rises: item.rises };
   if ((kind === 'led' || kind === 'spot') && item.soft != null) one.more = { soft: item.soft };
   if (kind === 'custom') { one.more = {}; for (const key of ['name', 'z', 'pan', 'tilt', 'beam', 'ch', 'moves', 'soft']) if (item[key] != null) one.more[key] = item[key]; }
   return one;
@@ -2268,6 +2356,22 @@ function layoutAlign(how) {
   settleRows(all.map((one) => one.item));
   redrawLayout();
 }
+// Flip what is selected: across (left becomes right) or front to back. One thing flips in place;
+// several flip as a group round their middle. Objects and the way lights point flip with them.
+function layoutFlip(axis) {
+  const all = selected();
+  if (!all.length) return;
+  layoutKeep();
+  const mid = all.reduce((sum, one) => sum + one.item[axis], 0) / all.length;
+  for (const { kind, item } of all) {
+    item[axis] = Math.round(2 * mid - item[axis]);
+    const spin = (v) => ((Math.round(v) % 360) + 360) % 360, turn = (v) => spin(axis === 'x' ? -(v || 0) : 180 - (v || 0));
+    if (kind === 'object') item.rot = turn(item.rot);
+    if (kind === 'custom' && item.pan != null) item.pan = turn(item.pan);
+  }
+  settleRows(all.map((one) => one.item));
+  redrawLayout();
+}
 function layoutSpread(axis) {
   const all = selected().sort((a, b) => a.item[axis] - b.item[axis]);
   if (all.length < 3) return;
@@ -2295,6 +2399,8 @@ function layoutKey(e) {
   else if (cmd && key === 'd') layoutDuplicate();
   else if (cmd && key === 'z') (e.shiftKey ? layoutRedo : layoutUndo)();
   else if (cmd && key === 'y') layoutRedo();
+  else if (e.shiftKey && !cmd && key === 'h') layoutFlip('x');
+  else if (e.shiftKey && !cmd && key === 'v') layoutFlip('y');
   else if (cmd && key === 'a') { work.sel = KINDS_OF_LIGHT.flatMap((kind) => seen(kind).map((it) => ({ kind, id: it.id }))); redrawLayout(); }
   else return;
   e.preventDefault();
@@ -2358,7 +2464,7 @@ function renderKinds() {
   if (box.dataset.shown === now) return;          // nothing about the kinds changed (a light was only dragged)
   box.dataset.shown = now;
   box.textContent = '';
-  for (const kind of work.kinds) {
+  for (const kind of work.kinds.filter((k) => !k.fixture)) {         // only lights made here; library lights are in the library
     const row = document.createElement('div');
     row.className = 'line kind-row';
     const name = document.createElement('input');
@@ -2392,7 +2498,7 @@ function relook(look, renamed, alive, resides) {
     return out;
   };
   look.leds = move(look.leds); look.aim = move(look.aim); look.spots = move(look.spots); look.custom = move(look.custom);
-  look.dim = move(look.dim); look.point = move(look.point);
+  look.dim = move(look.dim); look.point = move(look.point);      // (rising platforms keep their ids, so their heights need no moving)
   if (resides) resides(look);
   return look;
 }
@@ -2921,6 +3027,7 @@ function syncUI() {
     section.querySelector('.count').textContent = picked ? picked + ' selected' : '';
     for (const slide of section.querySelectorAll('[data-slide]')) slide.read();
   }
+  for (const slide of document.querySelectorAll('#sec-risers [data-lift]')) slide.read();
   $('sel-leds').hidden = !selection.size;
   $('sel-spots').hidden = !selSpots.size;
   $('sel-sides').hidden = !selSides.size;
@@ -3079,7 +3186,8 @@ function drawFront(D) {
   ctx.fillStyle = '#0b0b10'; ctx.fillRect(0, HORIZON, FW, FLOOR_Y - HORIZON);
   // Stage objects that stand on the stage, as plain shapes seen from the front, furthest first
   for (const o of FRONT_OBJECTS) {
-    const sc = depthScale(o.z3), x = frontX(o.x3, o.z3), half = o.across * 96 * FIT.x * sc / 2, base = floorY(o.z3) - (o.z || 0) * PX * sc, tall = Math.max(2, o.h * PX * sc);
+    const lift = o.rises ? D[O_LIFT + RISERS.findIndex((r) => r.id === o.id)] : o.z || 0;
+    const sc = depthScale(o.z3), x = frontX(o.x3, o.z3), half = o.across * 96 * FIT.x * sc / 2, base = floorY(o.z3) - lift * PX * sc, tall = Math.max(2, o.h * PX * sc);
     if (o.look === 'truss' || o.look === 'tower' || o.look === 'stand' || o.look === 'pipe') {
       ctx.strokeStyle = '#3a3a44'; ctx.lineWidth = 1;
       ctx.strokeRect(x - Math.max(half, 1), base - tall, Math.max(half, 1) * 2, tall);
@@ -3286,9 +3394,11 @@ function buildThree() {
       for (const y of [-half, half]) add(new THREE.Mesh(new THREE.BoxGeometry(slope, r, r), brace), x, y, 0, parent).rotation.y = tilt * way;
     }
   }
+  const risen = [], OBJECTS_BY_ID = Object.fromEntries(OBJECTS.map((o) => [o.id, o]));
   for (const o of OBJECTS) {
     const look = assetOf(o).look, h = Math.max(0.02, o.h);
     const g = add(new THREE.Group(), o.x3, (o.z || 0) + h / 2, o.z3);      // the group's origin is the object's middle
+    if (o.rises) risen.push({ g, h, i: RISERS.indexOf(OBJECTS_BY_ID[o.id]) });
     g.rotation.y = -(o.rot || 0) * Math.PI / 180;
     const ready = mediaOf(o);
     if (ready) ready.then((node) => {              // its picture or video, on the side that faces the audience
@@ -3472,6 +3582,7 @@ function buildThree() {
       s.pool.material.color.setRGB(r * 0.12 * k * soft, g * 0.12 * k * soft, b * 0.12 * k * soft);
       s.hard.material.color.setRGB(r * 0.2 * k * (1 - soft), g * 0.2 * k * (1 - soft), b * 0.2 * k * (1 - soft));
     });
+    for (const r of risen) r.g.position.y = D[O_LIFT + r.i] + r.h / 2;
     for (const s of sides) {
       const lvl = D[s.pos] * D[s.type];
       s.cone.visible = lvl > 0.01;
@@ -5323,54 +5434,72 @@ function editLights(title, owner, save, kinds = []) {
 function renderLights() {
   const body = $('lights-body');
   body.textContent = '';
-  for (const [kind, label] of lightsKinds) {
-    const cfg = lightsDraft[kind], block = document.createElement('div');
-    block.className = 'lights-kind';
-    const head = document.createElement('div');
-    head.className = 'line';
-    const name = document.createElement('span');
-    name.className = 'lbl mini-lbl'; name.textContent = label;
-    const type = document.createElement('select');
-    for (const [id, text] of LIGHT_TYPES) if (!SWITCHED.includes(kind) || id === 'onoff') type.add(new Option(text, id, false, id === cfg.type));
-    type.addEventListener('change', () => { cfg.type = type.value; renderLights(); });
-    head.appendChild(name); head.appendChild(type); block.appendChild(head);
-    if (cfg.type === 'set') {
-      cfg.colors.forEach((color, i) => {
-        const row = document.createElement('div');
-        row.className = 'line lights-color';
-        const pick = document.createElement('input');
-        pick.type = 'color'; pick.className = 'color-pick'; pick.value = color.value;
-        pick.addEventListener('input', () => { color.value = pick.value; });
-        const text = document.createElement('input');
-        text.type = 'text'; text.value = color.name; text.maxLength = 24; text.placeholder = 'Color Name';
-        text.addEventListener('input', () => { color.name = text.value; });
-        row.appendChild(pick); row.appendChild(text);
-        const drop = button(row, '', 'btn icon', () => { cfg.colors.splice(i, 1); renderLights(); });
-        drop.innerHTML = svgIcon('close'); drop.title = 'Remove This Color';
-        block.appendChild(row);
-      });
-      const add = button(block, 'Add Color', 'btn lights-add', () => { cfg.colors.push({ name: '', value: '#ffffff' }); renderLights(); });
-      add.insertAdjacentHTML('afterbegin', svgIcon('plus'));
-    } else if (cfg.type === 'onoff') {
+  for (const [kind, label] of lightsKinds) body.appendChild(lightsBlock(lightsDraft[kind], kind, label, renderLights));
+}
+// The colour choices for one kind of light: a set of colours, on and off, any colour, or white.
+// `again` draws it afresh after a change of shape; `changed` is told when a colour is picked or named.
+function lightsBlock(cfg, kind, label, again, changed = () => {}) {
+  const block = document.createElement('div');
+  block.className = 'lights-kind';
+  const head = document.createElement('div');
+  head.className = 'line';
+  const name = document.createElement('span');
+  name.className = 'lbl mini-lbl'; name.textContent = label;
+  const type = document.createElement('select');
+  for (const [id, text] of LIGHT_TYPES) if (!SWITCHED.includes(kind) || id === 'onoff') type.add(new Option(text, id, false, id === cfg.type));
+  type.addEventListener('change', () => { cfg.type = type.value; if (cfg.type === 'set' && !cfg.colors.length) cfg.colors.push({ name: 'White', value: '#ffffff' }); again(); });
+  head.appendChild(name); head.appendChild(type); block.appendChild(head);
+  if (cfg.type === 'set') {
+    cfg.colors.forEach((color, i) => {
       const row = document.createElement('div');
       row.className = 'line lights-color';
       const pick = document.createElement('input');
-      pick.type = 'color'; pick.className = 'color-pick'; pick.value = cfg.on;
-      pick.addEventListener('input', () => { cfg.on = pick.value; });
-      const text = document.createElement('span');
-      text.className = 'lbl mini-lbl'; text.textContent = 'Color When On';
-      row.appendChild(pick); row.appendChild(text);        // the swatch sits at the left, in line with the color sets
+      pick.type = 'color'; pick.className = 'color-pick'; pick.value = color.value;
+      pick.addEventListener('input', () => { color.value = pick.value; });
+      pick.addEventListener('change', changed);
+      const text = document.createElement('input');
+      text.type = 'text'; text.value = color.name; text.maxLength = 24; text.placeholder = 'Color Name';
+      text.addEventListener('input', () => { color.name = text.value; });
+      text.addEventListener('change', changed);
+      row.appendChild(pick); row.appendChild(text);
+      const drop = button(row, '', 'btn icon', () => { if (cfg.colors.length > 1) { cfg.colors.splice(i, 1); again(); } else toast('A color set needs at least one color.', 2500); });
+      drop.innerHTML = svgIcon('close'); drop.title = 'Remove This Color';
       block.appendChild(row);
-    } else {
-      const note = document.createElement('p');
-      note.className = 'hint lights-note';
-      note.textContent = { rgb: 'A color picker: any color at all.', white: 'A slider from warm white (2700 K) to cool white (6500 K).' }[cfg.type];
-      block.appendChild(note);
-    }
-    body.appendChild(block);
+    });
+    const add = button(block, 'Add Color', 'btn lights-add', () => { cfg.colors.push({ name: '', value: '#ffffff' }); again(); });
+    add.insertAdjacentHTML('afterbegin', svgIcon('plus'));
+  } else if (cfg.type === 'onoff') {
+    const row = document.createElement('div');
+    row.className = 'line lights-color';
+    const pick = document.createElement('input');
+    pick.type = 'color'; pick.className = 'color-pick'; pick.value = cfg.on;
+    pick.addEventListener('input', () => { cfg.on = pick.value; });
+    pick.addEventListener('change', changed);
+    const text = document.createElement('span');
+    text.className = 'lbl mini-lbl'; text.textContent = 'Color When On';
+    row.appendChild(pick); row.appendChild(text);        // the swatch sits at the left, in line with the color sets
+    block.appendChild(row);
+  } else {
+    const note = document.createElement('p');
+    note.className = 'hint lights-note';
+    note.textContent = { rgb: 'A color picker: any color at all.', white: 'A slider from warm white (2700 K) to cool white (6500 K).' }[cfg.type];
+    block.appendChild(note);
   }
+  return block;
+}
+// In the layout editor the right panel shows the colour choices of the selected light's kind,
+// and every change is kept at once (for the show, or for the layout being edited by itself).
+function renderPropsColor(kind, label) {
+  const box = $('props-color'), project = currentProject(), tpl = project && project.scratch && templates.find((t) => t.id === project.templateId);
+  const owner = tpl || project, save = tpl ? saveTemplates : saveProjects, now = lightsOf(owner, work.kinds)[kind];
+  const cfg = { type: now.type, on: now.on || (SWITCHED.includes(kind) ? WARM_HEX : '#ffffff'), colors: (now.colors || []).map((c) => ({ name: c.name, value: hexOf(c.value).toLowerCase() })) };
+  const keep = () => { owner.lights = Object.assign({}, owner.lights, { [kind]: { type: cfg.type, on: cfg.on, colors: cfg.colors.map((c, i) => ({ name: c.name.trim() || `Color ${i + 1}`, value: c.value })) } }); save(); };
+  box.dataset.kind = kind;
+  box.textContent = '';
+  box.appendChild(lightsBlock(cfg, kind, `Every ${label}`, () => { keep(); renderPropsColor(kind, label); }, keep));
 }
 function buildLights() {
+  document.body.appendChild($('lights'));            // it opens from the layout editor too, not only from the list of items
   const close = () => { $('lights').hidden = true; lightsDraft = lightsDone = null; };
   $('lights-close').innerHTML = svgIcon('close');
   $('lights-close').addEventListener('click', close);
